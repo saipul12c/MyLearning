@@ -19,7 +19,7 @@ export default function AdminUsersPage() {
       const data = await getAllRegisteredUsers();
       const enrollments = await getAllEnrollmentsAdmin();
       setUsers(data);
-      setAllEnrollments(enrollments);
+      setAllEnrollments(enrollments.data);
       setLoading(false);
     };
     fetchUsers();

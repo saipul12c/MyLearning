@@ -20,5 +20,44 @@ ALTER TABLE certificates
 ADD COLUMN IF NOT EXISTS instructor_signature_id VARCHAR(100),
 ADD COLUMN IF NOT EXISTS admin_signature_id VARCHAR(100);
 
--- 4. Create Storage Bucket (Note: This usually needs to be done via Supabase Dashboard or CLI)
--- For the sake of this prompt, we assume the bucket 'signatures' exists and is private.
+-- 4. Create Storage Bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('signatures', 'signatures', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Storage Policies for 'signatures'
+-- Allow public read access (Needed for certificate verification)
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+CREATE POLICY "Public Access"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'signatures' );
+
+-- Allow ONLY admins and instructors to upload signatures
+DROP POLICY IF EXISTS "Authenticated Upload" ON storage.objects;
+CREATE POLICY "Authorized Upload"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK ( 
+  bucket_id = 'signatures' AND
+  EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE user_id = auth.uid()
+    AND role IN ('admin', 'instructor')
+  )
+);
+
+-- Allow users to manage ONLY their own signature files if they have the right role
+DROP POLICY IF EXISTS "Owner Update/Delete" ON storage.objects;
+DROP POLICY IF EXISTS "Owner Management" ON storage.objects;
+CREATE POLICY "Owner Management"
+ON storage.objects FOR ALL
+TO authenticated
+USING ( 
+  bucket_id = 'signatures' AND
+  EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE user_id = auth.uid()
+    AND role IN ('admin', 'instructor')
+  ) AND
+  name LIKE 'signatures/' || auth.uid()::text || '%'
+);

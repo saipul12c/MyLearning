@@ -69,6 +69,7 @@ export interface Enrollment {
   paymentProofUrl?: string;
   rejectionReason?: string;
   paymentRetryCount: number;
+  price: number;
 }
 
 export interface ContactMessage {
@@ -817,6 +818,7 @@ function mapDbToEnrollment(
     paymentProofUrl: db.payment_proof_url,
     rejectionReason: db.rejection_reason,
     paymentRetryCount: db.payment_retry_count || 0,
+    price: db.payment_amount || 0,
   };
 }
 

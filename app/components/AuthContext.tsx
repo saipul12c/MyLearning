@@ -9,6 +9,7 @@ import {
   getCurrentUser,
   updateProfile as authUpdateProfile,
   changePassword as authChangePassword,
+  updateOnlineStatus,
 } from "@/lib/auth";
 import { migrateLocalStorageToSupabase } from "@/lib/enrollment";
 import { supabase } from "@/lib/supabase";
@@ -85,6 +86,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
   }, [refreshUser]);
+
+  // Heartbeat for online status
+  useEffect(() => {
+    if (!user) return;
+
+    // Set online immediately
+    updateOnlineStatus(user.id, true);
+
+    const interval = setInterval(() => {
+      updateOnlineStatus(user.id, true);
+    }, 60000); // Every minute
+
+    const handleOffline = () => {
+      updateOnlineStatus(user.id, false);
+    };
+
+    window.addEventListener("beforeunload", handleOffline);
+    
+    return () => {
+      clearInterval(interval);
+      handleOffline();
+      window.removeEventListener("beforeunload", handleOffline);
+    };
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);

@@ -20,6 +20,8 @@ export interface User {
   website?: string;
   linkedin?: string;
   avatarUrl?: string;
+  isOnline: boolean;
+  lastSeenAt: string;
 }
 
 export type SafeUser = User;
@@ -70,6 +72,8 @@ export async function register(
         bio: "",
         role: "user",
         createdAt: authData.user.created_at,
+        isOnline: true,
+        lastSeenAt: new Date().toISOString(),
       }
     };
   } catch (error: any) {
@@ -126,6 +130,8 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
       bio: "",
       role: "user",
       createdAt,
+      isOnline: false,
+      lastSeenAt: createdAt,
     };
   }
 
@@ -138,6 +144,8 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     role: profile.role as UserRole,
     createdAt: profile.created_at || createdAt,
     avatarUrl: profile.avatar_url,
+    isOnline: profile.is_online || false,
+    lastSeenAt: profile.last_seen_at || profile.created_at || createdAt,
   };
 }
 
@@ -159,6 +167,8 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     role: profile.role as UserRole,
     createdAt: profile.created_at,
     avatarUrl: profile.avatar_url,
+    isOnline: profile.is_online || false,
+    lastSeenAt: profile.last_seen_at || profile.created_at,
   };
 }
 
@@ -195,6 +205,8 @@ export async function updateProfile(
         role: data.role as UserRole,
         createdAt: data.created_at,
         avatarUrl: data.avatar_url,
+        isOnline: data.is_online || false,
+        lastSeenAt: data.last_seen_at || data.created_at,
       }
     };
   } catch (error: any) {
@@ -247,6 +259,8 @@ export async function getAllRegisteredUsers(): Promise<SafeUser[]> {
       role: p.role as UserRole,
       createdAt: p.created_at,
       avatarUrl: p.avatar_url,
+      isOnline: p.is_online || false,
+      lastSeenAt: p.last_seen_at || p.created_at,
     }));
   } catch (error) {
     console.error(error);
@@ -301,5 +315,19 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+export async function updateOnlineStatus(userId: string, isOnline: boolean): Promise<void> {
+  try {
+    await supabase
+      .from("user_profiles")
+      .update({ 
+        is_online: isOnline, 
+        last_seen_at: new Date().toISOString() 
+      })
+      .eq("user_id", userId);
+  } catch (error) {
+    console.error("Error updating online status:", error);
   }
 }

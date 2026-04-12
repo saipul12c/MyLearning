@@ -6,7 +6,7 @@ import {
   ArrowLeft, Save, Loader2, Plus, Trash2, CheckCircle, AlertCircle, 
   Image as ImageIcon, Play, FileText, ChevronUp, ChevronDown, Edit, X, Eye,
   Brain, Target, Upload, Info, BookOpen, Clock, Settings, List, Award, Timer, HelpCircle,
-  Type, ListOrdered, Bold, Italic, Link2, Code, Heading1, Heading2
+  Type, ListOrdered, Bold, Italic, Link2, Code, Heading1, Heading2, Sparkles
 } from "lucide-react";
 import { 
   getCategories, getInstructors, upsertCourse, getAdminCourseById, 
@@ -24,6 +24,7 @@ import { type Course } from "@/lib/data";
 import Link from "next/link";
 import Skeleton from "../ui/Skeleton";
 import VideoInput from "../VideoInput";
+import { generateAILessonContent } from "@/lib/gemini";
 
 interface Props {
   courseId?: string;
@@ -128,6 +129,7 @@ export default function CourseForm({ courseId }: Props) {
   });
 
   const [isReordering, setIsReordering] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
   useEffect(() => {
     async function loadResources() {
@@ -271,6 +273,31 @@ export default function CourseForm({ courseId }: Props) {
       }));
     } else {
       showNotification("Gagal menghapus: " + (res.error as any).message, "error");
+    }
+  };
+
+  const handleGenerateAI = async () => {
+    if (!lessonModal.lesson?.title) {
+      showNotification("Masukkan judul materi terlebih dahulu untuk generate AI.", "error");
+      return;
+    }
+    
+    setIsGeneratingAI(true);
+    try {
+      const content = await generateAILessonContent(
+        formData.title,
+        lessonModal.lesson.title,
+        (lessonModal.lesson?.content_type || 'video') as 'video' | 'article'
+      );
+      setLessonModal(prev => ({
+        ...prev,
+        lesson: { ...prev.lesson, description: content }
+      }));
+      showNotification("Materi berhasil digenerate oleh AI!", "success");
+    } catch (err: any) {
+      showNotification("Gagal generate AI: " + err.message, "error");
+    } finally {
+      setIsGeneratingAI(false);
     }
   };
 
@@ -804,6 +831,22 @@ export default function CourseForm({ courseId }: Props) {
                               <btn.icon size={14} />
                            </button>
                         ))}
+                        
+                        {/* AI Generate Button */}
+                        <div className="h-6 w-px bg-white/10 mx-1"></div>
+                        <button
+                           type="button"
+                           disabled={isGeneratingAI}
+                           onClick={handleGenerateAI}
+                           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                              isGeneratingAI 
+                              ? 'bg-purple-500/20 text-purple-400 animate-pulse' 
+                              : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white shadow-lg shadow-indigo-500/10'
+                           }`}
+                        >
+                           {isGeneratingAI ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                           {isGeneratingAI ? "Generating..." : "AI Generate"}
+                        </button>
                      </div>
                      <textarea 
                         id="lesson-desc"

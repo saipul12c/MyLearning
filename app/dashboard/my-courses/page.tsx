@@ -420,6 +420,7 @@ export default function MyCoursesPage() {
                       <PaymentModal 
                         enrollment={enr}
                         courseTitle={enr.courseTitle}
+                        price={enr.price}
                         qrisUrl={""} // Will be fetched inside PaymentModal if needed or pass from a more stable source
                         onClose={() => setShowPaymentModal(null)}
                         onSuccess={() => {
