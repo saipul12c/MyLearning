@@ -6,6 +6,7 @@ import { type Course } from "@/lib/data";
 import Link from "next/link";
 import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink } from "lucide-react";
 import Skeleton from "./ui/Skeleton";
+import SignatureManager from "./SignatureManager";
 
 interface InstructorDashboardProps {
   userId: string;
@@ -133,23 +134,30 @@ export default function InstructorDashboard({ userId, userName }: InstructorDash
         )}
       </div>
 
-      {/* Quick Tips */}
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="card p-6 bg-purple-500/5 border-purple-500/10">
-           <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
-             <Clock size={16} className="text-purple-400" /> Tips Instruktur
-           </h4>
-           <p className="text-slate-400 text-xs leading-relaxed">
-             Pastikan materi video Anda memiliki kualitas audio yang jelas. Siswa cenderung memberikan rating lebih tinggi pada kursus dengan audio jernih.
-           </p>
+      {/* Quick Tips & Signature */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4 h-full">
+            <div className="card p-6 bg-purple-500/5 border-purple-500/10">
+               <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                 <Clock size={16} className="text-purple-400" /> Tips Instruktur
+               </h4>
+               <p className="text-slate-400 text-xs leading-relaxed">
+                 Pastikan materi video Anda memiliki kualitas audio yang jelas. Siswa cenderung memberikan rating lebih tinggi pada kursus dengan audio jernih.
+               </p>
+            </div>
+            <div className="card p-6 bg-cyan-500/5 border-cyan-500/10">
+               <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                 <Award size={16} className="text-cyan-400" /> Engagement Siswa
+               </h4>
+               <p className="text-slate-400 text-xs leading-relaxed">
+                 Gunakan Proyek Akhir untuk menguji kreativitas siswa. Nilai hasil kerja mereka untuk memberikan pengalaman belajar yang personal.
+               </p>
+            </div>
+          </div>
         </div>
-        <div className="card p-6 bg-cyan-500/5 border-cyan-500/10">
-           <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
-             <Award size={16} className="text-cyan-400" /> Engagement Siswa
-           </h4>
-           <p className="text-slate-400 text-xs leading-relaxed">
-             Gunakan Proyek Akhir untuk menguji kreativitas siswa. Nilai hasil kerja mereka untuk memberikan pengalaman belajar yang personal.
-           </p>
+        <div className="lg:col-span-1">
+          <SignatureManager userId={userId} role="instructor" />
         </div>
       </div>
     </div>

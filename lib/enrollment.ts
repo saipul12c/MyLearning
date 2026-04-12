@@ -8,16 +8,21 @@ import { createNotification, notifyAdmins } from "./notifications";
 export type EnrollmentStatus = "pending" | "waiting_verification" | "active" | "paid" | "completed" | "expired" | "rejected" | "failed" | "refunded";
 
 export const REJECTION_REASONS = [
-  "Bukti transfer tidak terbaca/kabur.",
-  "Jumlah nominal tidak sesuai.",
-  "Nama pengirim tidak sesuai dengan data akun.",
-  "Bukti transfer palsu atau editan.",
-  "Transaksi tidak ditemukan di mutasi rekening.",
-  "Bukti transfer sudah pernah digunakan sebelumnya.",
-  "Tanggal transfer sudah kadaluarsa.",
-  "Gambar yang diunggah bukan bukti transfer QRIS.",
-  "Metode pembayaran salah (bukan QRIS).",
-  "Akun bank tujuan salah.",
+  "Bukti transfer tidak terbaca (kabur atau resolusi rendah).",
+  "Jumlah nominal tidak sesuai dengan harga kursus.",
+  "Nama pengirim tidak sesuai dengan data akun MyLearning.",
+  "Bukti transfer terindikasi hasil editan atau palsu.",
+  "Transaksi tidak ditemukan dalam mutasi rekening kami.",
+  "Bukti transfer sudah pernah digunakan sebelumnya (duplikat).",
+  "Tanggal transfer sudah kadaluarsa (lebih dari 48 jam).",
+  "Gambar yang diunggah bukan bukti transfer QRIS/Bank yang sah.",
+  "Metode pembayaran tidak sesuai dengan instruksi.",
+  "Akun bank tujuan salah/bukan milik MyLearning.",
+  "Struk terpotong (informasi Waktu/ID Transaksi tidak ada).",
+  "Status transaksi di struk masih 'Pending' atau 'Gagal'.",
+  "Transfer dilakukan menggunakan sistem yang sedang maintenance.",
+  "Rekening pengirim terindikasi melakukan aktivitas mencurigakan.",
+  "File yang diunggah bukan merupakan bukti pembayaran.",
 ];
 
 export interface AssignmentSubmission {
@@ -235,7 +240,7 @@ export async function verifyPayment(
       .eq("user_id", user.id)
       .single();
 
-    if (profile?.role !== "admin") throw new Error("Forbidden: Admin only");
+    if (profile?.role !== "admin" && profile?.role !== "instructor") throw new Error("Forbidden: Unauthorized access");
 
     const { data: enr, error: fetchError } = await supabase
       .from("enrollments")
@@ -344,7 +349,11 @@ export async function getActiveEnrollment(userId: string): Promise<Enrollment | 
   return all.find(e => e.status === "active") || null;
 }
 
-export async function getAllEnrollmentsAdmin(): Promise<Enrollment[]> {
+export async function getAllEnrollmentsAdmin(
+  page: number = 1, 
+  pageSize: number = 20, 
+  status: string = "all"
+): Promise<{ data: Enrollment[]; totalCount: number }> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
@@ -355,18 +364,44 @@ export async function getAllEnrollmentsAdmin(): Promise<Enrollment[]> {
       .eq("user_id", user.id)
       .single();
 
-    if (profile?.role !== "admin") throw new Error("Forbidden");
+    if (profile?.role !== "admin" && profile?.role !== "instructor") throw new Error("Forbidden");
 
-    const { data, error } = await supabase
+    // 1. Build Query
+    let query = supabase
       .from("enrollments")
-      .select("*")
-      .order("enrolled_at", { ascending: false });
+      .select(`
+        *,
+        user:user_profiles (full_name)
+      `, { count: 'exact' });
+
+    // 2. Apply Filters
+    if (status !== "all") {
+      // Map UI status back to DB status if needed
+      // "active" status in UI maps to "paid" in DB
+      const dbStatus = status === "active" ? "paid" : status;
+      query = query.eq("payment_status", dbStatus);
+    }
+
+    // 3. Apply Pagination & Sort
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, count, error } = await query
+      .order("enrolled_at", { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
-    return data.map(enr => mapDbToEnrollment(enr));
+
+    return { 
+      data: (data || []).map(enr => ({
+        ...mapDbToEnrollment(enr),
+        userName: enr.user?.full_name || "Siswa"
+      })), 
+      totalCount: count || 0 
+    };
   } catch (error) {
     console.error(error);
-    return [];
+    return { data: [], totalCount: 0 };
   }
 }
 
@@ -507,11 +542,19 @@ export async function submitAssignment(
   }
 }
 
-export async function completeFinalProject(enrollmentId: string): Promise<{ success: boolean; error?: string }> {
+export async function submitFinalProject(
+  enrollmentId: string, 
+  projectUrl: string, 
+  remarks: string = ""
+): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
       .from("enrollments")
-      .update({ final_project_completed: true })
+      .update({ 
+        final_project_completed: true,
+        final_project_url: projectUrl,
+        final_project_notes: remarks
+      })
       .eq("id", enrollmentId);
 
     if (error) throw error;
@@ -520,6 +563,11 @@ export async function completeFinalProject(enrollmentId: string): Promise<{ succ
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+export async function completeFinalProject(enrollmentId: string): Promise<{ success: boolean; error?: string }> {
+  // Legacy support for direct completion
+  return submitFinalProject(enrollmentId, "Manual Completion", "No notes provided");
 }
 
 // Internal helper to update progress percentage
@@ -532,7 +580,7 @@ async function updateEnrollmentProgress(enrollmentId: string) {
   // Fetch fresh data from Supabase with user info
   const { data: enr, error: fetchError } = await supabase
     .from("enrollments")
-    .select("*, user:user_profiles(full_name), course:courses(instructors(name))")
+    .select("*, user:user_profiles(full_name), course:courses(instructors(name, signature_id))")
     .eq("id", enrollmentId)
     .single();
   
@@ -570,6 +618,20 @@ async function updateEnrollmentProgress(enrollmentId: string) {
       // Write to certificates table (Allow History)
       const userData: any = enr.user;
       const courseData: any = enr.course;
+      const rawInstructor = courseData?.instructors;
+      const instructorName = (Array.isArray(rawInstructor) ? rawInstructor[0]?.name : rawInstructor?.name) || "Instruktur MyLearning";
+      const instructorSignatureId = Array.isArray(rawInstructor) ? rawInstructor[0]?.signature_id : rawInstructor?.signature_id;
+
+      // Get any admin signature as platform signature
+      const { data: adminProfile } = await supabase
+          .from("user_profiles")
+          .select("signature_id")
+          .eq("role", "admin")
+          .not("signature_id", "is", null)
+          .order("signature_last_updated", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
       await supabase.from("certificates").insert({
           enrollment_id: enrollmentId,
           user_id: enr.user_id,
@@ -577,8 +639,10 @@ async function updateEnrollmentProgress(enrollmentId: string) {
           certificate_number: newCertId,
           course_title: enr.course_title,
           issued_at: completedAt,
-          instructor_name: courseData?.instructors?.name || "Instruktur MyLearning",
-          user_name: userData?.full_name || "Siswa MyLearning"
+          instructor_name: instructorName,
+          user_name: userData?.full_name || "Siswa MyLearning",
+          instructor_signature_id: instructorSignatureId,
+          admin_signature_id: adminProfile?.signature_id
       });
 
       // Cleanup old certificates for this course/user (Max 3, Max 6 years)
@@ -759,8 +823,7 @@ function mapDbToEnrollment(
 function mapDbStatusToEnrollmentStatus(dbStatus: string): EnrollmentStatus {
   switch (dbStatus) {
     case 'pending': return 'pending';
-    case 'paid': return 'active';
-    case 'active': return 'active';
+    case 'paid': return 'active'; // Maps DB 'paid' to UI 'active'
     case 'waiting_verification': return 'waiting_verification';
     case 'rejected': return 'rejected';
     case 'failed': return 'failed';

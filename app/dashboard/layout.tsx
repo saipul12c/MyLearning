@@ -26,10 +26,19 @@ const adminMenuItems = [
   { href: "/dashboard/admin/settings", label: "Pengaturan", icon: Settings },
 ];
 
+const instructorMenuItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/admin/analytics", label: "Analitik Saya", icon: Shield },
+  { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+  { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
+  { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },
+  { href: "/dashboard/profile", label: "Profil", icon: User },
+];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isLoggedIn, isAdmin, logout, loading } = useAuth();
+  const { user, isLoggedIn, isAdmin, isInstructor, logout, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -50,7 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const menuItems = isAdmin ? adminMenuItems : userMenuItems;
+  const menuItems = isAdmin ? adminMenuItems : (isInstructor ? instructorMenuItems : userMenuItems);
   const initials = user?.fullName?.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() || "U";
 
   return (
@@ -92,7 +101,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-sm text-white font-medium truncate">{user?.fullName}</p>
               <div className="flex items-center gap-1.5">
                 {isAdmin && <Shield size={10} className="text-amber-400" />}
-                <p className="text-xs text-slate-500">{isAdmin ? "Administrator" : "Learner"}</p>
+                {isInstructor && <GraduationCap size={10} className="text-purple-400" />}
+                <p className="text-xs text-slate-500">{isAdmin ? "Administrator" : (isInstructor ? "Instructor" : "Learner")}</p>
               </div>
             </div>
           </div>
@@ -102,6 +112,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {isAdmin && (
             <p className="px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Admin Panel</p>
+          )}
+          {isInstructor && (
+            <p className="px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Instructor Panel</p>
           )}
           {menuItems.map((item) => {
             const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);

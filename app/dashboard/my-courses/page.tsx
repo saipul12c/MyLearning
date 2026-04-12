@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/app/components/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getUserEnrollments, completeLesson, uncompleteLesson, getRemainingDays, getEnrollmentDeadline, submitQuiz, submitAssignment, completeFinalProject, isCertificateExpired, resetEnrollmentForRetake, type Enrollment } from "@/lib/enrollment";
+import { getCertificateByNumber } from "@/lib/certificates";
 import { getCourseBySlug } from "@/lib/courses";
 import { getCourseAssessments } from "@/lib/assessments";
 import { getLevelLabel } from "@/lib/enrollment";
@@ -14,6 +15,7 @@ import { getInstructors } from "@/lib/courses";
 import QuizModal from "@/app/components/QuizModal";
 import AssignmentModal from "@/app/components/AssignmentModal";
 import LessonPlayer from "@/app/components/LessonPlayer";
+import FinalProjectForm from "@/app/components/FinalProjectForm";
 import Skeleton from "@/app/components/ui/Skeleton";
 import type { Quiz, Assignment } from "@/lib/assessments";
 
@@ -23,7 +25,18 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState<"lessons" | "quizzes" | "assignments" | "project">("lessons");
-  const [certData, setCertData] = useState<{ userName: string; courseTitle: string; startDate: string; endDate: string; instructor: string; isExpired?: boolean } | null>(null);
+  const [certData, setCertData] = useState<{
+    userName: string;
+    courseTitle: string;
+    startDate: string;
+    endDate: string;
+    instructor: string;
+    certificateId: string;
+    instructorSignatureId?: string | null;
+    adminSignatureId?: string | null;
+    adminName?: string;
+    isExpired: boolean;
+  } | null>(null);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
@@ -121,14 +134,23 @@ export default function MyCoursesPage() {
   };
 
   const handleDownloadCert = async (enrollment: Enrollment) => {
-    const course = await getCourseBySlug(enrollment.courseSlug);
+    if (!enrollment.certificateId) return;
+
+    const [course, certDetails] = await Promise.all([
+      getCourseBySlug(enrollment.courseSlug),
+      getCertificateByNumber(enrollment.certificateId)
+    ]);
+
     const certExpired = isCertificateExpired(enrollment);
     setCertData({
       userName: user.fullName,
       courseTitle: enrollment.courseTitle,
       startDate: new Date(enrollment.enrolledAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
       endDate: new Date(enrollment.completedAt!).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
-      instructor: course?.instructor || "MyLearning Team",
+      instructor: certDetails?.instructorName || course?.instructor || "MyLearning Team",
+      certificateId: enrollment.certificateId,
+      instructorSignatureId: certDetails?.instructorSignatureId,
+      adminSignatureId: certDetails?.adminSignatureId,
       isExpired: certExpired,
     });
   };
@@ -317,12 +339,17 @@ export default function MyCoursesPage() {
                     <li key={i} className="text-xs text-slate-400 flex items-start gap-2"><Target size={12} className="text-cyan-400 mt-0.5 flex-shrink-0" /> {d}</li>
                   ))}</ul>
                 </div>
-                <p className="text-xs text-slate-500 mb-4">Estimasi: ~{activeAssessments.finalProject.estimatedHours} jam</p>
-                {!active.finalProjectCompleted ? (
-                  <button onClick={handleFinalProject} className="btn-primary text-sm !py-2">Tandai Proyek Selesai</button>
-                ) : (
-                  <div className="flex items-center gap-2 text-emerald-400 text-sm"><CheckCircle size={18} /> Proyek akhir selesai!</div>
-                )}
+                <p className="text-xs text-slate-500 mb-6">Estimasi: ~{activeAssessments.finalProject.estimatedHours} jam</p>
+                
+                <FinalProjectForm 
+                  enrollmentId={active.id}
+                  projectTitle={activeAssessments.finalProject.title}
+                  isCompleted={active.finalProjectCompleted}
+                  existingUrl={active.finalProjectUrl}
+                  existingNotes={active.finalProjectNotes}
+                  adminFeedback={active.finalProjectFeedback}
+                  onSuccess={() => forceRefresh()}
+                />
               </div>
             )}
           </div>
@@ -525,7 +552,16 @@ export default function MyCoursesPage() {
 
       {/* Modals */}
       {certData && (
-        <CertificateGenerator userName={certData.userName} courseTitle={certData.courseTitle} startDate={certData.startDate} endDate={certData.endDate} instructor={certData.instructor} isExpired={certData.isExpired} onClose={() => setCertData(null)} />
+        <CertificateGenerator 
+          userName={certData.userName} 
+          courseTitle={certData.courseTitle} 
+          startDate={certData.startDate} 
+          endDate={certData.endDate} 
+          instructor={certData.instructor} 
+          isExpired={certData.isExpired} 
+          certificateId={certData.certificateId}
+          onClose={() => setCertData(null)} 
+        />
       )}
       {activeQuiz && active && (
         <QuizModal quiz={activeQuiz} enrollmentId={active.id} alreadyPassed={active.completedQuizzes?.some((q) => q.quizId === activeQuiz.id && q.passed) || false} previousScore={active.completedQuizzes?.find((q) => q.quizId === activeQuiz.id)?.score} onSubmit={handleQuizSubmit} onClose={() => { setActiveQuiz(null); forceRefresh(); }} />

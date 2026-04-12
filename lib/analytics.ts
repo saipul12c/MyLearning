@@ -7,14 +7,24 @@ export interface SalesSummary {
     popularCourses: { title: string; count: number }[];
     engagementRate: string;
     recentSales: any[];
+    topCategory: { name: string; count: number };
 }
 
 export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
     try {
-        // 1. Get Paid Enrollments count and sum
+        // 1. Get Paid Enrollments with course details
         const { data: enrollments, error } = await supabase
             .from("enrollments")
-            .select("payment_amount, payment_status, course_title, enrolled_at")
+            .select(`
+                payment_amount, 
+                payment_status, 
+                course_title, 
+                enrolled_at,
+                courses (
+                    title,
+                    categories (name)
+                )
+            `)
             .in("payment_status", ["paid", "completed"]);
 
         if (error) throw error;
@@ -23,11 +33,16 @@ export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
         const totalEnrollments = enrollments.length;
         const completedCourses = enrollments.filter(e => e.payment_status === 'completed').length;
 
-        // 2. Calculate popular courses
+        // 2. Calculate popular courses and categories
         const courseCounts: Record<string, number> = {};
-        enrollments.forEach(e => {
-            const title = e.course_title || "Unknown Course";
+        const categoryCounts: Record<string, number> = {};
+
+        enrollments.forEach((e: any) => {
+            const title = e.courses?.title || e.course_title || "Unknown Course";
             courseCounts[title] = (courseCounts[title] || 0) + 1;
+
+            const catName = e.courses?.categories?.name || "Uncategorized";
+            categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
         });
 
         const popularCourses = Object.entries(courseCounts)
@@ -35,18 +50,23 @@ export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
             .sort((a, b) => b.count - a.count)
             .slice(0, 5);
 
+        const sortedCategories = Object.entries(categoryCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+
+        const topCategory = sortedCategories[0] || { name: "N/A", count: 0 };
+
         // 3. Compute Engagement Rate (Real)
-        // Ratio of completed items vs total items across all active enrollments
         const { data: progressData } = await supabase
             .from("lesson_progress")
             .select("id");
         
-        const { data: totalLessons } = await supabase
+        const { count: totalLessons } = await supabase
             .from("lessons")
-            .select("id", { count: 'exact' });
+            .select("id", { count: 'exact', head: true });
 
-        const engagementRate = totalEnrollments > 0 
-            ? Math.round(((progressData?.length || 0) / ((totalLessons?.length || 1) * totalEnrollments)) * 100) 
+        const engagementRateValue = totalEnrollments > 0 && (totalLessons || 0) > 0
+            ? Math.round(((progressData?.length || 0) / ((totalLessons || 1) * totalEnrollments)) * 100) 
             : 0;
 
         return {
@@ -54,8 +74,15 @@ export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
             totalEnrollments,
             completedCourses,
             popularCourses,
-            engagementRate: `${engagementRate}%`,
-            recentSales: enrollments.sort((a, b) => new Date(b.enrolled_at).getTime() - new Date(a.enrolled_at).getTime()).slice(0, 5)
+            engagementRate: `${Math.min(100, engagementRateValue)}%`,
+            topCategory,
+            recentSales: enrollments
+                .map((e: any) => ({
+                    ...e,
+                    course_title: e.courses?.title || e.course_title || "Unknown Course"
+                }))
+                .sort((a, b) => new Date(b.enrolled_at).getTime() - new Date(a.enrolled_at).getTime())
+                .slice(0, 5)
         };
     } catch (err) {
         console.error("Error fetching analytics:", err);
@@ -65,6 +92,7 @@ export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
             completedCourses: 0,
             popularCourses: [],
             engagementRate: "0%",
+            topCategory: { name: "N/A", count: 0 },
             recentSales: []
         };
     }

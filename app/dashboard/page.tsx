@@ -4,20 +4,20 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/app/components/AuthContext";
 import { getActiveEnrollment, getUserEnrollments, getAllEnrollmentsAdmin, getRemainingDays, getContactMessages } from "@/lib/enrollment";
 import { getAllRegisteredUsers, type SafeUser } from "@/lib/auth";
-import { syncDataToDatabase } from "@/lib/sync-db";
 import { getCourses } from "@/lib/courses";
 import { getLevelLabel, type Enrollment } from "@/lib/enrollment";
 import Link from "next/link";
 import { BookOpen, Users, Award, Clock, TrendingUp, AlertTriangle, ArrowRight, CheckCircle, XCircle, MessageSquare, Loader2 } from "lucide-react";
 import Skeleton, { SkeletonCircle } from "../components/ui/Skeleton";
 import InstructorDashboard from "../components/InstructorDashboard";
+import SignatureManager from "../components/SignatureManager";
 
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
 
   if (!user) return null;
 
-  if (isAdmin) return <AdminDashboard />;
+  if (isAdmin) return <AdminDashboard userId={user.id} />;
   if (user.role === "instructor") return <InstructorDashboard userId={user.id} userName={user.fullName} />;
   return <UserDashboard userId={user.id} userName={user.fullName} />;
 }
@@ -164,26 +164,17 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
   );
 }
 
-function AdminDashboard() {
+function AdminDashboard({ userId }: { userId: string }) {
   const [allUsers, setAllUsers] = useState<SafeUser[]>([]);
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
+  const [totalEnrollments, setTotalEnrollments] = useState(0);
   const [messages, setMessages] = useState<any[]>([]);
   const [courseCount, setCourseCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-
-  const handleSync = async () => {
-    if (!confirm("Sinkronisasi semua data dari lib/data.ts ke Database? Tindakan ini akan meng-update metadata kursus Anda.")) return;
-    setSyncing(true);
-    const res = await syncDataToDatabase();
-    setSyncing(false);
-    if (res.success) alert("Sinkronisasi berhasil!");
-    else alert("Gagal: " + res.error);
-  };
 
   useEffect(() => {
     const fetchData = async () => {
-      const [users, enrollments, msgs, dbCourses] = await Promise.all([
+      const [users, enrollResult, msgs, dbCourses] = await Promise.all([
         getAllRegisteredUsers(),
         getAllEnrollmentsAdmin(),
         getContactMessages(),
@@ -191,7 +182,8 @@ function AdminDashboard() {
       ]);
       
       setAllUsers(users);
-      setAllEnrollments(enrollments);
+      setAllEnrollments(enrollResult.data);
+      setTotalEnrollments(enrollResult.totalCount);
       setMessages(msgs);
       setCourseCount(dbCourses.length);
       setLoading(false);
@@ -233,14 +225,6 @@ function AdminDashboard() {
           <p className="text-slate-400 text-sm mt-1">Overview & Real-time Platform Statistics</p>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={handleSync}
-            disabled={syncing}
-            className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group"
-          >
-            <TrendingUp size={14} className={syncing ? "animate-spin" : "group-hover:scale-110 transition-transform"} />
-            {syncing ? "Syncing..." : "Sync Lokal ke Database"}
-          </button>
           <Link href="/dashboard/admin/courses" className="btn-primary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
             <BookOpen size={14} className="group-hover:scale-110 transition-transform" />
             Manajemen Kursus
@@ -253,7 +237,7 @@ function AdminDashboard() {
         {[
           { icon: Users, label: "Total Pengguna", value: allUsers.length, color: "text-purple-400", bg: "from-purple-500/15 to-purple-500/5" },
           { icon: BookOpen, label: "Total Kursus", value: courseCount, color: "text-cyan-400", bg: "from-cyan-500/15 to-cyan-500/5" },
-          { icon: TrendingUp, label: "Total Enrollment", value: allEnrollments.length, color: "text-emerald-400", bg: "from-emerald-500/15 to-emerald-500/5" },
+          { icon: TrendingUp, label: "Total Enrollment", value: totalEnrollments, color: "text-emerald-400", bg: "from-emerald-500/15 to-emerald-500/5" },
           { icon: MessageSquare, label: "Pesan Baru", value: unread, color: "text-amber-400", bg: "from-amber-500/15 to-amber-500/5" },
         ].map((stat) => (
           <div key={stat.label} className="card p-5 group hover:border-white/20 transition-all duration-300">
@@ -266,53 +250,60 @@ function AdminDashboard() {
         ))}
       </div>
 
-      {/* Recent Enrollments */}
-      <div className="card p-8 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-3xl rounded-full" />
-        <div className="flex items-center justify-between mb-6 relative z-10 border-b border-white/5 pb-4">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-             <div className="w-1.5 h-6 bg-purple-500 rounded-full" />
-             Enrollment Terbaru
-          </h2>
-          <Link href="/dashboard/admin/enrollments" className="text-xs font-bold text-purple-400 hover:text-purple-300 uppercase tracking-widest flex items-center gap-1 group">
-             Lihat Semua 
-             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-          </Link>
+      {/* Recent Enrollments & Signature */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="card p-8 relative overflow-hidden group h-full">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center justify-between mb-6 relative z-10 border-b border-white/5 pb-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                 <div className="w-1.5 h-6 bg-purple-500 rounded-full" />
+                 Enrollment Terbaru
+              </h2>
+              <Link href="/dashboard/admin/enrollments" className="text-xs font-bold text-purple-400 hover:text-purple-300 uppercase tracking-widest flex items-center gap-1 group">
+                 Lihat Semua 
+                 <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+            {allEnrollments.length > 0 ? (
+              <div className="space-y-1 relative z-10">
+                {allEnrollments.slice(0, 5).map((enr: Enrollment) => {
+                  const enrollUser = allUsers.find((u: SafeUser) => u.id === enr.userId);
+                  return (
+                    <div key={enr.id} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/5 -mx-4 px-4 rounded-xl transition-colors group/item">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-400 group-hover/item:border-purple-500/30 border border-transparent transition-colors">
+                          {enrollUser?.fullName?.substring(0, 2).toUpperCase() || "??"}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">{enrollUser?.fullName || "Akun Terhapus"}</p>
+                          <p className="text-xs text-slate-500 font-medium">{enr.courseTitle}</p>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full glass ${
+                        enr.status === "active" ? "text-cyan-400 border-cyan-500/20" :
+                        enr.status === "completed" ? "text-emerald-400 border-emerald-500/20" :
+                        enr.status === "waiting_verification" ? "text-amber-400 border-amber-500/20" :
+                        "text-red-400 border-red-500/20"
+                      }`}>
+                        {enr.status === "active" ? "Aktif" : enr.status === "completed" ? "Selesai" : 
+                         enr.status === "waiting_verification" ? "Verifikasi" : enr.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 relative z-10">
+                <TrendingUp size={48} className="text-slate-800 mx-auto mb-4" />
+                <p className="text-sm text-slate-500 font-medium font-bold uppercase tracking-tighter">Belum ada enrollment yang tercatat</p>
+              </div>
+            )}
+          </div>
         </div>
-        {allEnrollments.length > 0 ? (
-          <div className="space-y-1 relative z-10">
-            {allEnrollments.slice(-5).reverse().map((enr: Enrollment) => {
-              const enrollUser = allUsers.find((u: SafeUser) => u.id === enr.userId);
-              return (
-                <div key={enr.id} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/5 -mx-4 px-4 rounded-xl transition-colors group/item">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-400 group-hover/item:border-purple-500/30 border border-transparent transition-colors">
-                      {enrollUser?.fullName?.substring(0, 2).toUpperCase() || "??"}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">{enrollUser?.fullName || "Akun Terhapus"}</p>
-                      <p className="text-xs text-slate-500 font-medium">{enr.courseTitle}</p>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full glass ${
-                    enr.status === "active" ? "text-cyan-400 border-cyan-500/20" :
-                    enr.status === "completed" ? "text-emerald-400 border-emerald-500/20" :
-                    enr.status === "waiting_verification" ? "text-amber-400 border-amber-500/20" :
-                    "text-red-400 border-red-500/20"
-                  }`}>
-                    {enr.status === "active" ? "Aktif" : enr.status === "completed" ? "Selesai" : 
-                     enr.status === "waiting_verification" ? "Verifikasi" : enr.status}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-12 relative z-10">
-            <TrendingUp size={48} className="text-slate-800 mx-auto mb-4" />
-            <p className="text-sm text-slate-500 font-medium font-bold uppercase tracking-tighter">Belum ada enrollment yang tercatat</p>
-          </div>
-        )}
+        <div className="lg:col-span-1">
+          <SignatureManager userId={userId} role="admin" />
+        </div>
       </div>
     </div>
   );

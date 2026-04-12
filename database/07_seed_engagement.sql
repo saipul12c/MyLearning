@@ -48,7 +48,20 @@ BEGIN
     SELECT user_id INTO id_joko FROM user_profiles WHERE full_name = 'Joko Susanto' LIMIT 1;
     SELECT user_id INTO id_kartika FROM user_profiles WHERE full_name = 'Kartika Sari' LIMIT 1;
 
-    -- INSERT TESTIMONIAL REVIEWS (One per course, matching unique users)
+    -- 1.1 ENROLLMENTS for Reviewers (To ensure student counts reflect reality)
+    INSERT INTO enrollments (course_id, user_id, payment_status, enrolled_at, progress_percentage)
+    VALUES 
+    (cid_react, id_dimas, 'completed', NOW() - INTERVAL '30 days', 100),
+    (cid_python, id_anisa, 'completed', NOW() - INTERVAL '25 days', 100),
+    (cid_uiux, id_raka, 'completed', NOW() - INTERVAL '20 days', 100),
+    (cid_flutter, id_siti, 'completed', NOW() - INTERVAL '15 days', 100),
+    (cid_ai, id_budi, 'completed', NOW() - INTERVAL '10 days', 100),
+    (cid_devops, id_cindy, 'completed', NOW() - INTERVAL '5 days', 100),
+    (cid_marketing, id_david, 'completed', NOW() - INTERVAL '2 days', 100),
+    (cid_illustrator, id_eva, 'completed', NOW() - INTERVAL '1 day', 100)
+    ON CONFLICT (course_id, user_id) DO NOTHING;
+
+    -- 1.2 REVIEWS & TESTIMONIALS
     
     -- 1. Dimas -> React
     INSERT INTO reviews (course_id, user_id, rating, comment, is_approved)

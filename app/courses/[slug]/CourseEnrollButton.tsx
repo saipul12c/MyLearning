@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/AuthContext";
 import { Enrollment, enrollCourse, getActiveEnrollment, getUserEnrollments } from "@/lib/enrollment";
@@ -95,44 +96,39 @@ export default function CourseEnrollButton({
           </div>
         )}
         <button
-          onClick={() => setShowPaymentModal(true)}
+          onClick={() => {
+            setActiveEnr(currentEnr);
+            setShowPaymentModal(true);
+          }}
           className="btn-primary w-full !py-3.5 text-base flex items-center justify-center gap-2"
         >
           <CreditCard size={18} /> {currentEnr.status === "rejected" ? "Upload Ulang Bukti" : "Bayar & Daftar"}
         </button>
-        {showPaymentModal && (
-          <PaymentModal 
-            enrollment={currentEnr}
-            courseTitle={courseTitle}
-            qrisUrl={instructorQrisUrl || ""}
-            onClose={() => setShowPaymentModal(false)}
-            onSuccess={() => {
-              setShowPaymentModal(false);
-              setMessage({ type: "success", text: "Bukti berhasil dikirim! Menunggu verifikasi admin." });
-            }}
-          />
-        )}
       </>
     );
   }
-
   const handleEnroll = async () => {
     if (!user) return;
-    const assessments = await getCourseAssessments(courseSlug);
-    const totalAssessmentItems = assessments ? assessments.quizzes.length + assessments.assignments.length + (assessments.finalProject ? 1 : 0) : 0;
-    
-    const result = await enrollCourse(user.id, courseSlug, courseTitle, totalLessons, level, totalAssessmentItems, isFree);
-    
-    if (result.success) {
-      if (isFree) {
-        setMessage({ type: "success", text: "Berhasil mendaftar! Mengarahkan ke kursus..." });
-        setTimeout(() => router.push("/dashboard/my-courses"), 1500);
+    setLoading(true);
+    try {
+      const assessments = await getCourseAssessments(courseSlug);
+      const totalAssessmentItems = assessments ? assessments.quizzes.length + assessments.assignments.length + (assessments.finalProject ? 1 : 0) : 0;
+      
+      const result = await enrollCourse(user.id, courseSlug, courseTitle, totalLessons, level, totalAssessmentItems, isFree);
+      
+      if (result.success) {
+        if (isFree) {
+          setMessage({ type: "success", text: "Berhasil mendaftar! Mengarahkan ke kursus..." });
+          setTimeout(() => router.push("/dashboard/my-courses"), 1500);
+        } else {
+          setActiveEnr(result.enrollment!);
+          setShowPaymentModal(true);
+        }
       } else {
-        setActiveEnr(result.enrollment!);
-        setShowPaymentModal(true);
+        setMessage({ type: "error", text: result.error || "Gagal mendaftar." });
       }
-    } else {
-      setMessage({ type: "error", text: result.error || "Gagal mendaftar." });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -165,20 +161,23 @@ export default function CourseEnrollButton({
       )}
 
       {showPaymentModal && activeEnr && (
-        <PaymentModal 
-          enrollment={activeEnr}
-          courseTitle={courseTitle}
-          qrisUrl={instructorQrisUrl || ""}
-          onClose={() => {
-            setShowPaymentModal(false);
-            window.location.reload(); // Reload to show waiting status
-          }}
-          onSuccess={() => {
-            setShowPaymentModal(false);
-            setMessage({ type: "success", text: "Bukti berhasil dikirim! Menunggu verifikasi admin." });
-            window.location.reload();
-          }}
-        />
+        typeof document !== "undefined" && createPortal(
+          <PaymentModal 
+            enrollment={activeEnr}
+            courseTitle={courseTitle}
+            price={price}
+            qrisUrl={instructorQrisUrl || ""}
+            onClose={() => setShowPaymentModal(false)}
+            onSuccess={() => {
+              setShowPaymentModal(false);
+              setMessage({ type: "success", text: "Bukti berhasil dikirim! Menunggu verifikasi admin." });
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              // Instead of full reload, we can just update local list
+              getUserEnrollments(user!.id).then(setEnrollments);
+            }}
+          />,
+          document.body
+        )
       )}
     </div>
   );

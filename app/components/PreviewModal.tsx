@@ -29,12 +29,21 @@ export default function PreviewModal({ lesson, courseTitle, onClose, onEnroll }:
           {/* Video Placeholder or Embed */}
           <div className="aspect-video bg-black relative">
             {lesson.videoUrl ? (
-              <iframe
-                src={lesson.videoUrl}
-                className="absolute inset-0 w-full h-full border-0 z-10"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              ></iframe>
+              lesson.videoUrl.match(/\.(mp4|webm|ogg)$/) ? (
+                <video
+                  src={lesson.videoUrl}
+                  controls
+                  autoPlay
+                  className="absolute inset-0 w-full h-full z-10"
+                />
+              ) : (
+                <iframe
+                  src={lesson.videoUrl}
+                  className="absolute inset-0 w-full h-full border-0 z-10"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                ></iframe>
+              )
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-gradient-to-br from-slate-900 to-slate-800">
                 <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">

@@ -72,13 +72,23 @@ export async function getCourseReviews(courseSlug: string): Promise<Review[]> {
 }
 
 export async function getCourseStats(courseSlug: string) {
-  const reviews = await getCourseReviews(courseSlug);
-  const count = reviews.length;
-  const average = count > 0 
-    ? Number((reviews.reduce((acc, r) => acc + r.rating, 0) / count).toFixed(1))
-    : 0;
-  
-  return { average, count };
+  try {
+    const { data, error } = await supabase
+      .from("courses")
+      .select("rating, total_reviews")
+      .eq("slug", courseSlug)
+      .single();
+    
+    if (error || !data) return { average: 0, count: 0 };
+    
+    return { 
+      average: Number(data.rating || 0), 
+      count: Number(data.total_reviews || 0) 
+    };
+  } catch (err) {
+    console.error("Error fetching course stats:", err);
+    return { average: 0, count: 0 };
+  }
 }
 
 export async function addReview({ courseSlug, userId, userName, rating, comment }: Omit<Review, "id" | "createdAt">): Promise<{ success: boolean; error?: string }> {

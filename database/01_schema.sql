@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ============================================
 -- 1. USER PROFILES
 -- ============================================
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
   full_name VARCHAR(200) NOT NULL,
@@ -28,7 +28,7 @@ COMMENT ON TABLE user_profiles IS 'Profil pengguna dengan sistem role (admin/use
 -- ============================================
 -- 2. CATEGORIES
 -- ============================================
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(100) NOT NULL UNIQUE,
   slug VARCHAR(100) NOT NULL UNIQUE,
@@ -41,7 +41,7 @@ CREATE TABLE categories (
 -- ============================================
 -- 3. INSTRUCTORS
 -- ============================================
-CREATE TABLE instructors (
+CREATE TABLE IF NOT EXISTS instructors (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL UNIQUE,
   name VARCHAR(200) NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE instructors (
 -- ============================================
 -- 4. COURSES
 -- ============================================
-CREATE TABLE courses (
+CREATE TABLE IF NOT EXISTS courses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title VARCHAR(500) NOT NULL,
   slug VARCHAR(500) NOT NULL UNIQUE,
@@ -94,7 +94,7 @@ CREATE TABLE courses (
 -- ============================================
 -- 5. LESSONS
 -- ============================================
-CREATE TABLE lessons (
+CREATE TABLE IF NOT EXISTS lessons (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   title VARCHAR(500) NOT NULL,
@@ -111,10 +111,10 @@ CREATE TABLE lessons (
 -- ============================================
 -- 6. ENROLLMENTS
 -- ============================================
-CREATE TABLE enrollments (
+CREATE TABLE IF NOT EXISTS enrollments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
   course_slug TEXT,
   course_title TEXT,
   enrolled_at TIMESTAMPTZ DEFAULT NOW(),
@@ -147,21 +147,21 @@ CREATE TABLE enrollments (
 -- ============================================
 -- 7. PROGRESS TRACKING
 -- ============================================
-CREATE TABLE lesson_progress (
+CREATE TABLE IF NOT EXISTS lesson_progress (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
   lesson_id VARCHAR(50) NOT NULL,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
   is_completed BOOLEAN DEFAULT FALSE,
   watch_duration_seconds INTEGER DEFAULT 0,
   completed_at TIMESTAMPTZ,
   UNIQUE(enrollment_id, lesson_id)
 );
 
-CREATE TABLE quiz_progress (
+CREATE TABLE IF NOT EXISTS quiz_progress (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
     quiz_id VARCHAR(100) NOT NULL,
     score INTEGER DEFAULT 0,
     passed BOOLEAN DEFAULT FALSE,
@@ -170,10 +170,10 @@ CREATE TABLE quiz_progress (
     UNIQUE(enrollment_id, quiz_id)
 );
 
-CREATE TABLE assignment_progress (
+CREATE TABLE IF NOT EXISTS assignment_progress (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
     assignment_id VARCHAR(100) NOT NULL,
     score INTEGER DEFAULT 0,
     passed BOOLEAN DEFAULT FALSE,
@@ -191,7 +191,7 @@ CREATE TABLE assignment_progress (
 -- ============================================
 -- 8. ASSESSMENTS DEFINITIONS
 -- ============================================
-CREATE TABLE assessment_definitions (
+CREATE TABLE IF NOT EXISTS assessment_definitions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   assessment_type VARCHAR(20) NOT NULL CHECK (assessment_type IN ('quiz', 'assignment', 'final_project')),
@@ -216,7 +216,7 @@ CREATE TABLE assessment_definitions (
   UNIQUE(course_id, assessment_type, slug)
 );
 
-CREATE TABLE assessment_questions (
+CREATE TABLE IF NOT EXISTS assessment_questions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   assessment_id UUID NOT NULL REFERENCES assessment_definitions(id) ON DELETE CASCADE,
   question_text TEXT NOT NULL,
@@ -230,13 +230,17 @@ CREATE TABLE assessment_questions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+COMMENT ON COLUMN assessment_definitions.max_attempts IS 'Batas maksimal percobaan pengerjaan (0 = tidak terbatas)';
+COMMENT ON COLUMN assessment_definitions.time_limit_minutes IS 'Batas waktu pengerjaan dalam menit (0 = tidak ada batas)';
+COMMENT ON COLUMN assessment_questions.points IS 'Bobot poin untuk pertanyaan ini';
+
 -- ============================================
 -- 9. DISCUSSIONS & NOTIFICATIONS
 -- ============================================
-CREATE TABLE discussions (
+CREATE TABLE IF NOT EXISTS discussions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   lesson_id UUID NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
   parent_id UUID REFERENCES discussions(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   is_resolved BOOLEAN DEFAULT FALSE,
@@ -244,9 +248,9 @@ CREATE TABLE discussions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
   title VARCHAR(200) NOT NULL,
   message TEXT NOT NULL,
   type VARCHAR(20) DEFAULT 'info' CHECK (type IN ('info', 'success', 'warning', 'error')),
@@ -258,10 +262,10 @@ CREATE TABLE notifications (
 -- ============================================
 -- 10. REVIEWS, CERTIFICATES, CONTACT
 -- ============================================
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
   rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
   is_approved BOOLEAN DEFAULT TRUE,
@@ -270,10 +274,10 @@ CREATE TABLE reviews (
   UNIQUE(course_id, user_id)
 );
 
-CREATE TABLE certificates (
+CREATE TABLE IF NOT EXISTS certificates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE UNIQUE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
   course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   certificate_number VARCHAR(100) NOT NULL UNIQUE,
   issued_at TIMESTAMPTZ DEFAULT NOW(),
@@ -282,7 +286,7 @@ CREATE TABLE certificates (
   user_name VARCHAR(200)
 );
 
-CREATE TABLE contact_messages (
+CREATE TABLE IF NOT EXISTS contact_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(200) NOT NULL,
   email VARCHAR(300) NOT NULL,
@@ -311,22 +315,28 @@ ORDER BY sale_date DESC;
 -- ============================================
 -- 12. PERFORMANCE INDEXES
 -- ============================================
-CREATE INDEX idx_categories_slug ON categories(slug);
-CREATE INDEX idx_instructors_user_id ON instructors(user_id);
-CREATE INDEX idx_instructors_slug ON instructors(slug);
-CREATE INDEX idx_courses_slug ON courses(slug);
-CREATE INDEX idx_courses_category_id ON courses(category_id);
-CREATE INDEX idx_courses_instructor_id ON courses(instructor_id);
-CREATE INDEX idx_courses_published_featured ON courses(is_published, is_featured) WHERE is_published = true;
-CREATE INDEX idx_courses_fulltext ON courses USING gin(to_tsvector('indonesian', coalesce(title, '') || ' ' || coalesce(description, '')));
-CREATE INDEX idx_enrollments_user_id ON enrollments(user_id);
-CREATE INDEX idx_enrollments_course_id ON enrollments(course_id);
-CREATE INDEX idx_user_profiles_user_id ON user_profiles(user_id);
-CREATE INDEX idx_lesson_progress_enrollment ON lesson_progress(enrollment_id);
-CREATE INDEX idx_discussions_lesson ON discussions(lesson_id);
-CREATE INDEX idx_discussions_parent ON discussions(parent_id);
-CREATE INDEX idx_notifications_user_read ON notifications(user_id, is_read);
-CREATE INDEX idx_assessment_def_course ON assessment_definitions(course_id);
-CREATE INDEX idx_assessment_ques_def ON assessment_questions(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
+CREATE INDEX IF NOT EXISTS idx_instructors_user_id ON instructors(user_id);
+CREATE INDEX IF NOT EXISTS idx_instructors_slug ON instructors(slug);
+CREATE INDEX IF NOT EXISTS idx_courses_slug ON courses(slug);
+CREATE INDEX IF NOT EXISTS idx_courses_category_id ON courses(category_id);
+CREATE INDEX IF NOT EXISTS idx_courses_instructor_id ON courses(instructor_id);
+CREATE INDEX IF NOT EXISTS idx_courses_published_featured ON courses(is_published, is_featured) WHERE is_published = true;
+-- Indonesian Full-Text Search Vector
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS title_description_vector tsvector 
+GENERATED ALWAYS AS (to_tsvector('indonesian', coalesce(title, '') || ' ' || coalesce(description, ''))) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_courses_fulltext ON courses USING gin(title_description_vector);
+CREATE INDEX IF NOT EXISTS idx_enrollments_user_id ON enrollments(user_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_course_id ON enrollments(course_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_status ON enrollments(payment_status);
+CREATE INDEX IF NOT EXISTS idx_enrollments_date ON enrollments(enrolled_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_progress_enrollment ON lesson_progress(enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_discussions_lesson ON discussions(lesson_id);
+CREATE INDEX IF NOT EXISTS idx_discussions_parent ON discussions(parent_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_assessment_def_course ON assessment_definitions(course_id);
+CREATE INDEX IF NOT EXISTS idx_assessment_ques_def ON assessment_questions(assessment_id);
 
 -- NOTE: TRIGGERS AND FUNCTIONS ARE MOVED TO 02_logic.sql

@@ -17,18 +17,18 @@ const isSupabaseConfigured = () => {
  */
 
 // Centralized Authorization Helper
-async function checkAdmin() {
+async function checkAuthorized() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
-
+  
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("role")
     .eq("user_id", user.id)
     .single();
-
-  if (profile?.role !== "admin") {
-    throw new Error("Forbidden: Admin access required");
+    
+  if (profile?.role !== "admin" && profile?.role !== "instructor") {
+    throw new Error("Forbidden: Admin or Instructor access required");
   }
   return user;
 }
@@ -53,7 +53,7 @@ export async function getAdminCourseById(id: string) {
 
 export async function upsertLesson(lessonData: any) {
   try {
-    await checkAdmin();
+    await checkAuthorized();
 
     // 1. INPUT VALIDATION
     if (!lessonData.course_id || !lessonData.title) {
@@ -86,7 +86,7 @@ export async function upsertLesson(lessonData: any) {
 
 export async function deleteLesson(id: string) {
   try {
-    await checkAdmin();
+    await checkAuthorized();
     const { error } = await supabase.from("lessons").delete().eq("id", id);
     return { success: !error, error };
   } catch (err: any) {
@@ -96,7 +96,7 @@ export async function deleteLesson(id: string) {
 
 export async function updateLessonsOrder(lessons: {id: string, order_index: number}[]) {
   try {
-    await checkAdmin();
+    await checkAuthorized();
     const { error } = await supabase.from("lessons").upsert(lessons);
     return { success: !error, error };
   } catch (err: any) {
@@ -160,7 +160,7 @@ export async function getCourses(): Promise<Course[]> {
       id, title, slug, short_description, description, thumbnail_url, 
       price, discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
-      is_published, is_featured, created_at, updated_at,
+      is_published, is_featured, created_at, updated_at, tags,
       categories(name, slug),
       instructors(name, slug, avatar_url, website_url, linkedin_url)
     `)
@@ -175,6 +175,109 @@ export async function getCourses(): Promise<Course[]> {
   return data.map(mapDbToCourse);
 }
 
+/**
+ * Fetches the most popular courses based on enrollments in the last 3 months.
+ * Fallback to all-time popularity if no recent data exists.
+ */
+export async function getPopularCourses(limit: number = 8): Promise<Course[]> {
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+  try {
+    // 1. Fetch successful enrollments in the last 3 months
+    const { data: enrollments, error: enrError } = await supabase
+      .from("enrollments")
+      .select("course_id")
+      .gte("enrolled_at", threeMonthsAgo.toISOString())
+      .in("payment_status", ["paid", "completed"]);
+
+    if (enrError) throw enrError;
+
+    let courseIds: string[] = [];
+    
+    if (enrollments && enrollments.length > 0) {
+      // 2. Aggregate counts per course
+      const counts: Record<string, number> = {};
+      enrollments.forEach((e: any) => {
+        counts[e.course_id] = (counts[e.course_id] || 0) + 1;
+      });
+
+      // 3. Sort and slice top IDs
+      courseIds = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([id]) => id);
+    }
+
+    // 4. Fallback: If no recent enrollments, use all-time stats
+    if (courseIds.length === 0) {
+      const { data: fallback, error: fallbackError } = await supabase
+        .from("courses")
+        .select("id")
+        .eq("is_published", true)
+        .order("total_students", { ascending: false })
+        .limit(limit);
+      
+      if (fallbackError) throw fallbackError;
+      courseIds = fallback.map(c => c.id);
+    }
+
+    if (courseIds.length === 0) return [];
+
+    // 5. Fetch full details for the top courses
+    const { data, error } = await supabase
+      .from("courses")
+      .select(`
+        id, title, slug, short_description, description, thumbnail_url, 
+        price, discount_price, level, language, duration_hours, 
+        total_lessons, rating, total_reviews, total_students,
+        is_published, is_featured, created_at, updated_at, tags,
+        categories(name, slug),
+        instructors(name, slug, avatar_url, website_url, linkedin_url)
+      `)
+      .in("id", courseIds);
+
+    if (error) throw error;
+
+    // 6. Map and Maintain original popularity order
+    const mapped = data.map(mapDbToCourse);
+    return mapped.sort((a, b) => courseIds.indexOf(a.id) - courseIds.indexOf(b.id));
+
+  } catch (err) {
+    console.error("Error in getPopularCourses:", err);
+    // Ultimate fallback: just return the normal courses
+    const all = await getCourses();
+    return all.slice(0, limit);
+  }
+}
+
+
+export async function searchCourses(query: string): Promise<Course[]> {
+  const { data, error } = await supabase
+    .from("courses")
+    .select(`
+      id, title, slug, short_description, description, thumbnail_url, 
+      price, discount_price, level, language, duration_hours, 
+      total_lessons, rating, total_reviews, total_students,
+      is_published, is_featured, created_at, updated_at, tags,
+      categories(name, slug),
+      instructors(name, slug, avatar_url, website_url, linkedin_url)
+    `)
+    .eq("is_published", true)
+    .textSearch('title_description_vector', query, {
+      config: 'indonesian',
+      type: 'websearch'
+    })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error searching courses in Supabase:", error);
+    return [];
+  }
+
+  return data.map(mapDbToCourse);
+}
+
 export async function getCourseBySlug(slug: string): Promise<Course | null> {
   const { data, error } = await supabase
     .from("courses")
@@ -182,7 +285,7 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
       id, title, slug, short_description, description, thumbnail_url, 
       price, discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
-      is_published, is_featured, learning_points, requirements,
+      is_published, is_featured, learning_points, requirements, preview_video_url, tags,
       categories(name, slug),
       instructors(name, slug, bio, avatar_url, expertise, rating, qris_url, website_url, linkedin_url),
       lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url)
@@ -216,7 +319,7 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
 // Admin CRUD
 export async function upsertCourse(courseData: Partial<Course>) {
   try {
-    await checkAdmin();
+    await checkAuthorized();
 
     // 1. INPUT VALIDATION
     const rawData = courseData as any;
@@ -254,6 +357,8 @@ export async function upsertCourse(courseData: Partial<Course>) {
       is_featured: Boolean(courseData.isFeatured),
       learning_points: Array.isArray(courseData.learningPoints) ? courseData.learningPoints : [],
       requirements: Array.isArray(courseData.requirements) ? courseData.requirements : [],
+      preview_video_url: courseData.previewVideoUrl || null,
+      tags: Array.isArray(courseData.tags) ? courseData.tags : [],
     };
 
     const { data, error } = await supabase
@@ -270,7 +375,7 @@ export async function upsertCourse(courseData: Partial<Course>) {
 
 export async function deleteCourse(id: string) {
   try {
-    await checkAdmin();
+    await checkAuthorized();
     const { error } = await supabase.from("courses").delete().eq("id", id);
     return { success: !error, error };
   } catch (err: any) {
@@ -331,6 +436,8 @@ function mapDbToCourse(db: any): Course {
     updatedAt: db.updated_at,
     learningPoints: db.learning_points || [],
     requirements: db.requirements || [],
+    previewVideoUrl: db.preview_video_url,
+    tags: db.tags || [],
     lessons: []
   };
 }

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Star, Users, Clock, BookOpen, X, SlidersHorizontal, Filter } from "lucide-react";
+import { Search, Star, Users, Clock, BookOpen, X, SlidersHorizontal, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { type Course, type Category } from "@/lib/data";
 import { formatPrice, formatNumber, formatDuration } from "@/lib/utils";
 import { getLevelLabel, getLevelBg } from "@/lib/enrollment";
@@ -14,11 +14,16 @@ interface CoursesClientProps {
   initialCategory?: string;
 }
 
+const ITEMS_PER_PAGE = 8;
+
+
 export default function CoursesClient({ initialCourses, initialCategories, initialCategory }: CoursesClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || "all");
   const [selectedLevel, setSelectedLevel] = useState("all");
   const [sortBy, setSortBy] = useState("popular");
+  const [currentPage, setCurrentPage] = useState(1);
+
 
   const filteredCourses = useMemo(() => {
     let result = [...initialCourses];
@@ -56,6 +61,19 @@ export default function CoursesClient({ initialCourses, initialCategories, initi
 
     return result;
   }, [searchQuery, selectedCategory, selectedLevel, sortBy, initialCourses]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
+  const paginatedCourses = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredCourses.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredCourses, currentPage]);
+
+  // Reset to page 1 when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, selectedLevel, sortBy]);
+
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -168,9 +186,9 @@ export default function CoursesClient({ initialCourses, initialCategories, initi
             </div>
           )}
 
-          {filteredCourses.length > 0 ? (
+          {paginatedCourses.length > 0 ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredCourses.map((course) => {
+              {paginatedCourses.map((course) => {
                 return (
                   <Link href={`/courses/${course.slug}`} key={course.id} className="card group overflow-hidden flex flex-col h-full" id={`course-card-${course.slug}`}>
                     <div className="relative h-44 bg-[#0c0c14] overflow-hidden">
@@ -179,6 +197,7 @@ export default function CoursesClient({ initialCourses, initialCategories, initi
                           src={course.thumbnail}
                           alt={course.title}
                           fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                       ) : (
@@ -243,6 +262,60 @@ export default function CoursesClient({ initialCourses, initialCategories, initi
                 className="mt-6 text-purple-400 hover:text-purple-300 font-bold"
               >
                 Tampilkan Semua Kursus
+              </button>
+            </div>
+          )}
+
+          {/* Pagination UI */}
+          {totalPages > 1 && (
+            <div className="mt-16 flex justify-center items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="w-10 h-10 rounded-xl border border-white/5 bg-white/5 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="flex items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  // Basic logic to show limited page numbers if totalPages is large
+                  if (
+                    page === 1 || 
+                    page === totalPages || 
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-10 h-10 rounded-xl font-bold text-xs transition-all ${
+                          currentPage === page 
+                            ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30" 
+                            : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (
+                    (page === 2 && currentPage > 3) || 
+                    (page === totalPages - 1 && currentPage < totalPages - 2)
+                  ) {
+                    return <span key={page} className="text-slate-600 px-1">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="w-10 h-10 rounded-xl border border-white/5 bg-white/5 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                aria-label="Next Page"
+              >
+                <ChevronRight size={20} />
               </button>
             </div>
           )}

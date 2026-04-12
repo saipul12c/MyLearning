@@ -66,7 +66,7 @@ export default function AnalyticsPage() {
     },
     { 
       label: "Engagement Rate", 
-      value: "68%", 
+      value: summary?.engagementRate || "0%", 
       icon: Activity, 
       color: "text-cyan-400", 
       bg: "bg-cyan-500/10",
@@ -204,7 +204,7 @@ export default function AnalyticsPage() {
             <div className="glass-strong p-8 rounded-3xl border border-white/5 bg-gradient-to-br from-purple-500/5 to-transparent relative overflow-hidden">
                <h3 className="text-lg font-bold text-white mb-4">Masterpiece Insight</h3>
                <p className="text-sm text-slate-400 leading-relaxed mb-6">
-                 Berdasarkan data 30 hari terakhir, kursus kategori <span className="text-white font-bold">Programming</span> memiliki tingkat konversi tertinggi. Pertimbangkan untuk meluncurkan kursus <span className="text-cyan-400 font-bold">Advanced React</span> untuk memaksimalkan ROI.
+                 Berdasarkan data terbaru, kursus kategori <span className="text-white font-bold">{summary?.topCategory?.name || "N/A"}</span> memiliki tingkat permintaan tertinggi dengan <span className="text-white font-bold">{summary?.topCategory?.count || 0}</span> enrollment. Pertimbangkan untuk merilis materi lanjutan di kategori ini untuk memaksimalkan ROI.
                </p>
                <button className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors group">
                  Lihat Detail Strategi <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />

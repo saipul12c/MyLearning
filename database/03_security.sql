@@ -35,6 +35,8 @@ DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
 CREATE POLICY "Users can update own profile" ON user_profiles FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Admins can manage all profiles" ON user_profiles;
 CREATE POLICY "Admins can manage all profiles" ON user_profiles FOR ALL USING (is_admin());
+DROP POLICY IF EXISTS "Instructors can see profiles of their students" ON user_profiles;
+CREATE POLICY "Instructors can see profiles of their students" ON user_profiles FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM enrollments e JOIN courses c ON e.course_id = c.id JOIN instructors i ON c.instructor_id = i.id WHERE e.user_id = user_profiles.user_id AND i.user_id = auth.uid()));
 
 -- 2. INSTRUCTORS Policies
 ALTER TABLE instructors ENABLE ROW LEVEL SECURITY;
@@ -69,14 +71,28 @@ DROP POLICY IF EXISTS "Users can view own enrollments" ON enrollments;
 CREATE POLICY "Users can view own enrollments" ON enrollments FOR SELECT USING (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Instructors can view enrollments for their courses" ON enrollments;
 CREATE POLICY "Instructors can view enrollments for their courses" ON enrollments FOR SELECT USING (EXISTS (SELECT 1 FROM courses JOIN instructors ON courses.instructor_id = instructors.id WHERE courses.id = enrollments.course_id AND instructors.user_id = auth.uid()));
+DROP POLICY IF EXISTS "Users can enroll themselves" ON enrollments;
+CREATE POLICY "Users can enroll themselves" ON enrollments FOR INSERT WITH CHECK (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Users can update own payment proof" ON enrollments;
 CREATE POLICY "Users can update own payment proof" ON enrollments FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Admins can manage all enrollments" ON enrollments;
 CREATE POLICY "Admins can manage all enrollments" ON enrollments FOR ALL USING (is_admin());
+DROP POLICY IF EXISTS "Instructors can update enrollments for their courses" ON enrollments;
+CREATE POLICY "Instructors can update enrollments for their courses" ON enrollments FOR UPDATE USING (EXISTS (SELECT 1 FROM courses JOIN instructors ON courses.instructor_id = instructors.id WHERE courses.id = enrollments.course_id AND instructors.user_id = auth.uid()));
 
 -- 6. CONTENT ACCESS (Paywall)
 DROP POLICY IF EXISTS "Access lesson content" ON lessons;
 CREATE POLICY "Access lesson content" ON lessons FOR SELECT USING (is_free_preview = true OR is_admin() OR EXISTS (SELECT 1 FROM enrollments WHERE enrollments.course_id = lessons.course_id AND enrollments.user_id = auth.uid() AND enrollments.payment_status IN ('paid', 'completed')) OR EXISTS (SELECT 1 FROM courses c JOIN instructors i ON c.instructor_id = i.id WHERE c.id = lessons.course_id AND i.user_id = auth.uid()));
+
+-- PROGRESS MONITORING FOR INSTRUCTORS
+DROP POLICY IF EXISTS "Instructors can view lesson progress for their courses" ON lesson_progress;
+CREATE POLICY "Instructors can view lesson progress for their courses" ON lesson_progress FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM enrollments e JOIN courses c ON e.course_id = c.id JOIN instructors i ON c.instructor_id = i.id WHERE e.id = lesson_progress.enrollment_id AND i.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Instructors can view quiz progress for their courses" ON quiz_progress;
+CREATE POLICY "Instructors can view quiz progress for their courses" ON quiz_progress FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM enrollments e JOIN courses c ON e.course_id = c.id JOIN instructors i ON c.instructor_id = i.id WHERE e.id = quiz_progress.enrollment_id AND i.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Instructors can view assignment progress for their courses" ON assignment_progress;
+CREATE POLICY "Instructors can view assignment progress for their courses" ON assignment_progress FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM enrollments e JOIN courses c ON e.course_id = c.id JOIN instructors i ON c.instructor_id = i.id WHERE e.id = assignment_progress.enrollment_id AND i.user_id = auth.uid()));
 
 -- 7. PROGRESS TRACKING
 ALTER TABLE lesson_progress ENABLE ROW LEVEL SECURITY;
@@ -113,9 +129,28 @@ ALTER TABLE assessment_questions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enrolled students can view questions" ON assessment_questions;
 CREATE POLICY "Enrolled students can view questions" ON assessment_questions FOR SELECT USING (EXISTS (SELECT 1 FROM assessment_definitions ad JOIN enrollments e ON ad.course_id = e.course_id WHERE ad.id = assessment_questions.assessment_id AND e.user_id = auth.uid() AND e.payment_status IN ('paid', 'completed')) OR is_admin() OR is_instructor());
 
+-- 9.5 REVIEWS
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view approved reviews" ON reviews;
+CREATE POLICY "Anyone can view approved reviews" ON reviews FOR SELECT USING (is_approved = true);
+DROP POLICY IF EXISTS "Authenticated users can create reviews" ON reviews;
+CREATE POLICY "Authenticated users can create reviews" ON reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can manage own reviews" ON reviews;
+CREATE POLICY "Users can manage own reviews" ON reviews FOR ALL USING (auth.uid() = user_id);
+
 -- 10. OTHER
 ALTER TABLE contact_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can send messages" ON contact_messages;
 CREATE POLICY "Anyone can send messages" ON contact_messages FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Admins can manage messages" ON contact_messages;
 CREATE POLICY "Admins can manage messages" ON contact_messages FOR ALL USING (is_admin());
+
+-- 11. CERTIFICATES
+ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own certificates" ON certificates;
+CREATE POLICY "Users can view own certificates" ON certificates FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins can manage all certificates" ON certificates;
+CREATE POLICY "Admins can manage all certificates" ON certificates FOR ALL USING (is_admin());
+DROP POLICY IF EXISTS "Instructors can view certificates for their courses" ON certificates;
+CREATE POLICY "Instructors can view certificates for their courses" ON certificates FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM courses JOIN instructors ON courses.instructor_id = instructors.id WHERE courses.id = certificates.course_id AND instructors.user_id = auth.uid()));
+-- System can manage all (service_role doesn't need policy, but SECURITY DEFINER functions will work)

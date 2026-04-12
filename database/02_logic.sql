@@ -111,7 +111,14 @@ BEGIN
 
     v_total_items := COALESCE(v_total_items, 0);
     IF v_total_items <= 0 THEN 
+        -- Fallback: Count lessons + Project (Assuming 1 project if none defined yet)
         SELECT total_lessons INTO v_total_items FROM courses c JOIN enrollments e ON e.course_id = c.id WHERE e.id = v_enroll_id;
+        
+        -- Check if there's a final project definition for this course
+        IF EXISTS (SELECT 1 FROM assessment_definitions ad JOIN enrollments e ON e.course_id = ad.course_id WHERE e.id = v_enroll_id AND ad.assessment_type = 'final_project') THEN
+            v_total_items := v_total_items + 1;
+        END IF;
+
         v_total_items := COALESCE(v_total_items, 1);
         IF v_total_items <= 0 THEN v_total_items := 1; END IF;
     END IF;
@@ -134,6 +141,39 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+
+-- 5. TRIGGER FUNCTION: Sync Instructor Course Statistics
+-- Automatically updates total_courses whenever a course is added/deleted
+CREATE OR REPLACE FUNCTION sync_instructor_course_stats()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_instructor_id UUID;
+BEGIN
+    v_instructor_id := COALESCE(NEW.instructor_id, OLD.instructor_id);
+    
+    UPDATE instructors 
+    SET total_courses = (SELECT COUNT(*) FROM courses WHERE instructor_id = v_instructor_id)
+    WHERE id = v_instructor_id;
+    
+    RETURN NULL;
+END;
+$$ language 'plpgsql';
+
+-- 6. TRIGGER FUNCTION: Handle New User (Auth to Profile Sync)
+-- Automatically creates a profile record when a new user signs up
+CREATE OR REPLACE FUNCTION handle_new_user() 
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.user_profiles (user_id, full_name, avatar_url, role)
+  VALUES (
+    NEW.id, 
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email), 
+    NEW.raw_user_meta_data->>'avatar_url', 
+    'user'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================
 -- APPLY TRIGGERS
@@ -167,6 +207,10 @@ CREATE TRIGGER trigger_sync_course_reviews AFTER INSERT OR UPDATE OR DELETE ON r
 DROP TRIGGER IF EXISTS trigger_sync_course_enrollments ON enrollments;
 CREATE TRIGGER trigger_sync_course_enrollments AFTER INSERT OR UPDATE OR DELETE ON enrollments FOR EACH ROW EXECUTE FUNCTION sync_course_enrollment_stats();
 
+-- Instructor Stats
+DROP TRIGGER IF EXISTS trigger_sync_instructor_courses ON courses;
+CREATE TRIGGER trigger_sync_instructor_courses AFTER INSERT OR DELETE ON courses FOR EACH ROW EXECUTE FUNCTION sync_instructor_course_stats();
+
 -- Enrollment Auto-resolve
 DROP TRIGGER IF EXISTS trigger_resolve_course_id ON enrollments;
 CREATE TRIGGER trigger_resolve_course_id BEFORE INSERT ON enrollments FOR EACH ROW EXECUTE FUNCTION resolve_course_id_from_slug();
@@ -183,6 +227,12 @@ CREATE TRIGGER trigger_update_progress_assignments AFTER INSERT OR UPDATE OR DEL
 
 -- Enrollment Progress (Watch for Final Project)
 DROP TRIGGER IF EXISTS trigger_update_progress_enrollment ON enrollments;
+CREATE TRIGGER trigger_update_progress_enrollment AFTER UPDATE OF final_project_completed ON enrollments FOR EACH ROW EXECUTE FUNCTION calculate_enrollment_progress();
+
+-- Auth to Profile Sync
+-- IMPORTANT: This trigger must be run in the Supabase SQL Editor if you encounter permission errors.
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- ======================================================
 -- 4. MAINTENANCE PROCEDURES

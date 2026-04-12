@@ -52,10 +52,8 @@ export interface CourseAssessments {
 }
 
 /**
- * Empty placeholders for compatibility.
- * Use dynamic fetch functions instead.
+ * Dynamic fetch functions below replace the old static data.
  */
-export const courseAssessments: Record<string, CourseAssessments> = {};
 
 /**
  * Fetch assessments for a specific course dynamically from Supabase
@@ -119,7 +117,7 @@ export async function getCourseAssessments(courseSlug: string): Promise<CourseAs
               id: q.id,
               question: q.question_text,
               options: q.options,
-              correctAnswer: q.correct_answer_index,
+              correctAnswer: Number(q.correct_answer_index),
               explanation: q.explanation
             }))
         });

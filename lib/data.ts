@@ -74,6 +74,8 @@ export interface Course {
   updatedAt: string;
   learningPoints: string[];
   requirements: string[];
+  previewVideoUrl?: string;
+  tags?: string[];
   lessons?: Lesson[];
 }
 
@@ -81,14 +83,7 @@ export interface Course {
  * Empty placeholders for compatibility. 
  * Real data is now fetched via lib/courses.ts
  */
-export const categories: Category[] = [];
-export const instructors: Instructor[] = [];
-export const courses: Course[] = [];
+// (Empty arrays removed as they are no longer used by the new dynamic architecture)
 
-// Helper functions that now return empty or simple logic (Legacy Compatibility)
-export const getCourses = () => [];
-export const getCourseBySlug = (slug: string) => null;
-export const getInstructorById = (id: string) => null;
-export const getCoursesByCategory = (categorySlug: string) => [];
-export const searchCourses = (query: string) => [];
-export const getCourseLiveStats = (slug: string) => ({ rating: 4.8, students: 2500 });
+// Note: Helper functions like getCourses() and searchCourses() 
+// should now be imported from lib/courses.ts

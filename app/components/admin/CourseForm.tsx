@@ -12,6 +12,8 @@ import {
   getCategories, getInstructors, upsertCourse, getAdminCourseById, 
   upsertLesson, deleteLesson, updateLessonsOrder 
 } from "@/lib/courses";
+import { getInstructorProfile } from "@/lib/instructor";
+import { useAuth } from "../AuthContext";
 import { 
   getCourseAssessments, upsertAssessment, deleteAssessment, 
   upsertQuizQuestion, deleteQuizQuestion 
@@ -57,6 +59,7 @@ interface NotificationState {
 
 export default function CourseForm({ courseId }: Props) {
   const router = useRouter();
+  const { user, isAdmin, isInstructor } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(!!courseId);
   const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
@@ -134,6 +137,14 @@ export default function CourseForm({ courseId }: Props) {
         
         setCategories(cats.map(c => ({ id: (c as any).id || c.slug, name: c.name })) || []);
         setInstructors(insts.map(i => ({ id: (i as any).id || i.id, name: i.name })) || []);
+
+        // If instructor, auto-set their profile ID
+        if (isInstructor && user && !courseId) {
+          const profile = await getInstructorProfile(user.id);
+          if (profile) {
+            setFormData(prev => ({ ...prev, instructorIdDb: profile.id }));
+          }
+        }
 
         if (courseId) {
           const course = await getAdminCourseById(courseId);
@@ -419,7 +430,13 @@ export default function CourseForm({ courseId }: Props) {
                        <option value="">Pilih Kategori</option>
                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                    <select className="input w-full" value={formData.instructorIdDb} onChange={e => setFormData({...formData, instructorIdDb: e.target.value})} required>
+                    <select 
+                      className="input w-full" 
+                      value={formData.instructorIdDb} 
+                      onChange={e => setFormData({...formData, instructorIdDb: e.target.value})} 
+                      required
+                      disabled={isInstructor && !isAdmin}
+                    >
                        <option value="">Pilih Instruktur</option>
                        {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                     </select>
@@ -438,8 +455,17 @@ export default function CourseForm({ courseId }: Props) {
                        <option value="Mastery">Mastery</option>
                     </select>
                     <div className="flex gap-4">
-                       <label className="flex items-center gap-2 text-white text-sm"><input type="checkbox" checked={formData.isPublished} onChange={e => setFormData({...formData, isPublished: e.target.checked})} /> Published</label>
-                       <label className="flex items-center gap-2 text-white text-sm"><input type="checkbox" checked={formData.isFeatured} onChange={e => setFormData({...formData, isFeatured: e.target.checked})} /> Featured</label>
+                       <label className="flex items-center gap-2 text-white text-sm">
+                         <input type="checkbox" checked={formData.isPublished} onChange={e => setFormData({...formData, isPublished: e.target.checked})} /> Published
+                       </label>
+                       <label className="flex items-center gap-2 text-white text-sm opacity-60">
+                         <input 
+                           type="checkbox" 
+                           checked={formData.isFeatured} 
+                           onChange={e => setFormData({...formData, isFeatured: e.target.checked})} 
+                           disabled={!isAdmin}
+                         /> Featured { !isAdmin && <span className="text-[10px] ml-1">(Admin only)</span> }
+                       </label>
                     </div>
                  </div>
               </div>

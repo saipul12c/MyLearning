@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { getAllRegisteredUsers, updateUserRole, deleteUser, type UserRole, type SafeUser } from "@/lib/auth";
 import { getAllEnrollmentsAdmin, type Enrollment } from "@/lib/enrollment";
-import { Users, Shield, Trash2, Search, AlertCircle } from "lucide-react";
+import { Users, Shield, Trash2, Search, AlertCircle, GraduationCap } from "lucide-react";
+import { useAuth } from "@/app/components/AuthContext";
 
 export default function AdminUsersPage() {
+  const { isAdmin } = useAuth();
   const [users, setUsers] = useState<SafeUser[]>([]);
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,8 +49,10 @@ export default function AdminUsersPage() {
     <div className="max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Kelola <span className="gradient-text">Pengguna</span></h1>
-          <p className="text-slate-400 text-sm mt-1">{users.length} pengguna terdaftar</p>
+          <h1 className="text-2xl font-bold text-white">
+            {isAdmin ? "Kelola" : "Daftar"} <span className="gradient-text">{isAdmin ? "Pengguna" : "Siswa"}</span>
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">{users.length} {isAdmin ? "pengguna terdaftar" : "siswa Anda"}</p>
         </div>
       </div>
 
@@ -89,16 +93,17 @@ export default function AdminUsersPage() {
                         value={u.role}
                         onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
                         className="bg-white/5 border border-white/10 rounded-lg text-xs px-2 py-1 text-slate-300 outline-none"
-                        disabled={u.email === "admin@mylearning.id"}
+                        disabled={u.email === "admin@mylearning.id" || !isAdmin}
                       >
                         <option value="user">User</option>
+                        <option value="instructor">Instructor</option>
                         <option value="admin">Admin</option>
                       </select>
                     </td>
                     <td className="px-5 py-3 text-slate-400">{enrollmentCount}</td>
                     <td className="px-5 py-3 text-slate-500 text-xs">{new Date(u.createdAt).toLocaleDateString("id-ID")}</td>
                     <td className="px-5 py-3 text-right">
-                      {u.email !== "admin@mylearning.id" && (
+                      {u.email !== "admin@mylearning.id" && isAdmin && (
                         <button onClick={() => handleDelete(u.id, u.fullName)} className="text-red-400/60 hover:text-red-400 transition-colors">
                           <Trash2 size={16} />
                         </button>

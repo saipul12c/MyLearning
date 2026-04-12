@@ -141,6 +141,27 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
   };
 }
 
+export async function getPublicUser(userId: string): Promise<SafeUser | null> {
+  const { data: profile, error } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !profile) return null;
+
+  return {
+    id: userId,
+    email: "user@hidden.com",
+    fullName: profile.full_name,
+    phone: "",
+    bio: profile.bio || "",
+    role: profile.role as UserRole,
+    createdAt: profile.created_at,
+    avatarUrl: profile.avatar_url,
+  };
+}
+
 export async function updateProfile(
   userId: string,
   updates: Partial<Pick<User, "fullName" | "phone" | "bio" | "avatarUrl">>
@@ -209,7 +230,7 @@ export async function getAllRegisteredUsers(): Promise<SafeUser[]> {
       .eq("user_id", user.id)
       .single();
 
-    if (profile?.role !== "admin") return [];
+    if (profile?.role !== "admin" && profile?.role !== "instructor") return [];
 
     const { data: profiles, error } = await supabase
       .from("user_profiles")

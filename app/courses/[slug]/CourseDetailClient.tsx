@@ -60,6 +60,9 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 <span className="badge badge-primary">{course.category}</span>
                 <span className="badge bg-white/5 text-slate-400 border-0">{course.level}</span>
+                {course.tags && course.tags.length > 0 && course.tags.map((tag, i) => (
+                  <span key={i} className="badge bg-purple-500/10 text-purple-400 border border-purple-500/10 uppercase tracking-tighter text-[9px]">{tag}</span>
+                ))}
                 {course.discountPrice && <span className="badge badge-success">{discountPercent}% DISKON</span>}
               </div>
 
@@ -188,6 +191,7 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                         src={course.thumbnail}
                         alt={course.title}
                         fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                     ) : (
@@ -198,8 +202,19 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none group-hover:bg-black/30 transition-colors">
                       <div 
                         onClick={() => {
-                          const preview = (course.lessons || []).find(l => l.isFreePreview);
-                          if (preview) setSelectedPreview(preview);
+                          if (course.previewVideoUrl) {
+                            setSelectedPreview({
+                              id: "preview",
+                              title: "Cuplikan Kursus",
+                              videoUrl: course.previewVideoUrl,
+                              durationMinutes: 0,
+                              isFreePreview: true,
+                              description: "Tonton cuplikan singkat materi apa saja yang akan Anda pelajari dalam kursus ini."
+                            });
+                          } else {
+                            const preview = (course.lessons || []).find(l => l.isFreePreview);
+                            if (preview) setSelectedPreview(preview);
+                          }
                         }}
                         className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center backdrop-blur shadow-lg shadow-black/50 pointer-events-auto cursor-pointer hover:bg-white/30 transition-colors"
                       >

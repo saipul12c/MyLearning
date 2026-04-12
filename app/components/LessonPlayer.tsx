@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronRight, ChevronLeft, CheckCircle, PlayCircle, BookOpen, Clock, ArrowRight } from "lucide-react";
 import { type Lesson } from "@/lib/data";
 import DiscussionSection from "./DiscussionSection";
@@ -121,7 +122,7 @@ export default function LessonPlayer({
     return elements;
   };
 
-  return (
+  return typeof document !== "undefined" ? createPortal(
     <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col lg:flex-row animate-fade-in overflow-hidden">
       {/* Sidebar - Video & Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar">
@@ -295,6 +296,7 @@ export default function LessonPlayer({
             </button>
          </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+  ) : null;
 }

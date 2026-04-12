@@ -5,9 +5,13 @@ import { getCourses, deleteCourse } from "@/lib/courses";
 import { type Course } from "@/lib/data";
 import Link from "next/link";
 import { Plus, Edit2, Trash2, Search, ArrowLeft, ExternalLink } from "lucide-react";
+import { useAuth } from "@/app/components/AuthContext";
+import { getInstructorProfile } from "@/lib/instructor";
 
 export default function AdminCoursesPage() {
+  const { user, isAdmin, isInstructor } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [instructorProfile, setInstructorProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -16,9 +20,12 @@ export default function AdminCoursesPage() {
   }, []);
 
   async function fetchCourses() {
-    setLoading(true);
-    const data = await getCourses();
+    const [data, profile] = await Promise.all([
+      getCourses(),
+      isInstructor && user ? getInstructorProfile(user.id) : null
+    ]);
     setCourses(data);
+    setInstructorProfile(profile);
     setLoading(false);
   }
 
@@ -131,18 +138,22 @@ export default function AdminCoursesPage() {
                         >
                           <ExternalLink size={16} />
                         </Link>
-                        <Link 
-                          href={`/dashboard/admin/courses/${course.id}/edit`}
-                          className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-purple-400 hover:bg-purple-500/10"
-                        >
-                          <Edit2 size={16} />
-                        </Link>
-                        <button 
-                          onClick={() => handleDelete(course.id, course.title)}
-                          className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-red-400 hover:bg-red-500/10"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {(isAdmin || (isInstructor && instructorProfile && course.instructorId === instructorProfile.slug)) && (
+                          <>
+                            <Link 
+                              href={`/dashboard/admin/courses/${course.id}/edit`}
+                              className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-purple-400 hover:bg-purple-500/10"
+                            >
+                              <Edit2 size={16} />
+                            </Link>
+                            <button 
+                              onClick={() => handleDelete(course.id, course.title)}
+                              className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

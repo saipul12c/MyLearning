@@ -79,7 +79,7 @@ export async function postDiscussion(payload: {
         // 1. Fetch lesson and course details to find the instructor
         const { data: lessonData } = await supabase
             .from("lessons")
-            .select("title, course:courses(id, title, instructor:instructors(user_id))")
+            .select("title, course:courses(slug, title, instructor:instructors(user_id))")
             .eq("id", payload.lessonId)
             .single();
 
@@ -100,7 +100,7 @@ export async function postDiscussion(payload: {
                         title: "Balasan Diskusi Baru",
                         message: `Seseorang membalas pertanyaan Anda di materi "${lessonData.title}".`,
                         type: 'info',
-                        linkUrl: `/dashboard/courses/${course.id}/lessons/${payload.lessonId}`
+                        linkUrl: `/dashboard/courses/${course.slug}/lessons/${payload.lessonId}`
                     });
                 }
             } 
@@ -113,7 +113,7 @@ export async function postDiscussion(payload: {
                     title: "Diskusi Baru di Kursus Anda",
                     message: `Siswa bertanya di materi "${lessonData.title}" pada kursus "${course.title}".`,
                     type: 'info',
-                    linkUrl: `/dashboard/courses/${course.id}/lessons/${payload.lessonId}`
+                    linkUrl: `/dashboard/courses/${course.slug}/lessons/${payload.lessonId}`
                 });
             }
         }

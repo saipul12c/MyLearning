@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   BookOpen,
   Users,
@@ -13,11 +14,11 @@ import {
   Zap,
 } from "lucide-react";
 import { formatPrice, formatNumber } from "@/lib/utils";
-import { getCourses } from "@/lib/courses";
+import { getCourses, getPopularCourses } from "@/lib/courses";
 
 export default async function HomePage() {
-  const allCourses = await getCourses();
-  const featured = allCourses.filter(c => c.isFeatured).slice(0, 14);
+  const popularCourses = await getPopularCourses(8);
+
 
   return (
     <>
@@ -103,27 +104,38 @@ export default async function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featured.map((course, i) => (
+            {popularCourses.map((course, i) => (
               <Link
                 href={`/courses/${course.slug}`}
                 key={course.id}
                 className="card group overflow-hidden"
                 id={`featured-course-${course.slug}`}
               >
-                {/* Thumbnail placeholder */}
-                <div className="relative h-44 bg-gradient-to-br from-purple-900/40 to-cyan-900/30 overflow-hidden">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <BookOpen
-                      size={40}
-                      className="text-purple-400/50 group-hover:scale-110 transition-transform duration-300"
+                {/* Thumbnail */}
+                <div className="relative h-44 bg-[#0c0c14] overflow-hidden">
+                  {course.thumbnail ? (
+                    <Image
+                      src={course.thumbnail}
+                      alt={course.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
-                  </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/40 to-cyan-900/30">
+                      <BookOpen
+                        size={40}
+                        className="text-purple-400/50 group-hover:scale-110 transition-transform duration-300"
+                      />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                   {course.discountPrice && (
-                    <span className="absolute top-3 right-3 badge badge-success text-xs">
+                    <span className="absolute top-3 right-3 badge badge-success text-xs shadow-lg">
                       DISKON
                     </span>
                   )}
-                  <span className="absolute top-3 left-3 badge badge-primary text-xs">
+                  <span className="absolute top-3 left-3 badge badge-primary text-xs shadow-lg">
                     {course.category}
                   </span>
                 </div>

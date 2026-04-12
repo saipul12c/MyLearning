@@ -10,25 +10,31 @@ import { formatPrice } from "@/lib/data";
 export default function AdminEnrollmentsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
   const [selectedProof, setSelectedProof] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState(REJECTION_REASONS[0]);
   const [isRejecting, setIsRejecting] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      const allUsers = await getAllRegisteredUsers();
-      const allEnrollments = await getAllEnrollmentsAdmin();
-      setUsers(allUsers);
-      setEnrollments(allEnrollments);
+      setLoading(true);
+      const { data, totalCount: count } = await getAllEnrollmentsAdmin(page, pageSize, statusFilter);
+      setEnrollments(data);
+      setTotalCount(count);
       setLoading(false);
     };
     fetchData();
-  }, [refresh]);
+  }, [refresh, page, statusFilter]);
 
-  const filtered = statusFilter === "all" ? enrollments : enrollments.filter((e) => e.status === statusFilter);
+  const handleFilterChange = (newStatus: string) => {
+    setStatusFilter(newStatus);
+    setPage(1); // Reset to first page on filter change
+  };
 
   const handleExpire = async (id: string) => {
     if (confirm("Expire enrollment ini?")) {
@@ -46,11 +52,23 @@ export default function AdminEnrollmentsPage() {
 
   const handleVerify = async (id: string, approve: boolean) => {
     const reason = approve ? undefined : rejectionReason;
+    
+    // Save old state in case we need to roll back
+    const oldEnrollments = [...enrollments];
+    
+    // Optimistically update UI
+    setEnrollments(prev => prev.filter(enr => enr.id !== id));
+    setTotalCount(prev => prev - 1);
+    setSelectedProof(null);
+    setIsRejecting(null);
+
     const result = await verifyPayment(id, approve, reason);
-    if (result.success) {
-      setRefresh(r => r + 1);
-      setIsRejecting(null);
-      setSelectedProof(null);
+    
+    if (!result.success) {
+      // Rollback on failure
+      setEnrollments(oldEnrollments);
+      setTotalCount(oldEnrollments.length);
+      alert("Gagal melakukan verifikasi: " + result.error);
     }
   };
 
@@ -60,7 +78,7 @@ export default function AdminEnrollmentsPage() {
     <div className="max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Kelola <span className="gradient-text">Enrollment</span></h1>
-        <p className="text-slate-400 text-sm mt-1">{enrollments.length} total enrollment</p>
+        <p className="text-slate-400 text-sm mt-1">{totalCount} total enrollment</p>
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
@@ -68,7 +86,7 @@ export default function AdminEnrollmentsPage() {
         {["all", "pending", "waiting_verification", "active", "completed", "expired", "rejected", "failed", "refunded"].map((s) => (
           <button
             key={s}
-            onClick={() => setStatusFilter(s)}
+            onClick={() => handleFilterChange(s)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
               statusFilter === s ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "bg-white/5 text-slate-500 hover:text-slate-300"
             }`}
@@ -99,14 +117,14 @@ export default function AdminEnrollmentsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {enrollments.length === 0 ? (
                 <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">Tidak ada enrollment</td></tr>
               ) : (
-                filtered.map((enr) => {
+                enrollments.map((enr) => {
                   const enrollUser = users.find((u) => u.id === enr.userId);
                   return (
                     <tr key={enr.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                      <td className="px-5 py-3 text-white">{enrollUser?.fullName || "Akun Terhapus"}</td>
+                      <td className="px-5 py-3 text-white">{enr.userName || "Siswa"}</td>
                       <td className="px-5 py-3 text-slate-300 text-xs">{enr.courseTitle}</td>
                       <td className="px-5 py-3 text-center">
                         <div className="flex items-center gap-2 justify-center">
@@ -172,28 +190,62 @@ export default function AdminEnrollmentsPage() {
           </table>
         </div>
       </div>
+
+      {/* Pagination Controls */}
+      {totalCount > pageSize && (
+        <div className="flex items-center justify-between bg-white/5 px-6 py-4 rounded-2xl border border-white/5">
+           <p className="text-xs text-slate-500">
+             Menampilkan <span className="text-white font-bold">{(page - 1) * pageSize + 1}</span> - <span className="text-white font-bold">{Math.min(page * pageSize, totalCount)}</span> dari <span className="text-white font-bold">{totalCount}</span> data
+           </p>
+           <div className="flex gap-2">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1 || loading}
+                className="px-4 py-2 rounded-lg bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Previous
+              </button>
+              <button 
+                onClick={() => setPage(p => p + 1)}
+                disabled={page * pageSize >= totalCount || loading}
+                className="px-4 py-2 rounded-lg bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+           </div>
+        </div>
+      )}
+
       {/* Proof Modal */}
       {selectedProof && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-          <div className="bg-[#0f0f1a] rounded-2xl border border-white/10 max-w-lg w-full overflow-hidden flex flex-col shadow-2xl scale-in-center">
+          <div className="bg-[#0f0f1a] rounded-2xl border border-white/10 max-w-xl w-full overflow-hidden flex flex-col shadow-2xl scale-in-center">
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <h3 className="text-white font-bold">Verifikasi Bukti Bayar</h3>
               <button onClick={() => { setSelectedProof(null); setIsRejecting(null); }} className="text-slate-500 hover:text-white"><X size={20} /></button>
             </div>
             
-            <div className="p-6">
-              <div className="mb-4">
-                <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Pengguna</p>
-                <p className="text-white font-medium">{users.find(u => u.id === selectedProof.userId)?.fullName || "Akun Terhapus"}</p>
-                <p className="text-purple-400 text-xs mt-1">{selectedProof.courseTitle}</p>
+            <div className="p-6 overflow-y-auto max-h-[75vh] custom-scrollbar">
+              <div className="mb-4 bg-white/5 p-4 rounded-xl border border-white/5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Pengguna</p>
+                    <p className="text-white font-bold text-sm">{selectedProof.userName || "Akun Terhapus"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Kursus</p>
+                    <p className="text-purple-400 font-medium text-xs truncate">{selectedProof.courseTitle}</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="aspect-[3/4] bg-black rounded-xl border border-white/10 relative overflow-hidden mb-6">
+              <div className="h-64 sm:h-80 bg-black rounded-xl border border-white/10 relative overflow-hidden mb-6 shadow-inner">
                 {selectedProof.paymentProofUrl ? (
                   <Image 
                     src={selectedProof.paymentProofUrl} 
                     alt="Payment Proof" 
                     fill 
+                    sizes="(max-width: 768px) 100vw, 800px"
                     className="object-contain"
                   />
                 ) : (

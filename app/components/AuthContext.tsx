@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import type { SafeUser, UserRole } from "@/lib/auth";
 import {
   login as authLogin,
@@ -32,15 +32,20 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SafeUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMigrationRunning = useRef(false);
+  const initialCheckDone = useRef(false);
+
 
   const refreshUser = useCallback(async () => {
     try {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
-      if (currentUser) {
+      if (currentUser && !isMigrationRunning.current) {
         // Trigger migration if user is logged in
+        isMigrationRunning.current = true;
         await migrateLocalStorageToSupabase(currentUser.id);
       }
+
     } catch (error) {
       console.error("Error refreshing user:", error);
     } finally {
@@ -49,22 +54,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Initial user check
-    refreshUser();
-
-    // Listen for auth state changes
+    // Listen for auth state changes which also handles the initial session check
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // To prevent race conditions during INITIAL_SESSION event
+      // if refreshUser was already called by initial mount
+      if (initialCheckDone.current && event === 'INITIAL_SESSION') return;
+      
       if (session?.user) {
         await refreshUser();
+        initialCheckDone.current = true;
       } else {
         setUser(null);
         setLoading(false);
+        initialCheckDone.current = true;
       }
     });
 
+    // Fallback: If onAuthStateChange hasn't triggered within a reasonable time, 
+    // run initial check manually (some older browsers or race conditions)
+    const timeout = setTimeout(() => {
+        if (!initialCheckDone.current) {
+            refreshUser();
+        }
+    }, 1500);
+
+
     return () => {
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
+
   }, [refreshUser]);
 
   const login = async (email: string, password: string) => {

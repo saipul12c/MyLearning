@@ -67,7 +67,7 @@ export default function PublicProfilePage(props: { params: Promise<{ id: string 
                 <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-purple-500 to-cyan-400 p-1 mb-6 shadow-xl shadow-purple-500/20 relative">
                   <div className="w-full h-full rounded-[20px] overflow-hidden bg-slate-900 flex items-center justify-center border-4 border-[#0f0f1a]">
                     {profile.avatarUrl ? (
-                      <Image src={profile.avatarUrl} alt={profile.fullName} fill className="object-cover" />
+                      <Image src={profile.avatarUrl} alt={profile.fullName} fill sizes="128px" className="object-cover" />
                     ) : (
                       <UserIcon size={48} className="text-slate-700" />
                     )}
@@ -182,7 +182,7 @@ export default function PublicProfilePage(props: { params: Promise<{ id: string 
                         className="card group overflow-hidden border-white/5 hover:border-purple-500/30 transition-all"
                       >
                         <div className="relative h-40 bg-slate-900">
-                          <Image src={course.thumbnail} alt={course.title} fill className="object-cover opacity-80 group-hover:scale-105 group-hover:opacity-100 transition-all duration-500" />
+                          <Image src={course.thumbnail} alt={course.title} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" className="object-cover opacity-80 group-hover:scale-105 group-hover:opacity-100 transition-all duration-500" />
                         </div>
                         <div className="p-5">
                           <h3 className="text-white font-bold text-sm mb-3 line-clamp-1 group-hover:text-purple-400 transition-colors">{course.title}</h3>
