@@ -164,10 +164,11 @@ $$ language 'plpgsql';
 CREATE OR REPLACE FUNCTION handle_new_user() 
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (user_id, full_name, avatar_url, role)
+  INSERT INTO public.user_profiles (user_id, full_name, email, avatar_url, role)
   VALUES (
     NEW.id, 
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email), 
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+    NEW.email,
     NEW.raw_user_meta_data->>'avatar_url', 
     'user'
   );
@@ -278,3 +279,32 @@ BEGIN
     RAISE NOTICE 'Repair Selesai! Seluruh statistik Kursus dan Instruktur telah disinkronkan.';
 END;
 $$;
+
+-- Procedure to cleanup old contact/offline messages (> 30 days)
+-- Runs automatically to keep the database efficient
+CREATE OR REPLACE PROCEDURE cleanup_old_messages()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    DELETE FROM contact_messages 
+    WHERE created_at < NOW() - INTERVAL '30 days';
+    
+    RAISE NOTICE 'Pembersihan selesai: Pesan lama (>30 hari) telah dihapus.';
+END;
+$$;
+
+-- 5. VIEW: Popular Course Stats (Last 3 Months)
+-- Efficiently aggregates enrollment data in the database and is more stable than RPC
+CREATE OR REPLACE VIEW vw_popular_courses_master AS
+SELECT 
+    course_id, 
+    COUNT(*) as enrollment_count
+FROM enrollments
+WHERE enrolled_at >= NOW() - INTERVAL '3 months'
+AND payment_status IN ('paid', 'completed')
+GROUP BY course_id
+ORDER BY enrollment_count DESC;
+
+-- Explicit grants for API access
+GRANT SELECT ON vw_popular_courses_master TO anon, authenticated, service_role;
+COMMENT ON VIEW vw_popular_courses_master IS 'View utama untuk kursus terpopuler - MyLearning Masterpiece';

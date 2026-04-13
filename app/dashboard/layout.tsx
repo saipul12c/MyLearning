@@ -9,6 +9,7 @@ import {
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
   Phone, Ticket,
 } from "lucide-react";
+import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
 
 const userMenuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -173,7 +174,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Page Content */}
         <main className="flex-1 p-6 lg:p-8 overflow-auto">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

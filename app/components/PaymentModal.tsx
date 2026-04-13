@@ -37,7 +37,7 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
     setIsValidatingVoucher(true);
     setError(null);
     
-    const res = await validateVoucher(voucherCode, courseId, instructorId, initialPrice);
+    const res = await validateVoucher(voucherCode, courseId, instructorId, initialPrice, enrollment.userId);
     setIsValidatingVoucher(false);
     
     if (res.success && res.voucher && res.discountAmount !== undefined) {

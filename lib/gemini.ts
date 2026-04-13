@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { getCourses } from "./courses";
+import { supabase } from "./supabase";
 
 const apiKey = process.env.NEXT_GEMINI_API_KEY || "";
 
@@ -43,32 +44,79 @@ async function executeWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promis
   throw lastError;
 }
 
-export async function getGeminiResponse(chatHistory: { role: "user" | "model"; parts: { text: string }[] }[], userMessage: string): Promise<string> {
+export interface UserContext {
+  fullName?: string;
+  isLoggedIn: boolean;
+  enrolledCourseIds: string[]; // IDs of courses the user is currently officially enrolled in (paid/completed)
+}
+
+export async function getGeminiResponse(
+  chatHistory: { role: "user" | "model"; parts: { text: string }[] }[], 
+  userMessage: string,
+  userContext?: UserContext
+): Promise<string> {
   try {
     if (!apiKey) {
       return "Sistem AI sedang offline. Silakan coba lagi nanti atau hubungi agen.";
     }
 
-    // Fetch dynamic course data
+    // 1. Fetch catalog & potentially restricted lesson materials
     const courses = await getCourses();
+    
+    // Safety Logic: Filter lesson content based on user access
+    // We only share full lesson content with AI if the user has paid for it OR it's a free preview.
+    // For recommendation mode, we share only titles and descriptions.
+    const { data: lessonData, error: lessonError } = await supabase
+      .from("lessons")
+      .select("course_id, title, description, content_type, is_free_preview");
+
+    const lessonsByCourseId = (lessonData || []).reduce((acc: any, curr: any) => {
+      if (!acc[curr.course_id]) acc[curr.course_id] = [];
+      acc[curr.course_id].push(curr);
+      return acc;
+    }, {});
+
     const catalog = courses
-      .map(c => `- **${c.title}**\n  Slug: ${c.slug}\n  Harga: Rp ${c.price.toLocaleString('id-ID')}\n  Deskripsi: ${c.description}`)
+      .map(c => {
+        const userHasAccess = userContext?.isLoggedIn && userContext.enrolledCourseIds.includes(c.id);
+        
+        // Filter lessons based on user context
+        const accessibleLessons = (lessonsByCourseId[c.id] || []).filter((l: any) => 
+          userHasAccess || l.is_free_preview
+        );
+
+        let lessonsText = "";
+        if (accessibleLessons.length > 0) {
+          lessonsText = "\n  Materi Tersedia:\n" + accessibleLessons
+            .map((l: any) => `    - ${l.title}${l.is_free_preview ? " (Pratinjau Gratis)" : ""}: ${l.description?.substring(0, 100)}...`)
+            .join("\n");
+        }
+
+        return `- [**${c.title}**](/courses/${c.slug}) - Rp ${c.price.toLocaleString('id-ID')}\n  Ringkasan: ${c.description.substring(0, 100)}...${lessonsText}`;
+      })
       .join('\n\n');
 
     const systemPrompt = `
-Anda adalah asisten layanan pelanggan (CS) cerdas untuk MyLearning, platform pembelajaran online di Indonesia. 
+Anda adalah asisten layanan pelanggan (CS) cerdas dan mentor belajar untuk MyLearning, platform pembelajaran online premium di Indonesia. 
+
+${userContext?.isLoggedIn ? `PENGGUNA SAAT INI: ${userContext.fullName}. Sapa mereka dengan nama agar terasa lebih personal.` : "PENGGUNA SAAT INI: Tamu (Belum Login)."}
+
 TUGAS ANDA:
 1. Jawab pertanyaan pengguna tentang kursus, pendaftaran, dan fitur platform.
-2. REKOMENDASIKAN kursus yang relevan dari katalog di bawah ini jika ditanya.
-3. Selalu gunakan format Markdown yang rapi (bullet points, bold, dll) agar mudah dibaca.
-4. Gunakan Bahasa Indonesia yang ramah dan profesional.
-5. Jika pengguna ingin bicara dengan agen manusia, arahkan mereka dengan sopan (Sistem kami akan mendeteksi ini otomatis).
+2. REKOMENDASIKAN kursus yang relevan dari katalog di bawah ini.
+3. Sebagai mentor, bantu jelaskan materi pelajaran jika pengguna bertanya tentang isi kursus.
+4. ATURAN AKSES KONTEN (PENTING): 
+   - Anda hanya memiliki akses detail ke materi yang berlabel "Pratinjau Gratis" atau materi dari kursus yang SUDAH DIMILIKI pengguna (lihat data katalog di bawah).
+   - Jika pengguna bertanya tentang materi berbayar yang belum mereka miliki, jelaskan secara garis besar saja dan arahkan mereka untuk membeli kursus tersebut untuk melihat detail lengkapnya.
+5. Selalu gunakan format Markdown yang rapi.
+6. Gunakan Bahasa Indonesia yang ramah, profesional, dan sedikit santai (Premium feel).
 
-KATALOG KURSUS AKTIF:
+INSTRUKSI LINKING (PENTING):
+- Jika menyebutkan nama kursus, Anda WAJIB menggunakan format link: [Nama Kursus](/courses/slug). 
+- Contoh: "Berdasarkan minat Anda, saya sangat merekomendasikan [Mastering React & Next.js](/courses/mastering-react-nextjs) untuk karir Anda."
+
+KATALOG KURSUS & MATERI AKSES:
 ${catalog}
-
-INSTRUKSI LINKING:
-Jika menyebutkan kursus, berikan link dengan format: [Nama Kursus](/courses/slug). Contoh: [Mastering React](/courses/mastering-react-nextjs).
 `;
 
     // Gemini requires the first message in history to be from the 'user'

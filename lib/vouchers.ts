@@ -19,7 +19,8 @@ export async function validateVoucher(
   code: string, 
   courseId: string, 
   instructorId: string,
-  price: number
+  price: number,
+  userId?: string // Optional for guest check, mandatory for personal limit check
 ): Promise<{ success: boolean; discountAmount?: number; voucher?: Voucher; error?: string }> {
   try {
     const { data: voucher, error } = await supabase
@@ -37,22 +38,36 @@ export async function validateVoucher(
       return { success: false, error: "Kode voucher sudah kadaluarsa." };
     }
 
-    // 2. Usage Limit Check
+    // 2. Usage Limit Check (Global)
     if (voucher.usage_limit > 0 && voucher.used_count >= voucher.usage_limit) {
       return { success: false, error: "Kuota voucher sudah habis." };
     }
 
-    // 3. Min Purchase Check
+    // 3. User Specific Limit Check (New)
+    if (userId) {
+      const { data: usage } = await supabase
+        .from("voucher_usage")
+        .select("id")
+        .eq("voucher_id", voucher.id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      
+      if (usage) {
+        return { success: false, error: "Anda sudah pernah menggunakan kode voucher ini." };
+      }
+    }
+
+    // 4. Min Purchase Check
     if (voucher.min_purchase > 0 && price < voucher.min_purchase) {
       return { success: false, error: `Minimal pembelian untuk voucher ini adalah Rp ${voucher.min_purchase.toLocaleString('id-ID')}` };
     }
 
-    // 4. Scope Check (Course)
+    // 5. Scope Check (Course)
     if (voucher.course_id && voucher.course_id !== courseId) {
       return { success: false, error: "Voucher ini tidak berlaku untuk kursus ini." };
     }
 
-    // 5. Scope Check (Instructor)
+    // 6. Scope Check (Instructor)
     if (voucher.instructor_id && voucher.instructor_id !== instructorId) {
       return { success: false, error: "Voucher ini tidak berlaku untuk kursus dari instruktur ini." };
     }
@@ -73,6 +88,24 @@ export async function validateVoucher(
       discountAmount, 
       voucher: mapDbToVoucher(voucher) 
     };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Increment usage count atomically via RPC
+ */
+export async function incrementVoucherUsage(pVoucherId: string, pUserId: string, pEnrollId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('redeem_voucher_by_id', {
+      p_voucher_id: pVoucherId,
+      p_user_id: pUserId,
+      p_enroll_id: pEnrollId
+    });
+
+    if (error) throw error;
+    return { success: data.success, error: data.error };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

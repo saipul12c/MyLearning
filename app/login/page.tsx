@@ -122,9 +122,7 @@ export default function LoginPage() {
             </button>
             <p className="text-[11px] text-slate-500 text-center leading-relaxed">
               Dengan masuk, Anda menyetujui{" "}
-              <Link href="/kebijakan" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Ketentuan Layanan</Link>
-              {" "}dan{" "}
-              <Link href="/privasi" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Kebijakan Privasi</Link>
+              <Link href="/privasi" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Kebijakan Privasi & Layanan</Link>
               {" "}kami.
             </p>
           </form>
@@ -136,13 +134,6 @@ export default function LoginPage() {
                 Daftar Sekarang
               </Link>
             </p>
-          </div>
-
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-            <p className="text-xs text-slate-500 font-medium mb-2">Demo Admin:</p>
-            <p className="text-xs text-slate-400">Email: admin@mylearning.id</p>
-            <p className="text-xs text-slate-400">Password: admin123</p>
           </div>
         </div>
       </div>

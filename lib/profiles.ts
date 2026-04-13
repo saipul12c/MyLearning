@@ -1,6 +1,6 @@
 import { SafeUser, getPublicUser } from "./auth";
 import { type Course } from "./data";
-import { getCourses } from "./courses";
+import { getCourses, getInstructorCourses } from "./courses";
 import { supabase } from "./supabase";
 
 export interface PublicProfile extends SafeUser {
@@ -44,8 +44,7 @@ export async function getPublicProfile(idOrSlug: string): Promise<PublicProfile 
       // You could add more fields here if needed
     }
 
-    const allCourses = await getCourses();
-    profile.coursesTaught = allCourses.filter((c) => c.instructor === user.fullName);
+    profile.coursesTaught = await getInstructorCourses(user.fullName);
     profile.enrolledCount = profile.coursesTaught.reduce((acc, c) => acc + c.totalStudents, 0);
   }
 

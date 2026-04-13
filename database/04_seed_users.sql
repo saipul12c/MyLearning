@@ -39,11 +39,12 @@ BEGIN
     -- 3. Masukkan ke public.user_profiles
     -- Penggunaan ON CONFLICT sangat penting karena trigger 'on_auth_user_created' 
     -- mungkin sudah membuat profil default 'user' saat insert ke auth.users di atas.
-    INSERT INTO public.user_profiles (user_id, full_name, role)
-    VALUES (new_user_id, full_name, role)
+    INSERT INTO public.user_profiles (user_id, full_name, role, email)
+    VALUES (new_user_id, full_name, role, email)
     ON CONFLICT (user_id) DO UPDATE 
     SET full_name = EXCLUDED.full_name,
         role = EXCLUDED.role,
+        email = EXCLUDED.email,
         updated_at = NOW();
 
     RETURN new_user_id;

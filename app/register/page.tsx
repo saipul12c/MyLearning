@@ -163,9 +163,7 @@ export default function RegisterPage() {
             </button>
             <p className="text-[11px] text-slate-500 text-center leading-relaxed">
               Dengan mendaftar, Anda menyetujui{" "}
-              <Link href="/kebijakan" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Ketentuan Layanan</Link>
-              {" "}dan{" "}
-              <Link href="/privasi" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Kebijakan Privasi</Link>
+              <Link href="/privasi" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Kebijakan Privasi & Layanan</Link>
               {" "}kami.
             </p>
           </form>

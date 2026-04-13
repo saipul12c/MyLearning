@@ -4,6 +4,7 @@
 
 import { supabase } from "./supabase";
 import { createNotification, notifyAdmins } from "./notifications";
+import { incrementVoucherUsage } from "./vouchers";
 
 export type EnrollmentStatus = "pending" | "waiting_verification" | "active" | "paid" | "completed" | "expired" | "rejected" | "failed" | "refunded";
 
@@ -61,6 +62,8 @@ export interface Enrollment {
   finalProjectFeedback?: string;
   progress: number; // 0-100
   totalLessons: number;
+  courseId: string;
+  instructorId?: string;
   totalItems: number; // lessons + quizzes + assignments + 1 (final project)
   expiryDays: number;
   certificateValidUntil?: string;
@@ -72,6 +75,9 @@ export interface Enrollment {
   paymentAmount: number;
   voucherId?: string;
   discountAmount?: number;
+  // Admin-only fields (joined from user_profiles)
+  userName?: string;
+  userAvatarUrl?: string;
 }
 
 export interface ContactMessage {
@@ -194,6 +200,11 @@ export async function enrollCourse(
 
     if (error) throw error;
 
+    // Increment voucher usage if free enrollment and voucher used
+    if (isFree && voucherId && data) {
+      await incrementVoucherUsage(voucherId, userId, data.id);
+    }
+
     return { success: true, enrollment: mapDbToEnrollment(data) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -300,6 +311,11 @@ export async function verifyPayment(
 
     if (updateError) throw updateError;
 
+    // Increment voucher usage if applicable
+    if (approve && enr.voucher_id) {
+        await incrementVoucherUsage(enr.voucher_id, enr.user_id, enrollmentId);
+    }
+
     // Trigger Notification for Student
     await createNotification({
         userId: enr.user_id,
@@ -321,57 +337,78 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
   try {
     const { data: enrollments, error } = await supabase
       .from("enrollments")
-      .select("*")
+      .select(`
+        *,
+        courses (
+          instructor_id
+        )
+      `)
       .eq("user_id", userId)
       .order("enrolled_at", { ascending: false });
 
     if (error) throw error;
+    if (!enrollments || enrollments.length === 0) return [];
 
-    // Parallel fetch lesson, quiz, and assignment progress for each enrollment
-    const finalEnrollments = await Promise.all(enrollments.map(async (enr) => {
-      // Fetch Lesson Progress
-      const { data: lessonProgress } = await supabase
-        .from("lesson_progress")
-        .select("lesson_id")
-        .eq("enrollment_id", enr.id)
-        .eq("is_completed", true);
+    const enrollmentIds = enrollments.map(e => e.id);
+
+    // Batch fetch all progress in parallel
+    const [lessonData, quizData, assignmentData] = await Promise.all([
+      supabase.from("lesson_progress").select("*").in("enrollment_id", enrollmentIds).eq("is_completed", true),
+      supabase.from("quiz_progress").select("*").in("enrollment_id", enrollmentIds),
+      supabase.from("assignment_progress").select("*").in("enrollment_id", enrollmentIds)
+    ]);
+
+    const lessonProgressMap = (lessonData.data || []).reduce((acc: any, curr) => {
+      if (!acc[curr.enrollment_id]) acc[curr.enrollment_id] = [];
+      acc[curr.enrollment_id].push(curr.lesson_id);
+      return acc;
+    }, {});
+
+    const quizProgressMap = (quizData.data || []).reduce((acc: any, curr) => {
+      if (!acc[curr.enrollment_id]) acc[curr.enrollment_id] = [];
+      acc[curr.enrollment_id].push({
+        quizId: Number(curr.quiz_id),
+        score: curr.score,
+        answers: curr.answers,
+        passed: curr.passed,
+        submittedAt: curr.submitted_at
+      });
+      return acc;
+    }, {});
+
+    const assignmentProgressMap = (assignmentData.data || []).reduce((acc: any, curr) => {
+      if (!acc[curr.enrollment_id]) {
+        acc[curr.enrollment_id] = { ids: [], subs: [] };
+      }
+      acc[curr.enrollment_id].ids.push(Number(curr.assignment_id));
+      acc[curr.enrollment_id].subs.push({
+        id: curr.assignment_id,
+        passed: curr.passed,
+        score: curr.score || 0,
+        submissionUrl: curr.submission_url,
+        submissionNotes: curr.submission_notes,
+        adminFeedback: curr.admin_feedback
+      });
+      return acc;
+    }, {});
+
+    return enrollments.map(enr => {
+      const lessons = lessonProgressMap[enr.id] || [];
+      const quizzes = quizProgressMap[enr.id] || [];
+      const assignments = assignmentProgressMap[enr.id] || { ids: [], subs: [] };
       
-      // Fetch Quiz Progress
-      const { data: quizProgress } = await supabase
-        .from("quiz_progress")
-        .select("quiz_id, score, passed, answers, submitted_at")
-        .eq("enrollment_id", enr.id);
-
-      // Fetch Assignment Progress
-      const { data: assignmentProgress } = await supabase
-        .from("assignment_progress")
-        .select("assignment_id, passed, score, submission_url, submission_notes, admin_feedback")
-        .eq("enrollment_id", enr.id);
-
-      const completedLessonIds = (lessonProgress || []).map(p => p.lesson_id);
-      const completedQuizzes: QuizSubmission[] = (quizProgress || []).map(q => ({
-        quizId: Number(q.quiz_id),
-        score: q.score,
-        answers: q.answers,
-        passed: q.passed,
-        submittedAt: q.submitted_at
-      }));
-      const completedAssignmentIds = (assignmentProgress || []).map(a => Number(a.assignment_id));
-      const assignmentSubmissions: AssignmentSubmission[] = (assignmentProgress || []).map(a => ({
-        id: a.assignment_id,
-        passed: a.passed,
-        score: a.score || 0,
-        submissionUrl: a.submission_url,
-        submissionNotes: a.submission_notes,
-        adminFeedback: a.admin_feedback
-      }));
-
-      return mapDbToEnrollment(enr, completedLessonIds, completedQuizzes, completedAssignmentIds, assignmentSubmissions);
-    }));
-
-    return finalEnrollments;
-  } catch (error) {
+      return mapDbToEnrollment(
+        { ...enr, instructor_id: (enr as any).courses?.instructor_id }, 
+        lessons, 
+        quizzes, 
+        assignments.ids, 
+        assignments.subs
+      );
+    });
+  } catch (error: any) {
     console.error("Error fetching user enrollments:", error);
+    // Return empty but log detail; wrapping in a result object would require many UI changes, 
+    // so we'll at least ensure we don't swallow critical errors without trace.
     return [];
   }
 }
@@ -385,7 +422,7 @@ export async function getAllEnrollmentsAdmin(
   page: number = 1, 
   pageSize: number = 20, 
   status: string = "all"
-): Promise<{ data: Enrollment[]; totalCount: number }> {
+): Promise<{ data: Enrollment[]; totalCount: number; error?: string }> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
@@ -403,7 +440,7 @@ export async function getAllEnrollmentsAdmin(
       .from("enrollments")
       .select(`
         *,
-        user:user_profiles (full_name)
+        user:user_profiles (full_name, avatar_url)
       `, { count: 'exact' });
 
     // 2. Apply Filters
@@ -427,13 +464,14 @@ export async function getAllEnrollmentsAdmin(
     return { 
       data: (data || []).map(enr => ({
         ...mapDbToEnrollment(enr),
-        userName: enr.user?.full_name || "Siswa"
+        userName: enr.user?.full_name || "Siswa",
+        userAvatarUrl: enr.user?.avatar_url
       })), 
       totalCount: count || 0 
     };
-  } catch (error) {
-    console.error(error);
-    return { data: [], totalCount: 0 };
+  } catch (error: any) {
+    console.error("Admin Enrollment Fetch Error:", error);
+    return { data: [], totalCount: 0, error: error.message };
   }
 }
 
@@ -793,6 +831,26 @@ export async function getContactMessages(): Promise<ContactMessage[]> {
   }));
 }
 
+/**
+ * Returns statistics for contact messages (Total and Unread).
+ * Optimized count queries.
+ */
+export async function getContactMessageStats(): Promise<{ total: number; unread: number }> {
+  try {
+    const [totalRes, unreadRes] = await Promise.all([
+      supabase.from("contact_messages").select("id", { count: 'exact', head: true }),
+      supabase.from("contact_messages").select("id", { count: 'exact', head: true }).eq("status", "unread")
+    ]);
+
+    return {
+      total: totalRes.count || 0,
+      unread: unreadRes.count || 0
+    };
+  } catch (err) {
+    return { total: 0, unread: 0 };
+  }
+}
+
 export async function updateMessageStatus(
   messageId: string,
   status: ContactMessage["status"],
@@ -825,6 +883,8 @@ function mapDbToEnrollment(
   return {
     id: db.id,
     userId: db.user_id,
+    courseId: db.course_id,
+    instructorId: db.instructor_id,
     courseSlug: db.course_slug,
     courseTitle: db.course_title || db.course_slug,
     enrolledAt: db.enrolled_at,

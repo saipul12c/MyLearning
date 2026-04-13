@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { supabase } from "./supabase";
 import { 
   type Course, 
@@ -155,19 +156,47 @@ export async function getInstructors(): Promise<Instructor[]> {
   }));
 }
 
-export async function getCourses(): Promise<Course[]> {
-  const { data, error } = await supabase
+export async function getCourses(options: { 
+  page?: number; 
+  pageSize?: number; 
+  category?: string; 
+  search?: string;
+} = {}): Promise<Course[]> {
+  const { page = 1, pageSize = 100, category = "all", search = "" } = options;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
     .from("courses")
     .select(`
-      id, title, slug, short_description, description, thumbnail_url, 
+      id, title, slug, short_description, thumbnail_url, 
       price, discount_price, admin_discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, created_at, updated_at, tags,
       categories(name, slug),
       instructors(name, slug, avatar_url, website_url, linkedin_url)
     `)
-    .eq("is_published", true)
-    .order("created_at", { ascending: false });
+    .eq("is_published", true);
+
+  if (category && category !== "all") {
+    // We use .eq on the joined table's slug
+    // Note: To filter by a joined table, use the !inner hint or filter the primary table if the column exists there.
+    // Since category_id is in courses, we can filter by it if we had the ID, 
+    // but the UI gives us the slug. So we use the 'categories' join with !inner.
+    query = query.filter("categories.slug", "eq", category);
+  }
+
+  if (search) {
+    // Use the existing title_description_vector for optimized search
+    query = query.textSearch('title_description_vector', search, {
+      config: 'indonesian',
+      type: 'websearch'
+    });
+  }
+
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .range(from, to);
 
   if (error) {
     console.error("Error fetching courses from Supabase:", error);
@@ -178,6 +207,50 @@ export async function getCourses(): Promise<Course[]> {
 }
 
 /**
+ * Optimized helper to get total count of published courses
+ */
+export async function getCourseCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from("courses")
+    .select("*", { count: 'exact', head: true })
+    .eq("is_published", true);
+  
+  if (error) {
+    console.error("Error fetching course count:", error);
+    return 0;
+  }
+  return count || 0;
+}
+
+/**
+ * Fetch only courses taught by a specific instructor
+ * Much faster than fetching all and filtering in JS
+ */
+export async function getInstructorCourses(instructorName: string): Promise<Course[]> {
+  const { data, error } = await supabase
+    .from("courses")
+    .select(`
+      id, title, slug, short_description, thumbnail_url, 
+      price, discount_price, admin_discount_price, level, language, duration_hours, 
+      total_lessons, rating, total_reviews, total_students,
+      is_published, is_featured, created_at, updated_at, tags,
+      categories(name, slug),
+      instructors!inner(name, slug, avatar_url, website_url, linkedin_url)
+    `)
+    .eq("is_published", true)
+    .eq("instructors.name", instructorName)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(`Error fetching courses for instructor ${instructorName}:`, error);
+    return [];
+  }
+
+  return data.map(mapDbToCourse);
+}
+
+
+/**
  * Fetches the most popular courses based on enrollments in the last 3 months.
  * Fallback to all-time popularity if no recent data exists.
  */
@@ -186,32 +259,31 @@ export async function getPopularCourses(limit: number = 8): Promise<Course[]> {
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
   try {
-    // 1. Fetch successful enrollments in the last 3 months
-    const { data: enrollments, error: enrError } = await supabase
-      .from("enrollments")
+    // 1. Fetch popular course IDs via stable View
+    // Standardizing on 'vw_' prefix which works in your environment
+    const { data: popularData, error: viewError } = await supabase
+      .from("vw_popular_courses_master")
       .select("course_id")
-      .gte("enrolled_at", threeMonthsAgo.toISOString())
-      .in("payment_status", ["paid", "completed"]);
-
-    if (enrError) throw enrError;
+      .limit(limit);
 
     let courseIds: string[] = [];
-    
-    if (enrollments && enrollments.length > 0) {
-      // 2. Aggregate counts per course
-      const counts: Record<string, number> = {};
-      enrollments.forEach((e: any) => {
-        counts[e.course_id] = (counts[e.course_id] || 0) + 1;
-      });
 
-      // 3. Sort and slice top IDs
-      courseIds = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limit)
-        .map(([id]) => id);
+    if (viewError) {
+      // Robust Fallback: Log but don't crash. Use standard query if View cache is stale.
+      console.warn("View 'vw_popular_courses_master' not found in cache. Falling back to default sorting.");
+      const { data: fallbackEnrollments } = await supabase
+        .from("courses")
+        .select("id")
+        .eq("is_published", true)
+        .order("total_students", { ascending: false })
+        .limit(limit);
+      
+      courseIds = (fallbackEnrollments || []).map(c => c.id);
+    } else {
+      courseIds = (popularData || []).map((item: any) => item.course_id);
     }
-
-    // 4. Fallback: If no recent enrollments, use all-time stats
+    
+    // 2. Fallback: If no recent enrollments, use all-time stats
     if (courseIds.length === 0) {
       const { data: fallback, error: fallbackError } = await supabase
         .from("courses")
@@ -230,7 +302,7 @@ export async function getPopularCourses(limit: number = 8): Promise<Course[]> {
     const { data, error } = await supabase
       .from("courses")
       .select(`
-        id, title, slug, short_description, description, thumbnail_url, 
+        id, title, slug, short_description, thumbnail_url, 
         price, discount_price, admin_discount_price, level, language, duration_hours, 
         total_lessons, rating, total_reviews, total_students,
         is_published, is_featured, created_at, updated_at, tags,
@@ -258,7 +330,7 @@ export async function searchCourses(query: string): Promise<Course[]> {
   const { data, error } = await supabase
     .from("courses")
     .select(`
-      id, title, slug, short_description, description, thumbnail_url, 
+      id, title, slug, short_description, thumbnail_url, 
       price, discount_price, admin_discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, created_at, updated_at, tags,
@@ -270,7 +342,9 @@ export async function searchCourses(query: string): Promise<Course[]> {
       config: 'indonesian',
       type: 'websearch'
     })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(20);
+
 
   if (error) {
     console.error("Error searching courses in Supabase:", error);
@@ -280,11 +354,15 @@ export async function searchCourses(query: string): Promise<Course[]> {
   return data.map(mapDbToCourse);
 }
 
-export async function getCourseBySlug(slug: string): Promise<Course | null> {
+/**
+ * Fetches a course by its slug. 
+ * Cached by React to prevent multiple DB calls in a single request (Metadata + Page).
+ */
+export const getCourseBySlug = cache(async (slug: string): Promise<Course | null> => {
   const { data, error } = await supabase
     .from("courses")
     .select(`
-      id, title, slug, short_description, description, thumbnail_url, 
+      id, title, slug, short_description, thumbnail_url, 
       price, discount_price, admin_discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, learning_points, requirements, preview_video_url, tags,
@@ -316,7 +394,8 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
   }
 
   return course;
-}
+});
+
 
 // Admin CRUD
 export async function upsertCourse(courseData: Partial<Course>) {

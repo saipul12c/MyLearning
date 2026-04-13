@@ -1,12 +1,13 @@
+import { cache } from "react";
 import { supabase } from "./supabase";
 import { type Course } from "./data";
 import { getCourses } from "./courses";
 
 /**
  * Service to handle instructor-specific dashboard logic
+ * Cached to prevent double database calls when fetching courses and stats in the same cycle.
  */
-
-export async function getInstructorProfile(userId: string) {
+export const getInstructorProfile = cache(async (userId: string) => {
   const { data, error } = await supabase
     .from("instructors")
     .select("*")
@@ -22,7 +23,7 @@ export async function getInstructorProfile(userId: string) {
     return null;
   }
   return data;
-}
+});
 
 export async function getInstructorCourses(userId: string): Promise<Course[]> {
   // 1. Get the Instructor ID first

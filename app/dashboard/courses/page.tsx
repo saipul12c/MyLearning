@@ -20,34 +20,52 @@ export default function DashboardCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Debounced search query
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(search);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const categoriesData = await getCategories();
+      setCategories([{ id: "all", name: "Semua", slug: "all", icon: "📚", courseCount: 0 }, ...categoriesData]);
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const [coursesData, categoriesData] = await Promise.all([
-        getCourses(),
-        getCategories()
-      ]);
-      setCourses(coursesData);
-      setCategories([{ name: "Semua", slug: "all", icon: "📚", courseCount: 0 }, ...categoriesData]);
-      
-      if (user) {
-        getActiveEnrollment(user.id).then(setActiveEnrollment);
+      try {
+        const coursesData = await getCourses({
+          search: searchQuery,
+          category: category
+        });
+        setCourses(coursesData);
+        
+        if (user) {
+          getActiveEnrollment(user.id).then(setActiveEnrollment);
+        }
+      } catch (err) {
+        console.error("Error fetching filtered courses:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchData();
-  }, [user]);
+  }, [user, searchQuery, category]);
 
   const filtered = useMemo(() => {
-    let result = courses.filter((c) => c.isPublished);
-    if (category !== "all") result = result.filter((c) => c.categorySlug === category);
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((c) => c.title.toLowerCase().includes(q) || c.instructor.toLowerCase().includes(q));
-    }
-    return result;
-  }, [search, category, courses]);
+    // Since filtering is now server-side, we just return the fetched courses
+    // We only keep isPublished filter as a safeguard
+    return courses.filter((c) => c.isPublished);
+  }, [courses]);
 
   const handleEnroll = async (course: typeof courses[0]) => {
     if (!user) return;

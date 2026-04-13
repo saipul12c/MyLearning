@@ -17,12 +17,16 @@ import AssignmentModal from "@/app/components/AssignmentModal";
 import LessonPlayer from "@/app/components/LessonPlayer";
 import FinalProjectForm from "@/app/components/FinalProjectForm";
 import Skeleton from "@/app/components/ui/Skeleton";
+import ErrorState from "@/app/components/ui/ErrorState";
+import ActiveCourseCard from "./ActiveCourseCard";
+import WaitingVerificationCard from "./WaitingVerificationCard";
 import type { Quiz, Assignment } from "@/lib/assessments";
 
 export default function MyCoursesPage() {
   const { user } = useAuth();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState<"lessons" | "quizzes" | "assignments" | "project">("lessons");
   const [certData, setCertData] = useState<{
@@ -50,28 +54,45 @@ export default function MyCoursesPage() {
   useEffect(() => {
     const fetchEnrollments = async () => {
       if (!user) return;
-      const data = await getUserEnrollments(user.id);
-      setEnrollments(data);
-      
-      const activeEnr = data.find((e) => e.status === "active");
-      if (activeEnr) {
-        const [course, assessments] = await Promise.all([
-          getCourseBySlug(activeEnr.courseSlug),
-          getCourseAssessments(activeEnr.courseSlug)
-        ]);
-        setActiveCourseData(course);
-        setActiveAssessments(assessments);
-      } else {
-        setActiveCourseData(null);
-        setActiveAssessments(null);
+      try {
+        setLoading(true);
+        const data = await getUserEnrollments(user.id);
+        setEnrollments(data);
+        
+        const activeEnr = data.find((e) => e.status === "active");
+        if (activeEnr) {
+          const [course, assessments] = await Promise.all([
+            getCourseBySlug(activeEnr.courseSlug),
+            getCourseAssessments(activeEnr.courseSlug)
+          ]);
+          setActiveCourseData(course);
+          setActiveAssessments(assessments);
+        } else {
+          setActiveCourseData(null);
+          setActiveAssessments(null);
+        }
+      } catch (err: any) {
+        console.error("Fetch enrollments error:", err);
+        setError("Gagal memuat kursus Anda. Silakan coba lagi nanti.");
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
     fetchEnrollments();
   }, [user, refresh]);
 
   if (!user) return null;
+
+  if (error) {
+    return (
+      <div className="py-12">
+        <ErrorState 
+          message={error} 
+          onRetry={() => setRefresh(r => r + 1)} 
+        />
+      </div>
+    );
+  }
 
   if (loading && enrollments.length === 0) {
     return (
@@ -170,218 +191,21 @@ export default function MyCoursesPage() {
       </div>
 
       {/* Active Course */}
-      {active && (() => {
-        const remaining = getRemainingDays(active);
-        const deadline = getEnrollmentDeadline(active);
-        const passedQuizzes = active.completedQuizzes?.filter((q) => q.passed).length || 0;
-
-        return (
-          <div className="card p-8 border-purple-500/20 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-3xl rounded-full" />
-            <div className="flex items-center justify-between mb-6 relative z-10 pb-4 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                <h2 className="text-lg font-bold text-white uppercase tracking-wider">Sedang Dipelajari</h2>
-              </div>
-              <div className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full glass ${remaining <= 5 ? "text-red-400 border-red-500/20" : "text-amber-400 border-amber-500/20"}`}>
-                <Clock size={14} /> {remaining} Hari Tersisa
-              </div>
-            </div>
-
-            <h3 className="text-white font-bold text-2xl mb-2 relative z-10 leading-tight">{active.courseTitle}</h3>
-            <p className="text-slate-500 text-xs mb-6 font-medium relative z-10">
-              Batas Waktu: <span className="text-slate-300 font-bold">{deadline.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
-              {activeCourseData && <span className="mx-2">•</span>}
-              {activeCourseData && <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter text-[10px]">{getLevelLabel(activeCourseData.level)}</span>}
-            </p>
-
-            {/* Progress */}
-            <div className="flex items-center gap-4 mb-6 relative z-10">
-              <div className="flex-1 h-3 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-purple-500 to-cyan-400 shadow-[0_0_12px_rgba(168,85,247,0.4)] transition-all duration-1000 ease-out" style={{ width: `${active.progress}%` }} />
-              </div>
-              <span className="text-sm font-black text-white min-w-[50px] text-right">{active.progress}%</span>
-            </div>
-
-            {/* Progress breakdown */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 relative z-10">
-              {[
-                { label: "Materi", value: `${active.completedLessons.length}/${activeCourseData?.lessons.length || 0}`, bg: "bg-purple-500/5", border: "border-purple-500/20" },
-                { label: "Quiz", value: `${passedQuizzes}/${activeAssessments?.quizzes.length || 0}`, bg: "bg-cyan-500/5", border: "border-cyan-500/20" },
-                { label: "Tugas", value: `${active.completedAssignments?.length || 0}/${activeAssessments?.assignments.length || 0}`, bg: "bg-amber-500/5", border: "border-amber-500/20" },
-                { label: "Proyek", value: active.finalProjectCompleted ? "LULUS" : "BELUM", bg: "bg-emerald-500/5", border: "border-emerald-500/20" },
-              ].map((stat) => (
-                <div key={stat.label} className={`text-center p-3 rounded-2xl ${stat.bg} border ${stat.border}`}>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{stat.label}</p>
-                  <p className="text-sm font-black text-white">{stat.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-1 mb-6 border-b border-white/5 pb-1 relative z-10 overflow-x-auto no-scrollbar">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-1.5 px-4 py-3 rounded-t-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
-                    activeTab === tab.key 
-                      ? "bg-white/5 text-purple-400 border-b-2 border-purple-500 shadow-[0_4px_12px_rgba(168,85,247,0.2)]" 
-                      : "text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  <tab.icon size={14} className={activeTab === tab.key ? "animate-pulse" : ""} /> {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content: Lessons */}
-            {activeTab === "lessons" && activeCourseData && (
-              <div className="space-y-2 relative z-10">
-                {activeCourseData.lessons.map((lesson: any, idx: number) => {
-                  const isDone = active.completedLessons.includes(lesson.id);
-                  return (
-                    <button key={lesson.id} onClick={() => setActiveLessonId(lesson.id)}
-                      className={`w-full group flex items-center justify-between p-4 rounded-2xl transition-all text-left ${
-                        isDone ? "bg-emerald-500/5 border border-emerald-500/10" : "bg-white/[0.03] border border-white/5 hover:border-purple-500/30 hover:bg-white/5"
-                      }`}>
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
-                          isDone ? "bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-white/5 text-slate-500 group-hover:bg-purple-500/20 group-hover:text-purple-400"
-                        }`}>
-                          {isDone ? <CheckCircle size={18} /> : idx + 1}
-                        </div>
-                        <div>
-                          <span className={`text-sm font-bold block ${isDone ? "text-emerald-300" : "text-white"}`}>{lesson.title}</span>
-                          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">Durasi: {lesson.durationMinutes} Menit</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest transition-opacity opacity-0 group-hover:opacity-100">Buka Materi</span>
-                         <ChevronRight size={16} className="text-slate-600 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Tab Content: Quizzes */}
-            {activeTab === "quizzes" && activeAssessments && (
-              <div className="space-y-4 relative z-10">
-                {activeAssessments.quizzes.map((quiz: any) => {
-                  const submission = active.completedQuizzes?.find((q) => q.quizId === quiz.id);
-                  const passed = submission?.passed;
-                  return (
-                    <div key={quiz.id} className={`p-4 rounded-xl border ${passed ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/5 bg-white/[0.02]"}`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-white font-medium text-sm">{quiz.title}</h4>
-                          <p className="text-xs text-slate-500 mt-1">{quiz.questions.length} pertanyaan • Minimal {quiz.passingScore}%</p>
-                          {submission && <p className="text-xs mt-1"><span className={passed ? "text-emerald-400" : "text-red-400"}>Skor: {submission.score}%</span></p>}
-                        </div>
-                        <button
-                          onClick={() => setActiveQuiz(quiz)}
-                          className={`text-xs px-3 py-2 rounded-lg font-medium transition-all ${
-                            passed ? "bg-emerald-500/10 text-emerald-400" : "bg-purple-500/15 text-purple-300 hover:bg-purple-500/25"
-                          }`}
-                        >
-                          {passed ? "✅ Lulus" : submission ? "Coba Lagi" : "Mulai Quiz"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Tab Content: Assignments */}
-            {activeTab === "assignments" && activeAssessments && (
-              <div className="space-y-3">
-                {activeAssessments.assignments.map((assignment: any) => {
-                  const done = active.completedAssignments?.includes(assignment.id);
-                  return (
-                    <div key={assignment.id} className={`p-4 rounded-xl border ${done ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/5 bg-white/[0.02]"}`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-white font-medium text-sm">{assignment.title}</h4>
-                          <p className="text-xs text-slate-500 mt-1">{assignment.tasks.length} soal • ~{assignment.timeEstimateMinutes} menit</p>
-                        </div>
-                        <button
-                          onClick={() => setActiveAssignment(assignment)}
-                          className={`text-xs px-3 py-2 rounded-lg font-medium transition-all ${
-                            done ? "bg-emerald-500/10 text-emerald-400" : "bg-purple-500/15 text-purple-300 hover:bg-purple-500/25"
-                          }`}
-                        >
-                          {done ? "✅ Selesai" : "Kerjakan"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Tab Content: Final Project */}
-            {activeTab === "project" && activeAssessments && activeAssessments.finalProject && (
-              <div className={`p-5 rounded-xl border ${active.finalProjectCompleted ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/5 bg-white/[0.02]"}`}>
-                <h4 className="text-white font-semibold mb-2">{activeAssessments.finalProject.title}</h4>
-                <p className="text-slate-400 text-sm mb-4">{activeAssessments.finalProject.description}</p>
-                <div className="mb-4">
-                  <h5 className="text-xs font-semibold text-slate-300 mb-2 uppercase">Tujuan:</h5>
-                  <ul className="space-y-1">{activeAssessments.finalProject.objectives.map((o: any, i: number) => (
-                    <li key={i} className="text-xs text-slate-400 flex items-start gap-2"><CheckCircle size={12} className="text-purple-400 mt-0.5 flex-shrink-0" /> {o}</li>
-                  ))}</ul>
-                </div>
-                <div className="mb-4">
-                  <h5 className="text-xs font-semibold text-slate-300 mb-2 uppercase">Deliverables:</h5>
-                  <ul className="space-y-1">{activeAssessments.finalProject.deliverables.map((d: any, i: number) => (
-                    <li key={i} className="text-xs text-slate-400 flex items-start gap-2"><Target size={12} className="text-cyan-400 mt-0.5 flex-shrink-0" /> {d}</li>
-                  ))}</ul>
-                </div>
-                <p className="text-xs text-slate-500 mb-6">Estimasi: ~{activeAssessments.finalProject.estimatedHours} jam</p>
-                
-                <FinalProjectForm 
-                  enrollmentId={active.id}
-                  projectTitle={activeAssessments.finalProject.title}
-                  isCompleted={active.finalProjectCompleted}
-                  existingUrl={active.finalProjectUrl}
-                  existingNotes={active.finalProjectNotes}
-                  adminFeedback={active.finalProjectFeedback}
-                  onSuccess={() => forceRefresh()}
-                />
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {active && (
+        <ActiveCourseCard 
+          active={active}
+          activeCourseData={activeCourseData}
+          activeAssessments={activeAssessments}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          setActiveLessonId={setActiveLessonId}
+          setActiveQuiz={setActiveQuiz}
+          setActiveAssignment={setActiveAssignment}
+        />
+      )}
 
       {/* Waiting Verification */}
-      {waiting.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-black text-white flex items-center gap-3"><Clock size={20} className="text-cyan-400" /> MENUNGGU VERIFIKASI <span className="bg-cyan-500/20 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full">{waiting.length}</span></h2>
-          <div className="grid gap-4">
-            {waiting.map((enr) => (
-              <div key={enr.id} className="card p-6 border-cyan-500/20 bg-cyan-500/5 hover:border-cyan-500/40 transition-all group">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                      <CreditCard size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-bold text-lg leading-tight">{enr.courseTitle}</h3>
-                      <p className="text-slate-400 text-xs mt-1 font-medium">Pembayaran Anda sedang diverifikasi secara manual oleh administrator.</p>
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-2 text-cyan-400 text-[10px] font-black uppercase tracking-[.2em] bg-cyan-500/10 px-4 py-2 rounded-full animate-pulse border border-cyan-500/20">
-                    <Loader2 size={14} className="animate-spin" /> Verifying
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <WaitingVerificationCard waiting={waiting} />
 
       {/* Rejected / Pending Payment */}
       {rejected.length > 0 && (
@@ -389,7 +213,6 @@ export default function MyCoursesPage() {
           <h2 className="text-lg font-black text-white flex items-center gap-3"><AlertTriangle size={20} className="text-amber-400" /> PERLU TINDAKAN <span className="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full">{rejected.length}</span></h2>
           <div className="grid gap-4">
             {rejected.map((enr) => {
-              const course = getCourseBySlug(enr.courseSlug);
               return (
                 <div key={enr.id} className="card p-6 border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40 transition-all">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -420,8 +243,10 @@ export default function MyCoursesPage() {
                       <PaymentModal 
                         enrollment={enr}
                         courseTitle={enr.courseTitle}
-                        price={enr.price}
-                        qrisUrl={""} // Will be fetched inside PaymentModal if needed or pass from a more stable source
+                        price={enr.paymentAmount}
+                        courseId={enr.courseId}
+                        instructorId={enr.instructorId || ""}
+                        qrisUrl={""} // Will be fetched inside PaymentModal
                         onClose={() => setShowPaymentModal(null)}
                         onSuccess={() => {
                           setShowPaymentModal(null);

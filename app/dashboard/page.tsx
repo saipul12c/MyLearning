@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/app/components/AuthContext";
-import { getActiveEnrollment, getUserEnrollments, getAllEnrollmentsAdmin, getRemainingDays, getContactMessages } from "@/lib/enrollment";
-import { getAllRegisteredUsers, type SafeUser } from "@/lib/auth";
-import { getCourses } from "@/lib/courses";
+import { getActiveEnrollment, getUserEnrollments, getAllEnrollmentsAdmin, getRemainingDays, getContactMessages, getContactMessageStats } from "@/lib/enrollment";
+import { getAllRegisteredUsers, getUserCount, type SafeUser } from "@/lib/auth";
+import { getCourses, getCourseCount } from "@/lib/courses";
 import { getLevelLabel, type Enrollment } from "@/lib/enrollment";
 import Link from "next/link";
 import { BookOpen, Users, Award, Clock, TrendingUp, AlertTriangle, ArrowRight, CheckCircle, XCircle, MessageSquare, Loader2 } from "lucide-react";
 import Skeleton, { SkeletonCircle } from "../components/ui/Skeleton";
 import InstructorDashboard from "../components/InstructorDashboard";
+import ErrorState from "../components/ui/ErrorState";
 import SignatureManager from "../components/SignatureManager";
 
 export default function DashboardPage() {
@@ -27,21 +28,41 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
   const [courseCount, setCourseCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const [active, all, dbCourses] = await Promise.all([
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [active, all, count] = await Promise.all([
         getActiveEnrollment(userId),
         getUserEnrollments(userId),
-        getCourses()
+        getCourseCount()
       ]);
       setActiveEnrollment(active);
       setAllEnrollments(all);
-      setCourseCount(dbCourses.length);
+      setCourseCount(count);
+    } catch (err: any) {
+      console.error("Dashboard error:", err);
+      setError("Gagal memuat data dashboard. Silakan coba lagi nanti.");
+    } finally {
       setLoading(false);
-    };
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [userId]);
+
+  if (error) {
+    return (
+      <div className="py-12">
+        <ErrorState 
+          message={error} 
+          onRetry={() => fetchData()} 
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -166,32 +187,54 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
 
 function AdminDashboard({ userId }: { userId: string }) {
   const [allUsers, setAllUsers] = useState<SafeUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
   const [totalEnrollments, setTotalEnrollments] = useState(0);
   const [messages, setMessages] = useState<any[]>([]);
   const [courseCount, setCourseCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const [users, enrollResult, msgs, dbCourses] = await Promise.all([
-        getAllRegisteredUsers(),
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [userCountValue, enrollResult, msgStats, count] = await Promise.all([
+        getUserCount(),
         getAllEnrollmentsAdmin(),
-        getContactMessages(),
-        getCourses()
+        getContactMessageStats(),
+        getCourseCount()
       ]);
       
-      setAllUsers(users);
+      setTotalUsers(userCountValue);
+      setAllUsers([]); // Keeping for compatibility, but count is prioritized
       setAllEnrollments(enrollResult.data);
       setTotalEnrollments(enrollResult.totalCount);
-      setMessages(msgs);
-      setCourseCount(dbCourses.length);
+      setMessages({ length: msgStats.total, unread: msgStats.unread } as any);
+      setCourseCount(count);
+    } catch (err: any) {
+      console.error("Admin Dashboard error:", err);
+      setError("Gagal memuat data statistik admin.");
+    } finally {
       setLoading(false);
-    };
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
-  const unread = messages.filter((m: any) => m.status === "unread").length;
+  const unread = (messages as any).unread || 0;
+
+  if (error) {
+    return (
+      <div className="py-20">
+        <ErrorState 
+          message={error} 
+          onRetry={() => fetchData()} 
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -235,7 +278,7 @@ function AdminDashboard({ userId }: { userId: string }) {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Users, label: "Total Pengguna", value: allUsers.length, color: "text-purple-400", bg: "from-purple-500/15 to-purple-500/5" },
+          { icon: Users, label: "Total Pengguna", value: totalUsers, color: "text-purple-400", bg: "from-purple-500/15 to-purple-500/5" },
           { icon: BookOpen, label: "Total Kursus", value: courseCount, color: "text-cyan-400", bg: "from-cyan-500/15 to-cyan-500/5" },
           { icon: TrendingUp, label: "Total Enrollment", value: totalEnrollments, color: "text-emerald-400", bg: "from-emerald-500/15 to-emerald-500/5" },
           { icon: MessageSquare, label: "Pesan Baru", value: unread, color: "text-amber-400", bg: "from-amber-500/15 to-amber-500/5" },
@@ -268,15 +311,14 @@ function AdminDashboard({ userId }: { userId: string }) {
             {allEnrollments.length > 0 ? (
               <div className="space-y-1 relative z-10">
                 {allEnrollments.slice(0, 5).map((enr: Enrollment) => {
-                  const enrollUser = allUsers.find((u: SafeUser) => u.id === enr.userId);
                   return (
                     <div key={enr.id} className="flex items-center justify-between py-4 border-b border-white/5 last:border-0 hover:bg-white/5 -mx-4 px-4 rounded-xl transition-colors group/item">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-400 group-hover/item:border-purple-500/30 border border-transparent transition-colors">
-                          {enrollUser?.fullName?.substring(0, 2).toUpperCase() || "??"}
+                          {enr.userName?.substring(0, 2).toUpperCase() || "??"}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">{enrollUser?.fullName || "Akun Terhapus"}</p>
+                          <p className="text-sm font-bold text-white">{enr.userName || "Siswa"}</p>
                           <p className="text-xs text-slate-500 font-medium">{enr.courseTitle}</p>
                         </div>
                       </div>

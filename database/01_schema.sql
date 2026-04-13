@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Ensure columns exist for re-runnability
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS email VARCHAR(300);
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_profiles' AND column_name='fts') THEN
+        ALTER TABLE user_profiles ADD COLUMN fts tsvector 
+        GENERATED ALWAYS AS (to_tsvector('simple', coalesce(full_name, '') || ' ' || coalesce(email, ''))) STORED;
+    END IF;
+END $$;
+
 COMMENT ON TABLE user_profiles IS 'Profil pengguna dengan sistem role (admin/user)';
 
 -- ============================================
@@ -335,6 +345,10 @@ CREATE INDEX IF NOT EXISTS idx_enrollments_status ON enrollments(payment_status)
 CREATE INDEX IF NOT EXISTS idx_enrollments_date ON enrollments(enrolled_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_progress_enrollment ON lesson_progress(enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_progress_enrollment ON quiz_progress(enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_assignment_progress_enrollment ON assignment_progress(enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON user_profiles(role);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_fts ON user_profiles USING gin(fts);
 CREATE INDEX IF NOT EXISTS idx_discussions_lesson ON discussions(lesson_id);
 CREATE INDEX IF NOT EXISTS idx_discussions_parent ON discussions(parent_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);

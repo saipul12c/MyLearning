@@ -25,6 +25,7 @@ export interface User {
   // Ban status
   isBanned?: boolean;
   banReason?: string;
+  enrollmentCount?: number;
 }
 
 export const BAN_REASONS = [
@@ -301,6 +302,19 @@ export async function getAllRegisteredUsers(): Promise<SafeUser[]> {
   }
 }
 
+/**
+ * Returns the total count of registered users.
+ * Optimized using a count query instead of data retrieval.
+ */
+export async function getUserCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from("user_profiles")
+    .select("id", { count: 'exact', head: true });
+  
+  if (error) return 0;
+  return count || 0;
+}
+
 export async function getUsersPaginatedAdmin(options: {
   page: number;
   pageSize: number;
@@ -324,7 +338,7 @@ export async function getUsersPaginatedAdmin(options: {
     // 1. Build Query
     let query = supabase
       .from("user_profiles")
-      .select("*", { count: 'exact' });
+      .select("*, enrollmentCount:enrollments(count)", { count: 'exact' });
 
     // 2. Apply Filters
     if (role && role !== "all") {
@@ -336,8 +350,11 @@ export async function getUsersPaginatedAdmin(options: {
     }
 
     if (search) {
-      // Search in full_name OR email
-      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      // High Performance Search: Using the generated fts column
+      query = query.textSearch('fts', search, {
+        config: 'simple',
+        type: 'websearch'
+      });
     }
 
     // 3. Apply Pagination & Sort
@@ -363,6 +380,7 @@ export async function getUsersPaginatedAdmin(options: {
       lastSeenAt: p.last_seen_at || p.created_at,
       isBanned: p.is_banned || false,
       banReason: p.ban_reason || "",
+      enrollmentCount: (p as any).enrollmentCount?.[0]?.count || 0
     }));
 
     return { 

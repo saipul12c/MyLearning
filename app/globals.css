@@ -219,6 +219,11 @@ body {
   color: #64748b;
 }
 
+option {
+  background-color: #0f0f1a;
+  color: #f1f5f9;
+}
+
 textarea.input {
   resize: vertical;
   min-height: 120px;

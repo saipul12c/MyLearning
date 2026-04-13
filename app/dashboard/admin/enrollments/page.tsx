@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { getAllEnrollmentsAdmin, forceExpireEnrollment, completeCourseAdmin, verifyPayment, REJECTION_REASONS } from "@/lib/enrollment";
-import { getAllRegisteredUsers } from "@/lib/auth";
 import { BookMarked, CheckCircle, XCircle, Clock, Filter, Eye, ThumbsUp, ThumbsDown, X } from "lucide-react";
 import Image from "next/image";
+import ErrorState from "@/app/components/ui/ErrorState";
 import { formatPrice } from "@/lib/data";
 
 export default function AdminEnrollmentsPage() {
-  const [users, setUsers] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -22,11 +22,17 @@ export default function AdminEnrollmentsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      const { data, totalCount: count } = await getAllEnrollmentsAdmin(page, pageSize, statusFilter);
-      setEnrollments(data);
-      setTotalCount(count);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const { data, totalCount: count } = await getAllEnrollmentsAdmin(page, pageSize, statusFilter);
+        setEnrollments(data);
+        setTotalCount(count);
+      } catch (err: any) {
+        console.error("Fetch enrollments error:", err);
+        setError("Gagal memuat daftar pendaftaran.");
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, [refresh, page, statusFilter]);
@@ -72,7 +78,21 @@ export default function AdminEnrollmentsPage() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading enrollments...</div>;
+  if (error) {
+    return (
+      <div className="py-20">
+        <ErrorState 
+          message={error} 
+          onRetry={() => setRefresh(r => r + 1)} 
+        />
+      </div>
+    );
+  }
+
+  if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center gap-3">
+    <div className="w-8 h-8 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+    Memuat data pendaftaran...
+  </div>;
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -121,7 +141,6 @@ export default function AdminEnrollmentsPage() {
                 <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">Tidak ada enrollment</td></tr>
               ) : (
                 enrollments.map((enr) => {
-                  const enrollUser = users.find((u) => u.id === enr.userId);
                   return (
                     <tr key={enr.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
                       <td className="px-5 py-3 text-white">{enr.userName || "Siswa"}</td>

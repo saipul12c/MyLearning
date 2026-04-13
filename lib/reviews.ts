@@ -27,7 +27,8 @@ export async function getAllReviews(): Promise<Review[]> {
       user_profiles ( full_name )
     `)
     .eq("is_approved", true)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   if (error || !data) return [];
 
@@ -36,6 +37,48 @@ export async function getAllReviews(): Promise<Review[]> {
     courseSlug: r.courses?.slug || "",
     userId: r.user_id,
     userName: r.user_profiles?.full_name || "Unknown User",
+    rating: r.rating,
+    comment: r.comment,
+    createdAt: r.created_at,
+  }));
+}
+
+export interface Testimonial extends Review {
+  userBio: string;
+  courseTitle: string;
+}
+
+/**
+ * Fetches the latest approved reviews formatted as testimonials for the landing page.
+ */
+export async function getLatestTestimonials(limit: number = 15): Promise<Testimonial[]> {
+  const { data, error } = await supabase
+    .from("reviews")
+    .select(`
+      id,
+      rating,
+      comment,
+      created_at,
+      user_id,
+      courses ( title, slug ),
+      user_profiles ( full_name, bio )
+    `)
+    .eq("is_approved", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) console.error("Error fetching testimonials:", error);
+    return [];
+  }
+
+  return data.map((r: any) => ({
+    id: r.id,
+    courseSlug: r.courses?.slug || "",
+    courseTitle: r.courses?.title || "",
+    userId: r.user_id,
+    userName: (r.user_profiles as any)?.full_name || "Siswa MyLearning",
+    userBio: (r.user_profiles as any)?.bio || "Siswa Berprestasi",
     rating: r.rating,
     comment: r.comment,
     createdAt: r.created_at,
@@ -56,7 +99,8 @@ export async function getCourseReviews(courseSlug: string): Promise<Review[]> {
     `)
     .eq("is_approved", true)
     .eq("courses.slug", courseSlug)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   if (error || !data) return [];
 

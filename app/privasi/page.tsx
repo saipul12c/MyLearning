@@ -132,7 +132,7 @@ export default function PrivacyPage() {
                         "Memberikan dukungan teknis",
                         "Update konten dan notifikasi penting",
                         "Analisis performa platform",
-                        "Keperluan keamanan dan verifikasi"
+                        "Keamanan dan verifikasi"
                       ].map((item, i) => (
                         <div key={i} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/5">
                           <UserCheck size={14} className="text-cyan-400" />
@@ -140,6 +140,29 @@ export default function PrivacyPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Pembagian */}
+                <div id="pembagian" className="scroll-mt-24 group">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                      <Share2 size={24} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white">3. Pembagian Informasi</h2>
+                  </div>
+                  <div className="space-y-4 text-slate-400 text-base leading-relaxed">
+                    <p>Kami tidak menjual informasi pribadi Anda kepada pihak ketiga. Kami hanya membagikan informasi dalam situasi terbatas berikut:</p>
+                    <ul className="space-y-3">
+                      <li className="flex gap-3">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2.5 flex-shrink-0" />
+                        <div>Penyedia layanan instruktur untuk membantu manajemen kursus.</div>
+                      </li>
+                      <li className="flex gap-3">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2.5 flex-shrink-0" />
+                        <div>Penyedia gerbang pembayaran (Payment Gateway) untuk transaksi aman.</div>
+                      </li>
+                    </ul>
                   </div>
                 </div>
 
@@ -156,6 +179,45 @@ export default function PrivacyPage() {
                       Kami menerapkan enkripsi end-to-end (SSL/TLS) untuk semua transmisi data sensitif. Data Anda disimpan di pusat data yang memenuhi standar keamanan industri tertinggi. Kami juga melakukan audit keamanan rutin untuk mencegah akses yang tidak sah, kebocoran, atau manipulasi data.
                     </p>
                   </div>
+                </div>
+
+                {/* Section 5: Cookie */}
+                <div id="cookie" className="scroll-mt-24 group">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-pink-500/10 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform">
+                      <Cookie size={24} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white">5. Cookie dan Teknologi Pelacakan</h2>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed">
+                    Kami menggunakan cookie untuk meningkatkan pengalaman navigasi Anda, mengingat preferensi login, dan menganalisis lalu lintas situs. Anda dapat mengatur browser Anda untuk menolak cookie, namun beberapa bagian dari platform mungkin tidak berfungsi dengan baik.
+                  </p>
+                </div>
+
+                {/* Section 6: Hak Pengguna */}
+                <div id="hak" className="scroll-mt-24 group">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-transform">
+                      <UserCheck size={24} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white">6. Hak Pengguna</h2>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed">
+                    Anda memiliki hak untuk mengakses, memperbarui, atau menghapus data pribadi Anda yang kami simpan. Anda juga berhak untuk menarik persetujuan penggunaan data kapan saja melalui pengaturan profil atau menghubungi tim dukungan kami.
+                  </p>
+                </div>
+
+                {/* Section 7: Penyimpanan */}
+                <div id="penyimpanan" className="scroll-mt-24 group">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                      <Smartphone size={24} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white">7. Penyimpanan Data</h2>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed">
+                    Kami menyimpan informasi Anda selama akun Anda aktif atau selama diperlukan untuk menyediakan layanan kepada Anda. Jika Anda menutup akun, kami akan menghapus data Anda kecuali yang diperlukan untuk memenuhi kewajiban hukum atau penyelesaian sengketa.
+                  </p>
                 </div>
 
                 {/* Section 8: Kontak */}

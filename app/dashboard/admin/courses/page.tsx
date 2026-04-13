@@ -5,6 +5,7 @@ import { getCourses, deleteCourse } from "@/lib/courses";
 import { type Course } from "@/lib/data";
 import Link from "next/link";
 import { Plus, Edit2, Trash2, Search, ArrowLeft, ExternalLink } from "lucide-react";
+import Image from "next/image";
 import { useAuth } from "@/app/components/AuthContext";
 import { getInstructorProfile } from "@/lib/instructor";
 
@@ -100,7 +101,13 @@ export default function AdminCoursesPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden flex-shrink-0">
                           {course.thumbnail ? (
-                            <img src={course.thumbnail} alt="" className="w-full h-full object-cover" />
+                            <Image 
+                              src={course.thumbnail} 
+                              alt="" 
+                              width={48} 
+                              height={48} 
+                              className="w-full h-full object-cover" 
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-600">No Image</div>
                           )}

@@ -19,13 +19,14 @@ import {
   ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
+import Skeleton from "@/app/components/ui/Skeleton";
 
 export default function AdminUsersPage() {
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<SafeUser[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Search state with debouncing
   const [searchInput, setSearchInput] = useState("");
@@ -56,21 +57,24 @@ export default function AdminUsersPage() {
   // Fetch Users
   useEffect(() => {
     const fetchUsers = async () => {
-      setLoading(true);
-      const { data, totalCount } = await getUsersPaginatedAdmin({
-        page,
-        pageSize,
-        search: searchQuery,
-        role: roleFilter,
-        status: statusFilter
-      });
-      
-      const enrollments = await getAllEnrollmentsAdmin();
-      
-      setUsers(data);
-      setTotalCount(totalCount);
-      setAllEnrollments(enrollments.data);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const { data, totalCount } = await getUsersPaginatedAdmin({
+          page,
+          pageSize,
+          search: searchQuery,
+          role: roleFilter,
+          status: statusFilter
+        });
+        
+        setUsers(data);
+        setTotalCount(totalCount);
+      } catch (err: any) {
+        console.error("Fetch users error:", err);
+        setError("Gagal memuat daftar pengguna.");
+      } finally {
+        setLoading(false);
+      }
     };
     fetchUsers();
   }, [page, searchQuery, roleFilter, statusFilter, refresh]);
@@ -108,6 +112,19 @@ export default function AdminUsersPage() {
   };
 
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  if (error) {
+    return (
+      <div className="card p-8 text-center bg-red-500/5 border-red-500/20">
+        <AlertCircle className="mx-auto text-red-400 mb-3" size={32} />
+        <h3 className="text-white font-bold mb-2">Terjadi Kesalahan</h3>
+        <p className="text-slate-400 text-sm mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-primary !py-2 px-6 text-sm mx-auto">
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl space-y-8 animate-in fade-in duration-500">
@@ -159,7 +176,7 @@ export default function AdminUsersPage() {
               setRoleFilter(e.target.value);
               setPage(1);
             }} 
-            className="input !pl-11 !h-12 !rounded-2xl !bg-[#151525] appearance-none"
+            className="input !pl-11 !h-12 !rounded-2xl !bg-[#151525] appearance-none cursor-pointer"
           >
             <option value="all">Semua Role</option>
             <option value="admin">Admin</option>
@@ -176,7 +193,7 @@ export default function AdminUsersPage() {
               setStatusFilter(e.target.value);
               setPage(1);
             }} 
-            className="input !pl-11 !h-12 !rounded-2xl !bg-[#151525] appearance-none"
+            className="input !pl-11 !h-12 !rounded-2xl !bg-[#151525] appearance-none cursor-pointer"
           >
             <option value="all">Keduanya</option>
             <option value="active">Aktif</option>
@@ -188,12 +205,28 @@ export default function AdminUsersPage() {
 
       {/* Users Table */}
       <div className="card !p-0 overflow-hidden border-white/5 shadow-2xl relative">
-        {loading && (
+        {loading && users.length > 0 && (
           <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
              <div className="bg-[#0f0f1a] p-4 rounded-2xl border border-white/10 shadow-2xl flex items-center gap-3">
                 <div className="w-6 h-6 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
                 <span className="text-white text-sm font-medium">Memuat Data...</span>
              </div>
+          </div>
+        )}
+        
+        {loading && users.length === 0 && (
+          <div className="p-6 space-y-4">
+             {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                   <Skeleton className="w-10 h-10 rounded-2xl" />
+                   <div className="flex-1 space-y-2">
+                      <Skeleton className="w-1/3 h-4" />
+                      <Skeleton className="w-1/4 h-3" />
+                   </div>
+                   <Skeleton className="w-20 h-4 rounded-full" />
+                   <Skeleton className="w-24 h-8 rounded-xl" />
+                </div>
+             ))}
           </div>
         )}
         
@@ -210,7 +243,7 @@ export default function AdminUsersPage() {
             </thead>
             <tbody className="divide-y divide-white/[0.03]">
               {users.length > 0 ? users.map((u) => {
-                const enrollmentCount = allEnrollments.filter(e => e.userId === u.id).length;
+                const enrollmentCount = u.enrollmentCount || 0;
                 return (
                   <tr key={u.id} className={`hover:bg-white/[0.02] transition-colors ${u.isBanned ? "bg-red-500/[0.02]" : ""}`}>
                     <td className="px-6 py-4">
@@ -350,7 +383,7 @@ export default function AdminUsersPage() {
       {/* Ban Modal */}
       {banModalUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="card max-w-md w-full !p-8 border-red-500/30 overflow-hidden relative">
+          <div className="card max-w-md w-full !p-8 border-red-500/30 overflow-hidden relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
             <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
               <Ban size={120} className="text-red-500" />
             </div>
@@ -366,7 +399,7 @@ export default function AdminUsersPage() {
                 <select 
                   value={banReason} 
                   onChange={(e) => setBanReason(e.target.value)} 
-                  className="input !h-12 !pr-10 appearance-none bg-[#151525]"
+                  className="input !h-12 !pr-10 appearance-none bg-[#151525] focus:border-red-500/50 cursor-pointer"
                 >
                   {BAN_REASONS.map((reason) => (
                     <option key={reason} value={reason}>{reason}</option>

@@ -15,9 +15,73 @@ import {
 } from "lucide-react";
 import { formatPrice, formatNumber } from "@/lib/utils";
 import { getCourses, getPopularCourses } from "@/lib/courses";
+import { getLatestTestimonials, type Testimonial } from "@/lib/reviews";
+
+export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
 export default async function HomePage() {
   const popularCourses = await getPopularCourses(8);
+  
+  // Dynamic Testimonials
+  const dbTestimonials = await getLatestTestimonials(15);
+  
+  // Robust Fallback + Shuffle
+  const fallbackTestimonials = [
+    {
+      userName: "Dimas Pratama",
+      userBio: "Full-Stack Developer di Tokopedia",
+      courseTitle: "Mastering React & Next.js",
+      courseSlug: "mastering-react-nextjs",
+      comment: "Kursus React & Next.js di MyLearning benar-benar mengubah karir saya. Dalam 3 bulan, saya berhasil landing job sebagai developer di perusahaan unicorn!",
+      rating: 5,
+    },
+    {
+      userName: "Anisa Putri",
+      userBio: "Data Analyst di GoTo",
+      courseTitle: "Python for Data Science",
+      courseSlug: "python-data-science-ml",
+      comment: "Materi Python untuk Data Science sangat komprehensif. Instrukturnya sabar dan menjelaskan konsep kompleks dengan cara yang mudah dipahami.",
+      rating: 5,
+    },
+    {
+      userName: "Raka Mahendra",
+      userBio: "UI/UX Designer Freelance",
+      courseTitle: "UI/UX Design Masterclass",
+      courseSlug: "uiux-design-figma",
+      comment: "Setelah menyelesaikan kursus UI/UX Design, portofolio saya meningkat drastis. Sekarang saya bisa mendapatkan klien freelance dari luar negeri.",
+      rating: 5,
+    },
+    {
+      userName: "Siti Aminah",
+      userBio: "Mobile Developer di Grab",
+      courseTitle: "Flutter Mobile Development",
+      courseSlug: "flutter-mobile-development",
+      comment: "Belajar Flutter di sini sangat menyenangkan. Kurikulumnya sangat up-to-date dengan kebutuhan industri saat ini.",
+      rating: 5,
+    },
+    {
+      userName: "Budi Cahyono",
+      userBio: "AI Engineer di Tech Indo",
+      courseTitle: "Deep Learning AI",
+      courseSlug: "deep-learning-ai",
+      comment: "Sangat membantu untuk memahami konsep AI yang rumit. Penjelasannya sangat mendalam dan aplikatif.",
+      rating: 5,
+    },
+    {
+      userName: "Cindy Lestari",
+      userBio: "DevOps Engineer di Startup Kita",
+      courseTitle: "DevOps for Engineers",
+      courseSlug: "devops-for-engineers",
+      comment: "Materi Docker dan Kubernetes-nya terbaik! Sangat membantu dalam pekerjaan operasional saya sehari-hari.",
+      rating: 5,
+    },
+  ];
+
+  // Logic to mix and rotate
+  const baseData = dbTestimonials.length >= 6 ? dbTestimonials : fallbackTestimonials;
+  const testimonials = [...baseData]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 6);
 
 
   return (
@@ -296,40 +360,7 @@ export default async function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                name: "Dimas Pratama",
-                role: "Full-Stack Developer di Tokopedia",
-                courseName: "Mastering React & Next.js",
-                courseSlug: "mastering-react-nextjs",
-                text: "Kursus React & Next.js di MyLearning benar-benar mengubah karir saya. Dalam 3 bulan, saya berhasil landing job sebagai developer di perusahaan unicorn!",
-                rating: 5,
-              },
-              {
-                name: "Anisa Putri",
-                role: "Data Analyst di GoTo",
-                courseName: "Python for Data Science",
-                courseSlug: "python-data-science-ml",
-                text: "Materi Python untuk Data Science sangat komprehensif. Instrukturnya sabar dan menjelaskan konsep kompleks dengan cara yang mudah dipahami.",
-                rating: 5,
-              },
-              {
-                name: "Raka Mahendra",
-                role: "UI/UX Designer Freelance",
-                courseName: "UI/UX Design Masterclass",
-                courseSlug: "uiux-design-figma",
-                text: "Setelah menyelesaikan kursus UI/UX Design, portofolio saya meningkat drastis. Sekarang saya bisa mendapatkan klien freelance dari luar negeri.",
-                rating: 5,
-              },
-              {
-                name: "Siti Aminah",
-                role: "Mobile Developer di Grab",
-                courseName: "Flutter Mobile Development",
-                courseSlug: "flutter-mobile-development",
-                text: "Belajar Flutter di sini sangat menyenangkan. Kurikulumnya sangat up-to-date dengan kebutuhan industri saat ini.",
-                rating: 5,
-              },
-            ].map((testimonial, idx) => (
+            {testimonials.map((testimonial: any, idx) => (
               <div key={idx} className="card p-6 flex flex-col h-full">
                 {/* Stars */}
                 <div className="stars mb-4">
@@ -337,25 +368,25 @@ export default async function HomePage() {
                     <Star key={i} size={16} className="fill-yellow-400 text-yellow-400" />
                   ))}
                 </div>
-
+                
                 <p className="text-slate-300 text-sm leading-relaxed mb-6 italic flex-grow">
-                  &ldquo;{testimonial.text}&rdquo;
+                  &ldquo;{testimonial.comment || testimonial.text}&rdquo;
                 </p>
 
                 <div className="mt-auto pt-6 border-t border-white/5 space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white font-bold text-sm">
-                      {testimonial.name
+                      {(testimonial.userName || "S")
                         .split(" ")
-                        .map((n) => n[0])
+                        .map((n: string) => n[0])
                         .join("")}
                     </div>
                     <div>
                       <div className="text-white font-medium text-sm">
-                        {testimonial.name}
+                        {testimonial.userName}
                       </div>
                       <div className="text-slate-500 text-xs text-balance">
-                        {testimonial.role}
+                        {testimonial.userBio}
                       </div>
                     </div>
                   </div>
@@ -366,7 +397,7 @@ export default async function HomePage() {
                   >
                     <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Lulusan:</div>
                     <div className="text-[11px] text-purple-400 font-bold group-hover/link:text-cyan-400 transition-colors underline decoration-purple-400/30 underline-offset-4">
-                      {testimonial.courseName}
+                      {testimonial.courseTitle}
                     </div>
                   </Link>
                 </div>

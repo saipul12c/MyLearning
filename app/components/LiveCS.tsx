@@ -3,14 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Send, Bot, User, Phone, CheckCircle, Clock, AlertCircle, Paperclip, Star } from "lucide-react";
 import { useAuth } from "./AuthContext";
-import { getGeminiResponse } from "@/lib/gemini";
+import { getGeminiResponse, type UserContext } from "@/lib/gemini";
 import { detectAgentRequest } from "@/lib/utils";
-import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages, type ChatMessage } from "@/lib/live_chat";
-import { saveContactMessage } from "@/lib/enrollment";
+import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages } from "@/lib/live_chat";
+import { saveContactMessage, getUserEnrollments } from "@/lib/enrollment";
 import { uploadChatFile } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type Mode = "idle" | "ai" | "checking" | "agent" | "offline-form" | "form-success" | "guest-form" | "survey";
 
@@ -22,6 +24,7 @@ interface Message {
 
 export default function LiveCS() {
   const { user, isLoggedIn } = useAuth();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,6 +35,10 @@ export default function LiveCS() {
   const [agentName, setAgentName] = useState("LearningAI");
   const [isAgentTyping, setIsAgentTyping] = useState(false);
   const [rating, setRating] = useState(0);
+  const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+  const [suggestionChips, setSuggestionChips] = useState<string[]>(["Cara daftar?", "Info Kursus"]);
+  const [ticketId, setTicketId] = useState("");
+  
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +48,32 @@ export default function LiveCS() {
   const [guestInfo, setGuestInfo] = useState({ name: "", email: "" });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 0. Proactive Greeting (Once per session after 30s)
+  useEffect(() => {
+    // Stop if we are on Login or Register pages
+    const EXCLUDED_PAGES = ["/login", "/register"];
+    if (EXCLUDED_PAGES.includes(pathname)) return;
+
+    const hasBeenShown = sessionStorage.getItem("proactive_greeting_shown");
+    if (hasBeenShown) return;
+
+    const timer = setTimeout(() => {
+      setIsOpen(true);
+      sessionStorage.setItem("proactive_greeting_shown", "true");
+    }, 30000); // 30 seconds
+
+    return () => clearTimeout(timer);
+  }, [pathname]);
+
+  // Fetch enrolled courses for AI awareness
+  useEffect(() => {
+    if (isLoggedIn && user) {
+        getUserEnrollments(user.id).then(enrs => {
+            setEnrolledIds(enrs.map(e => e.courseId));
+        });
+    }
+  }, [isLoggedIn, user]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -218,18 +251,34 @@ export default function LiveCS() {
         return;
       }
 
-      // AI Response
+      // AI Response with UserContext Awareness
       const history = messages.map(m => ({
         role: m.role === "model" ? "model" : "user" as any,
         parts: [{ text: m.content }]
       }));
       
-      const response = await getGeminiResponse(history, userMsg);
+      const context: UserContext = {
+        fullName: user?.fullName,
+        isLoggedIn: !!isLoggedIn,
+        enrolledCourseIds: enrolledIds
+      };
+
+      const response = await getGeminiResponse(history, userMsg, context);
       
       setMessages((prev) => [
         ...prev,
         { role: "model", content: response, timestamp: new Date() },
       ]);
+
+      // Update Suggestion Chips based on context
+      if (response.toLowerCase().includes("rekomendasi")) {
+        setSuggestionChips(["Berapa harganya?", "Bandingkan", "Cara daftar?"]);
+      } else if (response.toLowerCase().includes("materi")) {
+        setSuggestionChips(["Lihat bab lain", "Coba gratis", "Daftar sekarang"]);
+      } else {
+        setSuggestionChips(["Tanya lagi", "Puas, thx!", "Hubungi Agen"]);
+      }
+
       setLoading(false);
     } else if (mode === "agent" && chatSessionId) {
       // Send to live agent
@@ -354,10 +403,13 @@ export default function LiveCS() {
     e.preventDefault();
     setLoading(true);
     
+    const tid = `TID-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    setTicketId(tid);
+    
     const success = await saveContactMessage(
       offlineForm.name || user?.fullName || "Guest",
       offlineForm.email || user?.email || "guest@email.com",
-      offlineForm.subject,
+      `${offlineForm.subject} [${tid}]`,
       offlineForm.message
     );
     
@@ -367,10 +419,15 @@ export default function LiveCS() {
     setLoading(false);
   };
 
+  if (["/login", "/register"].includes(pathname)) return null;
+
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true);
+          sessionStorage.setItem("proactive_greeting_shown", "true");
+        }}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-cyan-500 shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-transform z-[100] animate-float pulse-glow"
         aria-label="Live CS"
       >
@@ -420,7 +477,29 @@ export default function LiveCS() {
             }`}>
               {msg.role === "model" || msg.role === "agent" ? (
                 <article className="prose-cs">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ node, ...props }) => {
+                        const isInternal = props.href?.startsWith("/");
+                        if (isInternal) {
+                          return (
+                            <Link 
+                              href={props.href || "#"} 
+                              className="text-cyan-400 hover:text-cyan-300 underline font-bold transition-colors"
+                              onClick={(e) => {
+                                // Small touch: auto-close chat if it's a course link? 
+                                // Maybe not, depends on preference.
+                              }}
+                            >
+                              {props.children}
+                            </Link>
+                          );
+                        }
+                        return <a target="_blank" rel="noopener noreferrer" {...props} />;
+                      }
+                    }}
+                  >
                     {msg.content}
                   </ReactMarkdown>
                 </article>
@@ -556,7 +635,8 @@ export default function LiveCS() {
             </div>
             <div>
               <h4 className="font-bold text-white">Pesan Terkirim!</h4>
-              <p className="text-slate-400 text-xs mt-1">Kami akan menghubungi Anda kembali melalui email sesegera mungkin.</p>
+              <p className="text-slate-400 text-xs mt-1">ID Tiket: <span className="text-cyan-400 font-mono font-bold">{ticketId}</span></p>
+              <p className="text-slate-400 text-[10px] mt-2 italic">Kami akan menghubungi Anda kembali melalui email sesegera mungkin.</p>
             </div>
             <button onClick={() => setMode("ai")} className="text-purple-400 text-xs hover:underline">Kembali ke Chat AI</button>
           </div>
@@ -566,19 +646,19 @@ export default function LiveCS() {
       {/* Footer / Input Area */}
       <div className="p-3 border-t border-white/10 bg-[#0f0a1a]/80 backdrop-blur-sm">
         {mode === "ai" && (
-          <div className="flex justify-center gap-2 mb-3">
-            <button 
-              onClick={handleContactAgent}
-              className="text-[10px] px-3 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition-colors flex items-center gap-1.5"
-            >
-              <Phone size={10} /> Hubungi Agen
-            </button>
-            <button 
-              onClick={() => setInputValue("Cara daftar kursus?")}
-              className="text-[10px] px-3 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition-colors"
-            >
-              Info Kursus
-            </button>
+          <div className="flex flex-wrap justify-center gap-2 mb-3">
+            {suggestionChips.map((chip, idx) => (
+              <button 
+                key={idx}
+                onClick={() => {
+                   if (chip === "Hubungi Agen") handleContactAgent();
+                   else setInputValue(chip);
+                }}
+                className="text-[10px] px-3 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition-colors animate-in fade-in"
+              >
+                {chip}
+              </button>
+            ))}
           </div>
         )}
 

@@ -17,20 +17,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  async redirects() {
-    return [
-      {
-        source: '/privasi',
-        destination: '/privacy',
-        permanent: true,
-      },
-      {
-        source: '/kebijakan',
-        destination: '/privacy',
-        permanent: true,
-      },
-    ];
-  },
 };
 
 export default nextConfig;
