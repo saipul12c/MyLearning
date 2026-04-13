@@ -41,7 +41,7 @@ export async function getAdminCourseById(id: string) {
       price, discount_price, category_id, instructor_id, level, language, 
       duration_hours, total_lessons, is_published, is_featured, 
       learning_points, requirements,
-      lessons:lessons(id, title, duration_minutes, is_free_preview, video_url, description, order_index, content_type)
+      lessons:lessons(id, title, duration_minutes, is_free_preview, video_url, description, order_index, content_type, assessments:assessment_definitions(*))
     `)
     .eq("id", id)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
@@ -288,7 +288,7 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
       is_published, is_featured, learning_points, requirements, preview_video_url, tags,
       categories(name, slug),
       instructors(name, slug, bio, avatar_url, expertise, rating, qris_url, website_url, linkedin_url),
-      lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url)
+      lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url, assessments:assessment_definitions(*))
     `)
     .eq("slug", slug)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
@@ -309,7 +309,8 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
         durationMinutes: l.duration_minutes,
         isFreePreview: l.is_free_preview,
         description: l.description,
-        videoUrl: l.video_url
+        videoUrl: l.video_url,
+        assessment: l.assessments && l.assessments.length > 0 ? l.assessments[0] : null
       }));
   }
 

@@ -582,9 +582,11 @@ export default function MyCoursesPage() {
           lessons={activeCourseData?.lessons || []}
           currentLessonId={activeLessonId}
           completedLessonIds={active.completedLessons}
+          completedAssignmentIds={active.completedAssignments || []}
           onClose={() => { setActiveLessonId(null); forceRefresh(); }}
           onToggleComplete={(id) => handleToggleLesson(active, id)}
           onNavigate={(id) => setActiveLessonId(id)}
+          onSubmitAssignment={handleAssignmentSubmit}
         />
       )}
     </div>

@@ -41,6 +41,7 @@ export interface Lesson {
   description?: string;
   videoUrl?: string;
   isCompleted?: boolean; // From student progress
+  assessment?: any; // Per-lesson assignment or quiz
 }
 
 export type CourseLevel = "Starter" | "Accelerator" | "Mastery";

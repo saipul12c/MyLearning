@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronRight, ChevronLeft, CheckCircle, PlayCircle, BookOpen, Clock, ArrowRight } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, CheckCircle, PlayCircle, BookOpen, Clock, ArrowRight, Brain, FileQuestion, Lock, Loader2 } from "lucide-react";
 import { type Lesson } from "@/lib/data";
 import DiscussionSection from "./DiscussionSection";
 
@@ -11,9 +11,11 @@ interface LessonPlayerProps {
   lessons: Lesson[];
   currentLessonId: string;
   completedLessonIds: string[];
+  completedAssignmentIds: number[];
   onClose: () => void;
   onToggleComplete: (lessonId: string) => Promise<void>;
   onNavigate: (lessonId: string) => void;
+  onSubmitAssignment?: (assignmentId: string, answers: string[]) => Promise<{score: number, passed: boolean}>;
 }
 
 export default function LessonPlayer({
@@ -21,16 +23,23 @@ export default function LessonPlayer({
   lessons,
   currentLessonId,
   completedLessonIds,
+  completedAssignmentIds,
   onClose,
   onToggleComplete,
   onNavigate,
+  onSubmitAssignment,
 }: LessonPlayerProps) {
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"content" | "assignment">("content");
+  const [assignmentAnswers, setAssignmentAnswers] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const found = lessons.find((l) => l.id === currentLessonId) || lessons[0];
     setActiveLesson(found);
+    setActiveTab("content");
+    setAssignmentAnswers([]);
   }, [currentLessonId, lessons]);
 
   if (!activeLesson) return null;
@@ -40,10 +49,51 @@ export default function LessonPlayer({
   const prevLesson = lessons[currentIndex - 1];
   const isCompleted = completedLessonIds.includes(activeLesson.id);
 
+  // Assignment Check
+  const currentAssignment = activeLesson.assessment;
+  const isAssignmentRequired = currentAssignment?.is_required !== false;
+  const isAssignmentDone = currentAssignment ? completedAssignmentIds.includes(Number(currentAssignment.id)) : true;
+  const isBlocked = isAssignmentRequired && !isAssignmentDone;
+
   const handleToggleComplete = async () => {
+    if (isBlocked) {
+      alert("Selesaikan tugas praktik terlebih dahulu sebelum menandai materi ini sebagai selesai.");
+      return;
+    }
     setIsSyncing(true);
     await onToggleComplete(activeLesson.id);
     setIsSyncing(false);
+  };
+
+  const handleNavigate = (lesson: Lesson) => {
+    // Optimization: find index of targeted lesson
+    const targetIdx = lessons.findIndex(l => l.id === lesson.id);
+    
+    // If moving forward and current is blocked, PREVENT.
+    if (targetIdx > currentIndex && isBlocked) {
+      alert("Ups! Selesaikan tugas praktik materi ini dulu ya sebelum lanjut ke materi berikutnya. 💪");
+      setActiveTab("assignment");
+      return;
+    }
+    
+    onNavigate(lesson.id);
+  };
+
+  const handleAssignmentSubmitLocal = async () => {
+    if (!currentAssignment || !onSubmitAssignment) return;
+    setIsSubmitting(true);
+    try {
+      const res = await onSubmitAssignment(currentAssignment.id, assignmentAnswers);
+      if (res.passed) {
+        alert("Selamat! Jawaban Anda benar. Sekarang Anda bisa lanjut ke materi berikutnya.");
+      } else {
+        alert("Skor Anda belum mencukupi. Silakan coba lagi.");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Enhanced Markdown-lite Parser
@@ -124,7 +174,7 @@ export default function LessonPlayer({
 
   return typeof document !== "undefined" ? createPortal(
     <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col lg:flex-row animate-fade-in overflow-hidden">
-      {/* Sidebar - Video & Content Area */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar">
         {/* Header Area */}
         <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
@@ -183,45 +233,142 @@ export default function LessonPlayer({
           )}
         </div>
 
+        {/* Tab Switcher (Only if assignment exists) */}
+        {currentAssignment && (
+           <div className="flex px-8 border-b border-white/5 bg-slate-900/30">
+              <button 
+                onClick={() => setActiveTab("content")}
+                className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 ${
+                   activeTab === 'content' ? 'border-purple-500 text-white' : 'border-transparent text-slate-500 hover:text-white'
+                }`}
+              >
+                 <BookOpen size={14} /> Materi Pelajaran
+              </button>
+              <button 
+                onClick={() => setActiveTab("assignment")}
+                className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 relative ${
+                   activeTab === 'assignment' ? 'border-cyan-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                 <Brain size={14} /> Tugas Praktik
+                 {isBlocked && (
+                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                 )}
+                 {isAssignmentDone && (
+                   <CheckCircle size={12} className="text-emerald-500" />
+                 )}
+              </button>
+           </div>
+        )}
+
         {/* Content Area */}
         <div className="max-w-4xl mx-auto w-full p-8 md:p-12">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-white/5">
-             <div>
-               <h2 className="text-3xl font-bold text-white mb-2">{activeLesson.title}</h2>
-               <div className="flex items-center gap-4 text-sm text-slate-500">
-                 <span className="flex items-center gap-1.5"><Clock size={16} /> {activeLesson.durationMinutes} Menit</span>
-                 <span className="flex items-center gap-1.5"><BookOpen size={16} /> Pelajaran {currentIndex + 1} of {lessons.length}</span>
+          {activeTab === "content" ? (
+            <div className="animate-in fade-in duration-500">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-white/5">
+                 <div>
+                   <h2 className="text-3xl font-bold text-white mb-2">{activeLesson.title}</h2>
+                   <div className="flex items-center gap-4 text-sm text-slate-500">
+                     <span className="flex items-center gap-1.5"><Clock size={16} /> {activeLesson.durationMinutes} Menit</span>
+                     <span className="flex items-center gap-1.5"><BookOpen size={16} /> Pelajaran {currentIndex + 1} of {lessons.length}</span>
+                   </div>
+                 </div>
+                 
+                 <div className="flex gap-2">
+                    <button 
+                      disabled={!prevLesson}
+                      onClick={() => handleNavigate(prevLesson!)}
+                      className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white disabled:opacity-20 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button 
+                      disabled={!nextLesson}
+                      onClick={() => handleNavigate(nextLesson!)}
+                      className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white disabled:opacity-20 disabled:cursor-not-allowed transition-all relative"
+                    >
+                      <ChevronRight size={20} />
+                      {nextLesson && isBlocked && (
+                         <div className="absolute -top-1 -right-1 bg-slate-950 p-1 rounded-full border border-white/10 scale-75">
+                            <Lock size={12} className="text-cyan-500" />
+                         </div>
+                      )}
+                    </button>
+                 </div>
                </div>
-             </div>
-             
-             <div className="flex gap-2">
-                <button 
-                  disabled={!prevLesson}
-                  onClick={() => onNavigate(prevLesson!.id)}
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white disabled:opacity-20 disabled:cursor-not-allowed transition-all"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <button 
-                  disabled={!nextLesson}
-                  onClick={() => onNavigate(nextLesson!.id)}
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white disabled:opacity-20 disabled:cursor-not-allowed transition-all"
-                >
-                  <ChevronRight size={20} />
-                </button>
-             </div>
-          </div>
 
-          <div className="prose prose-invert max-w-none">
-             {activeLesson.description ? (
-                parseContent(activeLesson.description)
-             ) : (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                   <BookOpen size={48} className="text-slate-700 mx-auto mb-4" />
-                   <p className="text-slate-500 italic">Materi tertulis tidak tersedia untuk sesi ini. Silakan tonton video di atas untuk memahami isi pelajaran.</p>
-                </div>
-             )}
-          </div>
+               <div className="prose prose-invert max-w-none">
+                  {activeLesson.description ? (
+                     parseContent(activeLesson.description)
+                  ) : (
+                     <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                        <BookOpen size={48} className="text-slate-700 mx-auto mb-4" />
+                        <p className="text-slate-500 italic">Materi tertulis tidak tersedia untuk sesi ini. Silakan tonton video di atas untuk memahami isi pelajaran.</p>
+                     </div>
+                  )}
+               </div>
+            </div>
+          ) : (
+            <div className="animate-in slide-in-from-right-8 duration-500 space-y-8">
+               <div className="flex items-center justify-between mb-8 pb-8 border-b border-white/5">
+                  <div>
+                    <h2 className="text-3xl font-bold text-white mb-2">{currentAssignment?.title || "Tugas Praktik"}</h2>
+                    <p className="text-sm text-slate-500">Selesaikan tugas di bawah ini untuk melanjutkan ke materi berikutnya.</p>
+                  </div>
+                  <div className={`px-4 py-2 rounded-2xl border text-xs font-bold uppercase tracking-widest ${isAssignmentDone ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}>
+                     {isAssignmentDone ? "STATUS: SELESAI" : "STATUS: BELUM SELESAI"}
+                  </div>
+               </div>
+
+               <div className="card p-8 bg-cyan-500/[0.02] border-cyan-500/10">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                     <FileQuestion className="text-cyan-400" size={20} /> Instruksi Tugas
+                  </h3>
+                  <div className="prose prose-invert prose-sm max-w-none text-slate-400">
+                     {parseContent(currentAssignment?.instructions || "Instruksi tidak tersedia.")}
+                  </div>
+               </div>
+
+               {!isAssignmentDone ? (
+                 <div className="space-y-6">
+                    <div className="space-y-4">
+                       <label className="text-sm font-bold text-white">Jawaban / Hasil Pekerjaan Anda</label>
+                       <textarea 
+                          className="input-premium w-full h-48 !bg-white/5 font-mono text-sm leading-relaxed" 
+                          placeholder="Tuliskan jawaban atau link hasil pekerjaan Anda di sini..."
+                          value={assignmentAnswers[0] || ""}
+                          onChange={(e) => setAssignmentAnswers([e.target.value])}
+                       />
+                    </div>
+                    <button 
+                       onClick={handleAssignmentSubmitLocal}
+                       disabled={isSubmitting || !assignmentAnswers[0]}
+                       className="btn-primary flex items-center gap-2 !py-4 w-full justify-center group"
+                    >
+                       {isSubmitting ? <><Loader2 size={18} className="animate-spin" /> Mengirim...</> : <><CheckCircle size={18} className="group-hover:scale-110 transition-transform" /> Kirim Jawaban</>}
+                    </button>
+                 </div>
+               ) : (
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-3xl p-12 text-center">
+                     <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-emerald-500/20">
+                        <CheckCircle size={40} />
+                     </div>
+                     <h3 className="text-2xl font-bold text-white mb-2">Tugas Selesai!</h3>
+                     <p className="text-slate-400 mb-8 max-w-md mx-auto text-sm">Anda telah menyelesaikan tugas praktik untuk materi ini. Anda dapat melanjutkan ke pelajaran berikutnya.</p>
+                     <button 
+                        onClick={() => {
+                           if (nextLesson) handleNavigate(nextLesson);
+                           else setActiveTab("content");
+                        }}
+                        className="btn-primary !px-8 !py-3 flex items-center gap-2 mx-auto"
+                     >
+                        {nextLesson ? "Lanjut ke Materi Berikutnya" : "Kembali ke Materi"} <ChevronRight size={18} />
+                     </button>
+                  </div>
+               )}
+            </div>
+          )}
+        </div>
 
           {nextLesson && (
             <div className="mt-16 p-8 rounded-3xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/20 flex flex-col md:flex-row items-center justify-between gap-6 group">
@@ -240,7 +387,6 @@ export default function LessonPlayer({
 
           <DiscussionSection lessonId={activeLesson.id} />
         </div>
-      </div>
 
       {/* Sidebar - Lesson List */}
       <div className="w-full lg:w-[350px] bg-slate-900 border-l border-white/5 flex flex-col h-full overflow-hidden shrink-0">
@@ -257,7 +403,7 @@ export default function LessonPlayer({
               return (
                 <button
                   key={lesson.id}
-                  onClick={() => onNavigate(lesson.id)}
+                  onClick={() => handleNavigate(lesson)}
                   className={`w-full flex items-start gap-4 p-4 rounded-2xl transition-all group relative ${
                     isCurrent ? "bg-purple-500/15 border border-purple-500/30 ring-1 ring-purple-500/20" : 
                     "hover:bg-white/5 border border-transparent"
@@ -271,14 +417,20 @@ export default function LessonPlayer({
                   }`}>
                     {isDone ? <CheckCircle size={14} /> : idx + 1}
                   </div>
-                  <div className="text-left">
-                    <p className={`text-sm font-bold transition-colors ${
-                      isCurrent ? "text-white" : "text-slate-400 group-hover:text-slate-300"
-                    }`}>
-                      {lesson.title}
-                    </p>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                       <p className={`text-sm font-bold truncate transition-colors ${
+                        isCurrent ? "text-white" : "text-slate-400 group-hover:text-slate-300"
+                       }`}>
+                        {lesson.title}
+                       </p>
+                       {idx > currentIndex && isBlocked && (
+                          <Lock size={12} className="text-cyan-500/50 shrink-0" />
+                       )}
+                    </div>
                     <div className="flex items-center gap-3 mt-1 text-[10px] font-bold text-slate-600 uppercase tracking-tighter">
                       <span className="flex items-center gap-1"><Clock size={10} /> {lesson.durationMinutes} Min</span>
+                      {lesson.assessment && <span className="text-cyan-500/80 flex items-center gap-1"><Brain size={10} /> Tugas</span>}
                       {lesson.isFreePreview && <span className="text-amber-500/80 border border-amber-500/20 px-1.5 rounded">Free</span>}
                     </div>
                   </div>

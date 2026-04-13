@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS assessment_definitions (
   order_index INTEGER DEFAULT 0,
   slug VARCHAR(100),
   instructions TEXT,
+  lesson_id UUID REFERENCES lessons(id) ON DELETE CASCADE,
   questions_list JSONB DEFAULT '[]'::jsonb,
   correct_answers_list JSONB DEFAULT '[]'::jsonb,
   objectives JSONB DEFAULT '[]'::jsonb,

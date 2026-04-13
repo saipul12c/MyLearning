@@ -224,7 +224,10 @@ export default function CourseForm({ courseId }: Props) {
   const openLessonModal = (lesson: any = null) => {
     setLessonModal({
       isOpen: true,
-      lesson: lesson || {
+      lesson: lesson ? {
+        ...lesson,
+        lessonAssignment: lesson.assessments && lesson.assessments.length > 0 ? lesson.assessments[0] : null
+      } : {
         course_id: courseId,
         title: "",
         duration_minutes: 0,
@@ -232,7 +235,8 @@ export default function CourseForm({ courseId }: Props) {
         description: "",
         is_free_preview: false,
         content_type: "video",
-        order_index: formData.lessons.length
+        order_index: formData.lessons.length,
+        lessonAssignment: null
       },
       isSaving: false
     });
@@ -246,9 +250,22 @@ export default function CourseForm({ courseId }: Props) {
 
     setLessonModal(prev => ({ ...prev, isSaving: true }));
     const res = await upsertLesson({ ...lessonData, course_id: courseId });
-    setLessonModal(prev => ({ ...prev, isSaving: false }));
-
+    
     if (res.success) {
+      // 2. Save Assessment if present
+      if (lessonData.lessonAssignment) {
+        const assRes = await upsertAssessment({
+          ...lessonData.lessonAssignment,
+          course_id: courseId,
+          lesson_id: (res.data as any).id, // Use the new/existing lesson ID
+          assessment_type: 'assignment',
+          title: lessonData.lessonAssignment.title || `Tugas: ${lessonData.title}`, // Fallback title
+        });
+        if (!assRes.success) {
+           console.error("Failed to save lesson assignment:", assRes.error);
+        }
+      }
+
       showNotification("Materi berhasil disimpan!", "success");
       setLessonModal({ isOpen: false, lesson: null, isSaving: false });
       
@@ -259,6 +276,7 @@ export default function CourseForm({ courseId }: Props) {
     } else {
       showNotification("Gagal menyimpan materi: " + (res.error as any).message, "error");
     }
+    setLessonModal(prev => ({ ...prev, isSaving: false }));
   };
 
   const handleDeleteLesson = async (id: string, title: string) => {
@@ -862,6 +880,90 @@ export default function CourseForm({ courseId }: Props) {
                      </div>
                   </div>
 
+                  {/* Tugas Praktik Section (NEW) */}
+                  <div className="pt-6 border-t border-white/5 space-y-4">
+                     <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Tugas Praktik (Opsional)</label>
+                        <button 
+                           type="button" 
+                           onClick={() => {
+                              const currentAss = lessonModal.lesson?.lessonAssignment;
+                              setLessonModal({
+                                 ...lessonModal, 
+                                 lesson: {
+                                    ...lessonModal.lesson, 
+                                    lessonAssignment: currentAss ? null : { 
+                                       title: lessonModal.lesson?.title ? `Tugas: ${lessonModal.lesson.title}` : "",
+                                       instructions: "",
+                                       is_required: true,
+                                       assessment_type: 'assignment'
+                                    }
+                                 }
+                              });
+                           }}
+                           className={`text-[10px] font-bold px-3 py-1 rounded-full transition-all ${
+                              lessonModal.lesson?.lessonAssignment 
+                              ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' 
+                              : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
+                           }`}
+                        >
+                           {lessonModal.lesson?.lessonAssignment ? "Hapus Tugas" : "+ Aktifkan Tugas"}
+                        </button>
+                     </div>
+
+                            {lessonModal.lesson?.lessonAssignment && (
+                               <div className="space-y-4 p-6 rounded-3xl bg-cyan-500/[0.03] border border-cyan-500/20 animate-in slide-in-from-top-4 duration-300">
+                                  <div className="space-y-1.5">
+                                     <label className="text-[10px] font-black uppercase text-cyan-500/50 tracking-widest px-1">Judul Tugas</label>
+                                     <input 
+                                        className="input-premium w-full !bg-white/5 !border-cyan-500/10 focus:!border-cyan-500/30" 
+                                        value={lessonModal.lesson.lessonAssignment.title || ""} 
+                                        onChange={e => setLessonModal({
+                                           ...lessonModal, 
+                                           lesson: {
+                                              ...lessonModal.lesson, 
+                                              lessonAssignment: {...lessonModal.lesson.lessonAssignment, title: e.target.value}
+                                           }
+                                        })} 
+                                        placeholder="Judul tugas praktik..." 
+                                     />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                     <label className="text-[10px] font-black uppercase text-cyan-500/50 tracking-widest px-1">Instruksi Pengerjaan</label>
+                                     <textarea 
+                                        className="input-premium w-full h-32 !bg-white/5 !border-cyan-500/10 focus:!border-cyan-500/30" 
+                                        value={lessonModal.lesson.lessonAssignment.instructions || ""} 
+                                        onChange={e => setLessonModal({
+                                           ...lessonModal, 
+                                           lesson: {
+                                              ...lessonModal.lesson, 
+                                              lessonAssignment: {...lessonModal.lesson.lessonAssignment, instructions: e.target.value}
+                                           }
+                                        })} 
+                                        placeholder="Apa yang harus dikerjakan siswa? Gunakan Markdown jika perlu." 
+                                     />
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                     <label className="flex items-center gap-3 cursor-pointer group">
+                                        <input 
+                                           type="checkbox" 
+                                           className="w-4 h-4 rounded border-white/10 bg-white/5 text-cyan-500 focus:ring-cyan-500/50" 
+                                           checked={lessonModal.lesson.lessonAssignment.is_required !== false} 
+                                           onChange={e => setLessonModal({
+                                              ...lessonModal, 
+                                              lesson: {
+                                                 ...lessonModal.lesson, 
+                                                 lessonAssignment: {...lessonModal.lesson.lessonAssignment, is_required: e.target.checked}
+                                              }
+                                           })} 
+                                        />
+                                        <span className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Wajib Selesai Sebelum Lanjut</span>
+                                     </label>
+                                  </div>
+                               </div>
+                            )}
+                         </div>
+
                   {/* Free Preview Toggle */}
                   <label className="flex items-center gap-3 w-max p-4 rounded-2xl border border-white/5 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors">
                      <input 
@@ -876,15 +978,16 @@ export default function CourseForm({ courseId }: Props) {
                      </div>
                   </label>
                </div>
-
+               {/* Modal Footer */}
                <div className="p-6 md:p-8 border-t border-white/5 bg-white/[0.02] flex justify-end gap-3">
                   <button type="button" onClick={() => setLessonModal({...lessonModal, isOpen: false})} className="btn-secondary !rounded-2xl px-6">Batal</button>
                   <button 
                      type="button" 
+                     disabled={lessonModal.isSaving}
                      onClick={() => handleSaveLesson(lessonModal.lesson)} 
                      className="btn-primary !rounded-2xl px-8 flex items-center gap-2 group"
                   >
-                     <Save size={18} className="group-hover:scale-110 transition-transform" />
+                     {lessonModal.isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                      Simpan Materi
                   </button>
                </div>
@@ -909,7 +1012,7 @@ export default function CourseForm({ courseId }: Props) {
                   </button>
                </div>
 
-               {/* Modal Tabs (Only for Quiz or Complex assignments) */}
+               {/* Modal Tabs */}
                <div className="flex px-8 border-b border-white/5 bg-white/[0.01]">
                   {[
                      { id: 'config', label: 'Konfigurasi Dasar', icon: Settings },
@@ -968,12 +1071,10 @@ export default function CourseForm({ courseId }: Props) {
                               <div className="space-y-1.5">
                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 flex items-center gap-2"><Timer size={12} /> Waktu (Menit)</label>
                                  <input type="number" className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.time_limit_minutes || 15} onChange={e => assessmentModal.data = {...assessmentModal.data, time_limit_minutes: Number(e.target.value)}} />
-                                 <p className="text-[10px] text-slate-500 mt-1 italic px-1">0 = Tanpa batas waktu</p>
                               </div>
                               <div className="space-y-1.5">
                                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Batas Percobaan</label>
                                  <input type="number" className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.max_attempts || 0} onChange={e => assessmentModal.data = {...assessmentModal.data, max_attempts: Number(e.target.value)}} />
-                                 <p className="text-[10px] text-slate-500 mt-1 italic px-1">0 = Tak terbatas</p>
                               </div>
                            </div>
                         ) : (
@@ -983,7 +1084,7 @@ export default function CourseForm({ courseId }: Props) {
                                  <textarea className="input-premium w-full h-32 !bg-white/5" defaultValue={assessmentModal.data?.instructions} onChange={e => assessmentModal.data = {...assessmentModal.data, instructions: e.target.value}} placeholder="Sebutkan langkah-langkah yang harus dilakukan siswa." />
                               </div>
                               <div className="space-y-1.5">
-                                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Kriteria Penilaian (Markdown)</label>
+                                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Kriteria Penilaian</label>
                                  <textarea className="input-premium w-full h-32 !bg-white/5 font-mono text-xs" defaultValue={assessmentModal.data?.evaluation_criteria} onChange={e => assessmentModal.data = {...assessmentModal.data, evaluation_criteria: e.target.value}} placeholder="- Kebersihan Kode: 30%&#10;- fungsionalitas: 70%" />
                               </div>
                               {assessmentModal.type === 'final_project' && (
@@ -1023,7 +1124,7 @@ export default function CourseForm({ courseId }: Props) {
                   <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                      <Brain size={24} className="text-purple-400" /> Detail Pertanyaan
                   </h3>
-                  <button type="button" onClick={() => setQuestionModal({...questionModal, isOpen: false})} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-400">
+                  <button type="button" onClick={() => setQuestionModal({...questionModal, isOpen: false})} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-400 font-bold">
                      <X size={20} />
                   </button>
                </div>
@@ -1085,12 +1186,12 @@ export default function CourseForm({ courseId }: Props) {
                </div>
 
                <div className="p-8 border-t border-white/5 bg-white/[0.02] flex justify-end gap-3 mt-4">
-                  <button type="button" onClick={() => setQuestionModal({...questionModal, isOpen: false})} className="btn-secondary !rounded-2xl px-6">Batal</button>
+                  <button type="button" onClick={() => setQuestionModal({...questionModal, isOpen: false})} className="btn-secondary !rounded-2xl px-6 font-bold">Batal</button>
                   <button 
                      type="button" 
                      disabled={questionModal.isSaving}
                      onClick={() => handleSaveQuestion({...questionModal.data, assessment_id: questionModal.assessmentId})} 
-                     className="btn-primary !rounded-2xl px-8 flex items-center gap-2"
+                     className="btn-primary !rounded-2xl px-8 flex items-center gap-2 font-bold"
                   >
                      {questionModal.isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                      Simpan Pertanyaan

@@ -76,7 +76,7 @@ export async function getCourseAssessments(courseSlug: string): Promise<CourseAs
         id, title, description, assessment_type, passing_score, 
         instructions, questions_list, correct_answers_list, 
         objectives, deliverables, evaluation_criteria, estimated_hours,
-        max_attempts, is_required, time_limit_minutes
+        max_attempts, is_required, time_limit_minutes, lesson_id
       `)
       .eq("course_id", course.id);
 
@@ -200,7 +200,8 @@ export async function upsertAssessment(assessmentData: any) {
       estimated_hours: assessmentData.estimated_hours || 0,
       max_attempts: assessmentData.max_attempts || 0,
       is_required: assessmentData.is_required !== undefined ? assessmentData.is_required : true,
-      time_limit_minutes: assessmentData.time_limit_minutes || 0
+      time_limit_minutes: assessmentData.time_limit_minutes || 0,
+      lesson_id: assessmentData.lesson_id || null
     };
 
     const { data, error } = await supabase
