@@ -3,9 +3,17 @@ import { getCourses } from "./courses";
 
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 
-// Initialize client as per documentation
+if (!apiKey) {
+  if (process.env.NODE_ENV !== "production") {
+    console.warn("Gemini API key is missing. AI features will be disabled locally.");
+  } else {
+    console.warn("WARNING: Gemini API key missing in Production/Build environment!");
+  }
+}
+
+// Initialize client with fallback to avoid SDK initialization errors if key is empty
 const ai = new GoogleGenAI({
-  apiKey: apiKey,
+  apiKey: apiKey || "missing-key-dummy",
   apiVersion: 'v1beta'
 });
 
@@ -145,5 +153,62 @@ INSTRUKSI:
       throw new Error("Layanan AI sedang sangat sibuk (High Demand). Jika sudah mencoba 3x namun tetap gagal. Silakan tunggu 30 detik lalu klik generate lagi.");
     }
     throw new Error("Gagal generate konten AI. Pastikan koneksi internet stabil atau coba gunakan judul materi yang berbeda.");
+  }
+}
+
+interface FAQItem {
+  question: string;
+  answer: string;
+}
+
+interface FAQCategory {
+  name: string;
+  icon: string;
+  items: FAQItem[];
+}
+
+/**
+ * Answers questions based on the FAQ data
+ */
+export async function getFAQGeminiResponse(userMessage: string, faqData: FAQCategory[]): Promise<string> {
+  try {
+    if (!apiKey) {
+      return "Sistem AI sedang offline. Silakan coba lagi nanti.";
+    }
+
+    const faqContext = faqData.map(cat => {
+      const items = cat.items.map(item => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n');
+      return `### Kategori: ${cat.name}\n${items}`;
+    }).join('\n\n---\n\n');
+
+    const prompt = `
+Anda adalah pakar bantuan pelanggan untuk MyLearning. Tugas Anda adalah menjawab pertanyaan pengguna HANYA berdasarkan data FAQ di bawah ini.
+
+DOKUMEN FAQ KAMI:
+${faqContext}
+
+INSTRUKSI:
+1. Jika pertanyaan pengguna ada di FAQ, berikan jawaban yang sesuai secara ramah.
+2. Jika pertanyaan TIDAK ada di FAQ, katakan dengan sopan bahwa Anda tidak memiliki informasi tersebut dan anjurkan untuk menghubungi tim support kami melalui halaman Kontak.
+3. Selalu gunakan Bahasa Indonesia yang ramah, profesional, dan gunakan format Markdown agar rapi.
+4. Jangan memberikan informasi di luar apa yang tertulis di FAQ di atas.
+
+Pertanyaan Pengguna: ${userMessage}
+`;
+
+    const response = await executeWithRetry(() => ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        temperature: 0.3, // Lower temperature for more factual responses
+        maxOutputTokens: 1000,
+      }
+    }));
+
+    const responseText = (response as any).text || (response as any).candidates?.[0]?.content?.parts?.[0]?.text || "";
+    return responseText.trim() || "Maaf, saya tidak bisa menemukan jawaban yang tepat di FAQ kami. Silakan hubungi tim support kami.";
+  } catch (error: any) {
+    console.error("FAQ AI Error:", error);
+    return "Maaf, terjadi kesalahan saat menghubungi asisten AI. Silakan coba lagi nanti.";
   }
 }

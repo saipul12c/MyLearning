@@ -120,6 +120,13 @@ export default function LoginPage() {
               {loading ? "Memproses..." : "Masuk"}
               <ArrowRight size={18} />
             </button>
+            <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+              Dengan masuk, Anda menyetujui{" "}
+              <Link href="/kebijakan" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Ketentuan Layanan</Link>
+              {" "}dan{" "}
+              <Link href="/privasi" className="text-purple-400 hover:text-purple-300 underline underline-offset-4 decoration-purple-400/30">Kebijakan Privasi</Link>
+              {" "}kami.
+            </p>
           </form>
 
           <div className="mt-6 text-center">

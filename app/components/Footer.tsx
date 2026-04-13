@@ -118,16 +118,16 @@ export default function Footer() {
           </p>
           <div className="flex gap-6">
             <Link
-              href="/terms"
+              href="/kebijakan"
               className="text-slate-500 hover:text-white text-sm transition-colors"
             >
-              Terms of Service
+              Ketentuan Layanan
             </Link>
             <Link
-              href="/privacy"
+              href="/privasi"
               className="text-slate-500 hover:text-white text-sm transition-colors"
             >
-              Privacy Policy
+              Kebijakan Privasi
             </Link>
           </div>
         </div>
