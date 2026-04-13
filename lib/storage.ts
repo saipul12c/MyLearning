@@ -14,6 +14,10 @@ export async function uploadAvatar(file: File): Promise<{ url: string | null; er
   return uploadToBucket(file, "avatars", "user-avatars");
 }
 
+export async function uploadChatFile(file: File): Promise<{ url: string | null; error: any }> {
+  return uploadToBucket(file, "chat_attachments", "attachments");
+}
+
 export async function uploadPaymentProofToStorage(file: File): Promise<{ url: string | null; error: any }> {
   return uploadToBucket(file, "payments", "proofs");
 }

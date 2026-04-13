@@ -132,6 +132,22 @@ export default function CertificateGenerator(props: CertificateProps) {
               alignItems: "center",
               padding: "35px 50px"
             }}>
+              {/* Logo Section */}
+              <div style={{ marginBottom: "20px", display: "flex", justifyContent: "center" }}>
+                <div style={{ 
+                  width: "48px", 
+                  height: "48px", 
+                  borderRadius: "12px", 
+                  background: "linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 4px 12px rgba(124, 58, 237, 0.2)"
+                }}>
+                  <img src="/logo.png" alt="Logo" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
+                </div>
+              </div>
+
               {/* Header Section */}
               <div style={{ marginBottom: "10px" }}>
                  <p style={{ fontSize: "10px", fontWeight: "800", letterSpacing: "4px", color: "#8B7D6B", textTransform: "uppercase" }}>Certificate of Excellence</p>

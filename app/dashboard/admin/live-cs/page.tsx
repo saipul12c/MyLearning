@@ -13,6 +13,9 @@ export default function AdminLiveCS() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -58,9 +61,18 @@ export default function AdminLiveCS() {
             const newMsg = payload.new as any;
             if (newMsg.sender_type === "user" || newMsg.sender_type === "bot") {
               setMessages((prev) => [...prev, newMsg]);
+              playNotificationSound();
+              setIsUserTyping(false);
             }
           }
         )
+        .on("broadcast", { event: "typing" }, (payload) => {
+          if (payload.payload.sender === "user") {
+            setIsUserTyping(true);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => setIsUserTyping(false), 3000);
+          }
+        })
         .subscribe();
 
       return () => {
@@ -107,6 +119,24 @@ export default function AdminLiveCS() {
       ]);
     }
     setLoading(false);
+  };
+
+  const playNotificationSound = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3");
+      audioRef.current.volume = 0.5;
+    }
+    audioRef.current.play().catch(() => {});
+  };
+
+  const broadcastTyping = async () => {
+    if (!activeSession) return;
+    const channel = supabase.channel(`admin-chat:${activeSession.id}`);
+    await channel.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { sender: "agent" },
+    });
   };
 
   const closeChat = async (id: string) => {
@@ -223,6 +253,18 @@ export default function AdminLiveCS() {
                   </div>
                 </div>
               ))}
+              {isUserTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-white/5 rounded-xl px-3 py-1.5 text-[10px] text-slate-500 flex items-center gap-2">
+                    <span className="italic">User sedang mengetik</span>
+                    <div className="flex gap-1">
+                      <div className="w-1 h-1 rounded-full bg-slate-600 animate-bounce"></div>
+                      <div className="w-1 h-1 rounded-full bg-slate-600 animate-bounce [animation-delay:0.2s]"></div>
+                      <div className="w-1 h-1 rounded-full bg-slate-600 animate-bounce [animation-delay:0.4s]"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-white/[0.02] border-t border-white/5">
@@ -230,7 +272,10 @@ export default function AdminLiveCS() {
                 <input
                   type="text"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(e) => {
+                    setInputValue(e.target.value);
+                    broadcastTyping();
+                  }}
                   onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
                   placeholder="Kirim pesan balasan..."
                   className="input flex-1"

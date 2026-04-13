@@ -3,24 +3,61 @@
 import { useState, useRef } from "react";
 import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight } from "lucide-react";
 import Image from "next/image";
-import { Enrollment, uploadPaymentProof } from "@/lib/enrollment";
+import { Enrollment, uploadPaymentProof, updateEnrollmentPrice } from "@/lib/enrollment";
+import { validateVoucher, Voucher } from "@/lib/vouchers";
+import { formatPrice } from "@/lib/utils";
 
 interface PaymentModalProps {
   enrollment: Enrollment;
   qrisUrl: string;
   courseTitle: string;
   price: number;
+  instructorId: string;
+  courseId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price, onClose, onSuccess }: PaymentModalProps) {
+export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: initialPrice, instructorId, courseId, onClose, onSuccess }: PaymentModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [voucherCode, setVoucherCode] = useState("");
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
+  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(initialPrice);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    
+    setIsValidatingVoucher(true);
+    setError(null);
+    
+    const res = await validateVoucher(voucherCode, courseId, instructorId, initialPrice);
+    setIsValidatingVoucher(false);
+    
+    if (res.success && res.voucher && res.discountAmount !== undefined) {
+      setAppliedVoucher(res.voucher);
+      setDiscountAmount(res.discountAmount);
+      const newPrice = initialPrice - res.discountAmount;
+      setFinalPrice(newPrice);
+      
+      // Update enrollment in DB immediately so the proof matches the price
+      const updateRes = await updateEnrollmentPrice(enrollment.id, newPrice, res.voucher.id, res.discountAmount);
+      if (!updateRes.success) {
+        setError("Gagal memperbarui data pendaftaran dengan voucher.");
+      }
+    } else {
+      setError(res.error || "Gagal menerapkan voucher.");
+      setAppliedVoucher(null);
+      setDiscountAmount(0);
+      setFinalPrice(initialPrice);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -126,8 +163,42 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price, 
                 </h3>
                 <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 mb-4">
                     <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Total yang harus dibayar:</p>
-                    <p className="text-xl font-extrabold text-white">{formatPriceLocal(price)}</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-xl font-extrabold text-white">{formatPrice(finalPrice)}</p>
+                      {discountAmount > 0 && (
+                        <p className="text-xs text-slate-500 line-through">{formatPrice(initialPrice)}</p>
+                      )}
+                    </div>
                 </div>
+
+                {/* Voucher Input */}
+                <div className="space-y-2 mb-4">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Punya Kode Voucher?</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      className="input-premium flex-1 !py-2 !text-xs" 
+                      placeholder="Masukkan kode..." 
+                      value={voucherCode}
+                      onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                      disabled={!!appliedVoucher || isValidatingVoucher}
+                    />
+                    <button 
+                      type="button"
+                      onClick={handleApplyVoucher}
+                      disabled={!voucherCode || !!appliedVoucher || isValidatingVoucher}
+                      className="btn-primary !py-2 !px-4 !text-[10px] whitespace-nowrap"
+                    >
+                      {isValidatingVoucher ? "..." : appliedVoucher ? "Terpakai" : "Terapkan"}
+                    </button>
+                  </div>
+                  {appliedVoucher && (
+                    <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 pl-1">
+                      <CheckCircle2 size={10} /> Voucher berhasil diterapkan: Potongan {formatPrice(discountAmount)}
+                    </p>
+                  )}
+                </div>
+
                 <p className="text-slate-400 text-[11px] leading-relaxed">
                   Silakan lakukan pembayaran sesuai harga kursus di atas. Pastikan nominal sesuai agar verifikasi otomatis lebih lancar.
                 </p>

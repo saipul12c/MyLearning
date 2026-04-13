@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Menu, X, BookOpen, LogIn, UserPlus, LayoutDashboard, LogOut, User, Shield } from "lucide-react";
+import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut, User, Shield } from "lucide-react";
 import { useAuth } from "./AuthContext";
+import Logo from "./Logo";
 import NotificationBell from "./NotificationBell";
 
 const navLinks = [
@@ -60,15 +61,11 @@ export default function Navbar() {
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group" id="navbar-logo">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-purple-500/25 transition-all duration-300">
-            <BookOpen size={20} className="text-white" />
-          </div>
-          <span className="text-xl font-bold">
-            <span className="gradient-text">My</span>
-            <span className="text-white">Learning</span>
-          </span>
-        </Link>
+        <Logo 
+          href="/" 
+          withText={true} 
+          id="navbar-logo"
+        />
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">

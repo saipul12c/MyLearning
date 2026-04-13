@@ -1,7 +1,9 @@
+"use server";
+
 import { GoogleGenAI } from "@google/genai";
 import { getCourses } from "./courses";
 
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+const apiKey = process.env.NEXT_GEMINI_API_KEY || "";
 
 if (!apiKey) {
   if (process.env.NODE_ENV !== "production") {
@@ -103,10 +105,6 @@ Jika menyebutkan kursus, berikan link dengan format: [Nama Kursus](/courses/slug
   }
 }
 
-export function detectAgentRequest(text: string): boolean {
-  const keywords = ["hubungi agen", "bicara dengan admin", "kontak admin", "instruktur", "manusia", "bantuan langsung", "cs live"];
-  return keywords.some(k => text.toLowerCase().includes(k));
-}
 
 /**
  * Generates educational content for a course lesson

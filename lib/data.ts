@@ -14,6 +14,7 @@ export const formatNumber = utilsFormatNumber;
 // --- Interfaces ---
 
 export interface Category {
+  id: string;
   name: string;
   slug: string;
   icon?: any;
@@ -23,6 +24,7 @@ export interface Category {
 export interface Instructor {
   id: string;
   name: string;
+  slug: string;
   avatar: string;
   expertise: string;
   bio: string;
@@ -55,6 +57,7 @@ export interface Course {
   thumbnail: string;
   price: number;
   discountPrice?: number;
+  adminDiscountPrice?: number;
   category: string;
   categorySlug: string;
   instructor: string;

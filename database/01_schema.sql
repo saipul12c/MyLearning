@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS courses (
   preview_video_url TEXT,
   price INTEGER NOT NULL DEFAULT 0,
   discount_price INTEGER,
+  admin_discount_price INTEGER,
   category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
   instructor_id UUID NOT NULL REFERENCES instructors(id) ON DELETE RESTRICT,
   level VARCHAR(20) NOT NULL DEFAULT 'Starter' CHECK (level IN ('Starter', 'Accelerator', 'Mastery')),

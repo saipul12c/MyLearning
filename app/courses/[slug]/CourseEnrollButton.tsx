@@ -166,6 +166,8 @@ export default function CourseEnrollButton({
             enrollment={activeEnr}
             courseTitle={courseTitle}
             price={price}
+            instructorId={instructorId}
+            courseId={String(courseId)}
             qrisUrl={instructorQrisUrl || ""}
             onClose={() => setShowPaymentModal(false)}
             onSuccess={() => {

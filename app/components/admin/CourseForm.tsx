@@ -39,6 +39,7 @@ interface CourseFormData {
   thumbnail: string;
   price: number;
   discountPrice: number;
+  adminDiscountPrice: number;
   categoryId: string;
   instructorIdDb: string;
   level: "Starter" | "Accelerator" | "Mastery";
@@ -103,6 +104,7 @@ export default function CourseForm({ courseId }: Props) {
     thumbnail: "",
     price: 0,
     discountPrice: 0,
+    adminDiscountPrice: 0,
     categoryId: "",
     instructorIdDb: "",
     level: "Starter",
@@ -137,8 +139,8 @@ export default function CourseForm({ courseId }: Props) {
       try {
         const [cats, insts] = await Promise.all([getCategories(), getInstructors()]);
         
-        setCategories(cats.map(c => ({ id: (c as any).id || c.slug, name: c.name })) || []);
-        setInstructors(insts.map(i => ({ id: (i as any).id || i.id, name: i.name })) || []);
+        setCategories(cats.map(c => ({ id: c.id, name: c.name })) || []);
+        setInstructors(insts.map(i => ({ id: i.id, name: i.name })) || []);
 
         // If instructor, auto-set their profile ID
         if (isInstructor && user && !courseId) {
@@ -160,6 +162,7 @@ export default function CourseForm({ courseId }: Props) {
               thumbnail: course.thumbnail_url || "",
               price: course.price || 0,
               discountPrice: course.discount_price || 0,
+              adminDiscountPrice: course.admin_discount_price || 0,
               categoryId: course.category_id,
               instructorIdDb: course.instructor_id,
               level: course.level,
@@ -226,7 +229,7 @@ export default function CourseForm({ courseId }: Props) {
       isOpen: true,
       lesson: lesson ? {
         ...lesson,
-        lessonAssignment: lesson.assessments && lesson.assessments.length > 0 ? lesson.assessments[0] : null
+        lessonAssignment: assessments.assignments.find((a: any) => a.lesson_id === lesson.id) || null
       } : {
         course_id: courseId,
         title: "",
@@ -433,7 +436,7 @@ export default function CourseForm({ courseId }: Props) {
             <ArrowLeft size={20} className="text-white transition-transform group-hover:-translate-x-1" />
           </Link>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            {courseId ? "Simulasi" : "Tambah"} <span className="gradient-text">Kursus</span>
+            {courseId ? "Edit" : "Tambah"} <span className="gradient-text">Kursus</span>
           </h1>
         </div>
         <div className="flex items-center gap-4">
@@ -493,7 +496,14 @@ export default function CourseForm({ courseId }: Props) {
                  <h2 className="text-lg font-bold text-white">Harga & Level</h2>
                  <div className="space-y-4">
                     <input type="number" className="input w-full" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} placeholder="Harga" />
-                    <input type="number" className="input w-full" value={formData.discountPrice} onChange={e => setFormData({...formData, discountPrice: Number(e.target.value)})} placeholder="Harga Diskon (Opsional)" />
+                    <input type="number" className="input w-full" value={formData.discountPrice} onChange={e => setFormData({...formData, discountPrice: Number(e.target.value)})} placeholder="Harga Diskon Instruktur (Opsional)" />
+                    {isAdmin && (
+                      <div className="pt-2 border-t border-white/5 space-y-2">
+                        <label className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest pl-1">Diskon Khusus Admin</label>
+                        <input type="number" className="input w-full border-cyan-500/30 bg-cyan-500/5 focus:border-cyan-500" value={formData.adminDiscountPrice} onChange={e => setFormData({...formData, adminDiscountPrice: Number(e.target.value)})} placeholder="Potongan Harga Admin (Opsional)" />
+                        <p className="text-[9px] text-slate-500 px-1 italic">Potongan ini akan mengurangi harga akhir secara langsung.</p>
+                      </div>
+                    )}
                     <select className="input w-full" value={formData.level} onChange={e => setFormData({...formData, level: e.target.value as any})}>
                        <option value="Starter">Starter</option>
                        <option value="Accelerator">Accelerator</option>

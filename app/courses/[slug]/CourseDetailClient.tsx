@@ -37,8 +37,12 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
     students: course.totalStudents
   };
 
-  const discountPercent = course.discountPrice
-    ? Math.round(((course.price - course.discountPrice) / course.price) * 100)
+  const instructorPrice = course.discountPrice || course.price;
+  const adminDiscount = course.adminDiscountPrice || 0;
+  const finalPrice = Math.max(0, instructorPrice - adminDiscount);
+
+  const discountPercent = (course.price > 0)
+    ? Math.round(((course.price - finalPrice) / course.price) * 100)
     : 0;
 
   return (
@@ -63,7 +67,7 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                 {course.tags && course.tags.length > 0 && course.tags.map((tag, i) => (
                   <span key={i} className="badge bg-purple-500/10 text-purple-400 border border-purple-500/10 uppercase tracking-tighter text-[9px]">{tag}</span>
                 ))}
-                {course.discountPrice && <span className="badge badge-success">{discountPercent}% DISKON</span>}
+                {(course.discountPrice || course.adminDiscountPrice) && <span className="badge badge-success">{discountPercent}% DISKON</span>}
               </div>
 
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-4 leading-tight">{course.title}</h1>
@@ -224,9 +228,9 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                   </div>
                   <div className="p-6">
                     <div className="flex items-end gap-3 mb-6" id="enroll-section">
-                      {course.discountPrice ? (
+                      {(course.discountPrice || course.adminDiscountPrice) ? (
                         <>
-                          <span className="text-3xl font-extrabold text-white">{formatPrice(course.discountPrice)}</span>
+                          <span className="text-3xl font-extrabold text-white">{formatPrice(finalPrice)}</span>
                           <span className="text-lg text-slate-500 line-through">{formatPrice(course.price)}</span>
                         </>
                       ) : (
@@ -240,7 +244,7 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                       courseTitle={course.title} 
                       totalLessons={course.totalLessons} 
                       level={course.level} 
-                      price={course.discountPrice || course.price}
+                      price={finalPrice}
                       instructorId={course.instructorId}
                       instructorQrisUrl={course.instructorQrisUrl}
                     />

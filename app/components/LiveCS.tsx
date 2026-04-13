@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, X, Send, Bot, User, Phone, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { MessageSquare, X, Send, Bot, User, Phone, CheckCircle, Clock, AlertCircle, Paperclip, Star } from "lucide-react";
 import { useAuth } from "./AuthContext";
-import { getGeminiResponse, detectAgentRequest } from "@/lib/gemini";
+import { getGeminiResponse } from "@/lib/gemini";
+import { detectAgentRequest } from "@/lib/utils";
 import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages, type ChatMessage } from "@/lib/live_chat";
 import { saveContactMessage } from "@/lib/enrollment";
+import { uploadChatFile } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-type Mode = "idle" | "ai" | "checking" | "agent" | "offline-form" | "form-success" | "guest-form";
+type Mode = "idle" | "ai" | "checking" | "agent" | "offline-form" | "form-success" | "guest-form" | "survey";
 
 interface Message {
   role: "user" | "model" | "agent" | "system";
@@ -27,6 +29,12 @@ export default function LiveCS() {
   const [loading, setLoading] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState({ adminOnline: false, instructorOnline: false, totalOnline: 0 });
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const [agentName, setAgentName] = useState("LearningAI");
+  const [isAgentTyping, setIsAgentTyping] = useState(false);
+  const [rating, setRating] = useState(0);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Offline/Guest form states
   const [offlineForm, setOfflineForm] = useState({ name: "", email: "", subject: "Bantuan CS Live", message: "" });
@@ -38,7 +46,59 @@ export default function LiveCS() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+    // Play sound for new messages (incoming only)
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && (lastMsg.role === "agent" || lastMsg.role === "model")) {
+      playNotificationSound();
+    }
   }, [messages, loading]);
+
+  const playNotificationSound = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"); // Premium Pop Sound
+      audioRef.current.volume = 0.4;
+    }
+    audioRef.current.play().catch(() => {}); // Ignore interaction errors
+  };
+
+  // Handle Persistence & Re-initialization
+  useEffect(() => {
+    const savedSessionId = localStorage.getItem("learning_chat_session");
+    if (savedSessionId) {
+      resumeSession(savedSessionId);
+    }
+  }, []);
+
+  const resumeSession = async (sessionId: string) => {
+    setLoading(true);
+    // Fetch session details to check if it's still open
+    const { data: session, error } = await supabase
+      .from("live_chats")
+      .select("*")
+      .eq("id", sessionId)
+      .single();
+
+    if (session && session.status !== "closed") {
+      setChatSessionId(sessionId);
+      setMode("agent");
+      setIsOpen(true);
+      
+      const history = await getChatMessages(sessionId);
+      const formattedHistory: Message[] = history.map(m => ({
+        role: m.senderType === "agent" ? "agent" : m.senderType === "bot" ? "model" : "user",
+        content: m.content,
+        timestamp: new Date(m.createdAt)
+      }));
+      
+      setMessages(formattedHistory);
+      
+      const status = await checkOnlineAgents();
+      setOnlineStatus(status);
+    } else {
+      localStorage.removeItem("learning_chat_session");
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (isOpen && messages.length === 0) {
@@ -79,6 +139,53 @@ export default function LiveCS() {
               },
             ]);
             setLoading(false);
+            setIsAgentTyping(false); // Stop typing when msg received
+          }
+        }
+      )
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.payload.sender === "agent") {
+          setIsAgentTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setIsAgentTyping(false), 3000);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [chatSessionId]);
+
+  // Listener for session status (Active/Closed)
+  useEffect(() => {
+    if (!chatSessionId) return;
+
+    const channel = supabase
+      .channel(`session:${chatSessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "live_chats",
+          filter: `id=eq.${chatSessionId}`,
+        },
+        (payload) => {
+          const update = payload.new as any;
+          if (update.status === "closed") {
+            setMessages((prev) => [
+              ...prev,
+              { 
+                role: "system", 
+                content: "Sesi chat telah diakhiri oleh Agen. Terima kasih!", 
+                timestamp: new Date() 
+              },
+            ]);
+            setChatSessionId(null);
+            localStorage.removeItem("learning_chat_session");
+            // Switch to survey mode
+            setMode("survey");
           }
         }
       )
@@ -98,6 +205,9 @@ export default function LiveCS() {
     // Add user message to UI
     const newMessage: Message = { role: "user", content: userMsg, timestamp: new Date() };
     setMessages((prev) => [...prev, newMessage]);
+
+    // Send typing broadcast for AI or Agent
+    await broadcastTyping();
 
     if (mode === "ai") {
       setLoading(true);
@@ -127,6 +237,42 @@ export default function LiveCS() {
     }
   };
 
+  const broadcastTyping = async () => {
+    if (!chatSessionId) return;
+    const channel = supabase.channel(`chat:${chatSessionId}`);
+    await channel.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { sender: "user" },
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !chatSessionId) return;
+
+    setLoading(true);
+    const { url, error } = await uploadChatFile(file);
+    
+    if (url) {
+      const content = `![Lampiran Gambar](${url})`;
+      await sendLiveMessage(chatSessionId, content, "user", user?.id);
+    } else {
+      console.error("Upload error:", error);
+    }
+    setLoading(false);
+  };
+
+  const submitSurvey = async () => {
+    if (rating === 0) return;
+    setLoading(true);
+    // You could save this to a 'chat_ratings' table if you want
+    // await saveChatRating(chatSessionId, rating);
+    await new Promise(r => setTimeout(r, 1000));
+    setMode("form-success");
+    setLoading(false);
+  };
+
   const handleContactAgent = async () => {
     setMode("checking");
     setLoading(true);
@@ -152,12 +298,13 @@ export default function LiveCS() {
       
       if (session) {
         setChatSessionId(session.id);
+        localStorage.setItem("learning_chat_session", session.id);
         setMode("agent");
         setMessages((prev) => [
           ...prev,
           { 
             role: "system", 
-            content: `Terhubung dengan ${status.adminOnline ? "Admin" : "Instruktur"} yang online. Mohon tunggu sebentar...`, 
+            content: `Terhubung dengan ${agentName}. Mohon tunggu sebentar...`, 
             timestamp: new Date() 
           },
         ]);
@@ -186,12 +333,13 @@ export default function LiveCS() {
     
     if (session) {
       setChatSessionId(session.id);
+      localStorage.setItem("learning_chat_session", session.id);
       setMode("agent");
       setMessages((prev) => [
         ...prev,
         { 
           role: "system", 
-          content: `Terhubung dengan Agen. Halo ${guestInfo.name}, mohon tunggu sebentar...`, 
+          content: `Terhubung dengan ${agentName}. Halo ${guestInfo.name}, mohon tunggu sebentar...`, 
           timestamp: new Date() 
         },
       ]);
@@ -241,7 +389,7 @@ export default function LiveCS() {
           </div>
           <div>
             <h3 className="font-bold text-sm leading-none">
-              {mode === "ai" ? "Assistant AI" : "Live Agent Support"}
+              {mode === "ai" ? "Assistant AI" : agentName}
             </h3>
             <div className="flex items-center gap-1.5 mt-1">
               <span className={`w-2 h-2 rounded-full ${mode === "ai" || onlineStatus.totalOnline > 0 ? "bg-emerald-400" : "bg-amber-400"}`}></span>
@@ -270,7 +418,7 @@ export default function LiveCS() {
                 ? "bg-white/5 text-slate-400 text-xs text-center w-full !rounded-lg"
                 : "bg-white/10 text-slate-200 rounded-bl-none border border-white/5"
             }`}>
-              {msg.role === "model" ? (
+              {msg.role === "model" || msg.role === "agent" ? (
                 <article className="prose-cs">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.content}
@@ -288,6 +436,19 @@ export default function LiveCS() {
               <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce"></div>
               <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:0.2s]"></div>
               <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:0.4s]"></div>
+            </div>
+          </div>
+        )}
+
+        {isAgentTyping && (
+          <div className="flex justify-start">
+            <div className="bg-white/10 rounded-2xl px-3.5 py-2 text-xs text-slate-400 flex items-center gap-2">
+              <span className="italic">{agentName} sedang mengetik</span>
+              <div className="flex gap-1">
+                <div className="w-1 h-1 rounded-full bg-slate-500 animate-bounce"></div>
+                <div className="w-1 h-1 rounded-full bg-slate-500 animate-bounce [animation-delay:0.2s]"></div>
+                <div className="w-1 h-1 rounded-full bg-slate-500 animate-bounce [animation-delay:0.4s]"></div>
+              </div>
             </div>
           </div>
         )}
@@ -358,6 +519,36 @@ export default function LiveCS() {
           </div>
         )}
 
+        {mode === "survey" && (
+          <div className="text-center p-6 space-y-4 animate-in fade-in">
+            <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto">
+              <Star className="text-purple-400" size={32} />
+            </div>
+            <div>
+              <h4 className="font-bold text-white">Bantu Kami Meningkat!</h4>
+              <p className="text-slate-400 text-xs mt-1">Bagaimana penilaian Anda terhadap layanan CS kami hari ini?</p>
+            </div>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button 
+                  key={s} 
+                  onClick={() => setRating(s)}
+                  className={`p-2 transition-all ${rating >= s ? "text-amber-400 scale-125" : "text-slate-600 hover:text-slate-400"}`}
+                >
+                  <Star fill={rating >= s ? "currentColor" : "none"} size={24} />
+                </button>
+              ))}
+            </div>
+            <button 
+              onClick={submitSurvey}
+              disabled={rating === 0 || loading}
+              className="btn-primary w-full text-xs !py-2 disabled:opacity-50"
+            >
+              Kirim Penilaian
+            </button>
+          </div>
+        )}
+
         {mode === "form-success" && (
           <div className="text-center p-6 space-y-4 animate-in fade-in">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
@@ -391,12 +582,32 @@ export default function LiveCS() {
           </div>
         )}
 
-        {mode !== "offline-form" && mode !== "form-success" && (
+        {mode !== "offline-form" && mode !== "form-success" && mode !== "survey" && (
           <div className="flex gap-2 relative">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleFileUpload}
+            />
+            {mode === "agent" && (
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="p-2.5 text-slate-500 hover:text-purple-400 transition-colors"
+                title="Unggah Gambar"
+              >
+                <Paperclip size={20} />
+              </button>
+            )}
             <input
               type="text"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                broadcastTyping();
+              }}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
               placeholder={mode === "agent" ? "Tulis pesan ke agen..." : "Tanya asisten AI..."}
               className="input !py-2.5 !pr-10 !rounded-xl text-sm"

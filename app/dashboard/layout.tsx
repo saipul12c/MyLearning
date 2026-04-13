@@ -7,7 +7,7 @@ import { useAuth } from "@/app/components/AuthContext";
 import {
   BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut,
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
-  Phone,
+  Phone, Ticket,
 } from "lucide-react";
 
 const userMenuItems = [
@@ -22,6 +22,7 @@ const adminMenuItems = [
   { href: "/dashboard/admin/analytics", label: "Analitik & Penjualan", icon: Shield },
   { href: "/dashboard/admin/users", label: "Kelola Pengguna", icon: Users },
   { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+  { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
   { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
   { href: "/dashboard/admin/messages", label: "Pesan Kontak", icon: MessageSquare },
   { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },
@@ -32,6 +33,7 @@ const instructorMenuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/admin/analytics", label: "Analitik Saya", icon: Shield },
   { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+  { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
   { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
   { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },
   { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },

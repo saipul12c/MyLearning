@@ -56,3 +56,13 @@ export function formatDuration(hours: number): string {
     return `${m} menit`;
   }
 }
+/**
+ * Detects if the user wants to talk to a human agent
+ */
+export function detectAgentRequest(text: string): boolean {
+  const keywords = [
+    "hubungi agen", "bicara dengan admin", "kontak admin", 
+    "instruktur", "manusia", "bantuan langsung", "cs live"
+  ];
+  return keywords.some(k => text.toLowerCase().includes(k));
+}

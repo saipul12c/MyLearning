@@ -25,6 +25,7 @@ export interface Quiz {
   timeLimitMinutes?: number;
   maxAttempts?: number;
   isRequired?: boolean;
+  lesson_id?: string | null;
 }
 
 export interface Assignment {
@@ -34,6 +35,7 @@ export interface Assignment {
   instructions: string;
   questions: string[];
   correctAnswers: string[];
+  lesson_id?: string | null;
 }
 
 export interface FinalProject {
@@ -111,6 +113,7 @@ export async function getCourseAssessments(courseSlug: string): Promise<CourseAs
           timeLimitMinutes: def.time_limit_minutes,
           maxAttempts: def.max_attempts,
           isRequired: def.is_required,
+          lesson_id: def.lesson_id,
           questions: quizQuestions
             .filter(q => q.assessment_id === def.id)
             .map(q => ({
@@ -128,7 +131,8 @@ export async function getCourseAssessments(courseSlug: string): Promise<CourseAs
           description: def.description,
           instructions: def.instructions,
           questions: def.questions_list || [],
-          correctAnswers: def.correct_answers_list || []
+          correctAnswers: def.correct_answers_list || [],
+          lesson_id: def.lesson_id
         });
       } else if (def.assessment_type === 'final_project') {
         assessments.finalProject = {

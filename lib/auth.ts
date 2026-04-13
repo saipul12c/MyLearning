@@ -22,7 +22,28 @@ export interface User {
   avatarUrl?: string;
   isOnline: boolean;
   lastSeenAt: string;
+  // Ban status
+  isBanned?: boolean;
+  banReason?: string;
 }
+
+export const BAN_REASONS = [
+  "Pelanggaran Syarat & Ketentuan (TOS)",
+  "Aktivitas Spam atau Iklan Tidak Sah",
+  "Perkataan Kasar atau Pelecehan (Harassment)",
+  "Penggunaan Akun Bersama (Account Sharing)",
+  "Manipulasi Data atau Percobaan Hacking",
+  "Penipuan Pembayaran atau Chargeback",
+  "Penyebaran Konten Tidak Pantas",
+  "Pelanggaran Hak Cipta Materi Kursus",
+  "Perilaku Toxic di Komunitas/Chat",
+  "Pencurian Identitas atau Akun Palsu",
+  "Penyalahgunaan Fitur Referral/Voucher",
+  "Pembatalan Transaksi Berulang yang Mencurigakan",
+  "Ancaman Terhadap Keamanan Platform",
+  "Permintaan Penutupan Akun oleh Pemilik",
+  "Aktivitas Mencurigakan Lainnya"
+];
 
 export type SafeUser = User;
 
@@ -54,6 +75,7 @@ export async function register(
       .insert({
         user_id: authData.user.id,
         full_name: fullName,
+        email: authData.user.email, // Store email for easier admin access
         role: "user",
       });
 
@@ -97,6 +119,12 @@ export async function login(
     // Fetch Profile
     const user = await fetchUserProfile(authData.user.id, authData.user.email!, authData.user.created_at);
 
+    // Check if user is banned
+    if (user.isBanned) {
+      await logout(); // Ensure session is cleared if they somehow got in
+      throw new Error(`Akun Anda telah di-ban. Alasan: ${user.banReason || "Tidak ditentukan"}`);
+    }
+
     return { success: true, user };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -137,7 +165,7 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
 
   return {
     id: userId,
-    email,
+    email: profile.email || email, // Prefer email from profile if available
     fullName: profile.full_name,
     phone: profile.phone || "",
     bio: profile.bio || "",
@@ -146,6 +174,8 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     avatarUrl: profile.avatar_url,
     isOnline: profile.is_online || false,
     lastSeenAt: profile.last_seen_at || profile.created_at || createdAt,
+    isBanned: profile.is_banned || false,
+    banReason: profile.ban_reason || "",
   };
 }
 
@@ -160,7 +190,7 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
 
   return {
     id: userId,
-    email: "user@hidden.com",
+    email: profile.email || "user@hidden.com",
     fullName: profile.full_name,
     phone: "",
     bio: profile.bio || "",
@@ -169,6 +199,7 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     avatarUrl: profile.avatar_url,
     isOnline: profile.is_online || false,
     lastSeenAt: profile.last_seen_at || profile.created_at,
+    isBanned: profile.is_banned || false,
   };
 }
 
@@ -252,7 +283,7 @@ export async function getAllRegisteredUsers(): Promise<SafeUser[]> {
     
     return profiles.map(p => ({
       id: p.user_id,
-      email: "user@hidden.com", // Hidden for privacy/admin logic
+      email: p.email || "user@hidden.com", // Showing actual email if stored in user_profiles
       fullName: p.full_name,
       phone: p.phone || "",
       bio: p.bio || "",
@@ -261,10 +292,86 @@ export async function getAllRegisteredUsers(): Promise<SafeUser[]> {
       avatarUrl: p.avatar_url,
       isOnline: p.is_online || false,
       lastSeenAt: p.last_seen_at || p.created_at,
+      isBanned: p.is_banned || false,
+      banReason: p.ban_reason || "",
     }));
   } catch (error) {
     console.error(error);
     return [];
+  }
+}
+
+export async function getUsersPaginatedAdmin(options: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  role?: string;
+  status?: string;
+}): Promise<{ data: SafeUser[]; totalCount: number }> {
+  try {
+    const { page, pageSize, search, role, status } = options;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profile?.role !== "admin" && profile?.role !== "instructor") throw new Error("Forbidden");
+
+    // 1. Build Query
+    let query = supabase
+      .from("user_profiles")
+      .select("*", { count: 'exact' });
+
+    // 2. Apply Filters
+    if (role && role !== "all") {
+      query = query.eq("role", role);
+    }
+
+    if (status && status !== "all") {
+      query = query.eq("is_banned", status === "banned");
+    }
+
+    if (search) {
+      // Search in full_name OR email
+      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+    }
+
+    // 3. Apply Pagination & Sort
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data: profiles, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+    
+    const formattedData = (profiles || []).map(p => ({
+      id: p.user_id,
+      email: p.email || "user@hidden.com",
+      fullName: p.full_name,
+      phone: p.phone || "",
+      bio: p.bio || "",
+      role: p.role as UserRole,
+      createdAt: p.created_at,
+      avatarUrl: p.avatar_url,
+      isOnline: p.is_online || false,
+      lastSeenAt: p.last_seen_at || p.created_at,
+      isBanned: p.is_banned || false,
+      banReason: p.ban_reason || "",
+    }));
+
+    return { 
+      data: formattedData, 
+      totalCount: count || 0 
+    };
+  } catch (error) {
+    console.error(error);
+    return { data: [], totalCount: 0 };
   }
 }
 
@@ -309,6 +416,34 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
     const { error } = await supabase
       .from("user_profiles")
       .delete()
+      .eq("user_id", userId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function toggleUserBan(userId: string, isBanned: boolean, reason?: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) throw new Error("Unauthorized");
+
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("user_id", currentUser.id)
+      .single();
+
+    if (profile?.role !== "admin") throw new Error("Forbidden: Admin only");
+
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ 
+        is_banned: isBanned,
+        ban_reason: isBanned ? reason : null
+      })
       .eq("user_id", userId);
 
     if (error) throw error;

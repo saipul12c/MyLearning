@@ -38,10 +38,10 @@ export async function getAdminCourseById(id: string) {
     .from("courses")
     .select(`
       id, title, slug, description, short_description, thumbnail_url, 
-      price, discount_price, category_id, instructor_id, level, language, 
+      price, discount_price, admin_discount_price, category_id, instructor_id, level, language, 
       duration_hours, total_lessons, is_published, is_featured, 
       learning_points, requirements,
-      lessons:lessons(id, title, duration_minutes, is_free_preview, video_url, description, order_index, content_type, assessments:assessment_definitions(*))
+      lessons:lessons(id, title, duration_minutes, is_free_preview, video_url, description, order_index, content_type)
     `)
     .eq("id", id)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
@@ -123,6 +123,7 @@ export async function getCategories(): Promise<Category[]> {
   }
   
   return data.map(c => ({
+    id: c.id,
     name: c.name,
     slug: c.slug,
     icon: c.icon,
@@ -142,8 +143,9 @@ export async function getInstructors(): Promise<Instructor[]> {
   }
 
   return data.map(i => ({
-    id: i.slug, // Map slug back to id for frontend compatibility
+    id: i.id, // Return UUID
     name: i.name,
+    slug: i.slug, // Keep slug for other uses
     avatar: i.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100", // Default Avatar
     expertise: i.expertise,
     bio: i.bio,
@@ -158,7 +160,7 @@ export async function getCourses(): Promise<Course[]> {
     .from("courses")
     .select(`
       id, title, slug, short_description, description, thumbnail_url, 
-      price, discount_price, level, language, duration_hours, 
+      price, discount_price, admin_discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, created_at, updated_at, tags,
       categories(name, slug),
@@ -229,7 +231,7 @@ export async function getPopularCourses(limit: number = 8): Promise<Course[]> {
       .from("courses")
       .select(`
         id, title, slug, short_description, description, thumbnail_url, 
-        price, discount_price, level, language, duration_hours, 
+        price, discount_price, admin_discount_price, level, language, duration_hours, 
         total_lessons, rating, total_reviews, total_students,
         is_published, is_featured, created_at, updated_at, tags,
         categories(name, slug),
@@ -257,7 +259,7 @@ export async function searchCourses(query: string): Promise<Course[]> {
     .from("courses")
     .select(`
       id, title, slug, short_description, description, thumbnail_url, 
-      price, discount_price, level, language, duration_hours, 
+      price, discount_price, admin_discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, created_at, updated_at, tags,
       categories(name, slug),
@@ -283,12 +285,12 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
     .from("courses")
     .select(`
       id, title, slug, short_description, description, thumbnail_url, 
-      price, discount_price, level, language, duration_hours, 
+      price, discount_price, admin_discount_price, level, language, duration_hours, 
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, learning_points, requirements, preview_video_url, tags,
       categories(name, slug),
       instructors(name, slug, bio, avatar_url, expertise, rating, qris_url, website_url, linkedin_url),
-      lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url, assessments:assessment_definitions(*))
+      lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url)
     `)
     .eq("slug", slug)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
@@ -309,8 +311,7 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
         durationMinutes: l.duration_minutes,
         isFreePreview: l.is_free_preview,
         description: l.description,
-        videoUrl: l.video_url,
-        assessment: l.assessments && l.assessments.length > 0 ? l.assessments[0] : null
+        videoUrl: l.video_url
       }));
   }
 
@@ -349,6 +350,7 @@ export async function upsertCourse(courseData: Partial<Course>) {
       thumbnail_url: courseData.thumbnail ? String(courseData.thumbnail).trim() : null,
       price: Math.max(0, Number(courseData.price) || 0),
       discount_price: courseData.discountPrice ? Math.max(0, Number(courseData.discountPrice)) : null,
+      admin_discount_price: (courseData as any).adminDiscountPrice ? Math.max(0, Number((courseData as any).adminDiscountPrice)) : null,
       category_id: rawData.categoryId as string, 
       instructor_id: rawData.instructorIdDb as string, 
       level: (['Starter', 'Accelerator', 'Mastery'].includes(courseData.level as string) ? courseData.level : 'Starter') as any,
@@ -417,6 +419,7 @@ function mapDbToCourse(db: any): Course {
     thumbnail: db.thumbnail_url || getLocalThumbnail(db.slug),
     price: db.price,
     discountPrice: db.discount_price,
+    adminDiscountPrice: db.admin_discount_price,
     category: db.categories?.name || "",
     categorySlug: db.categories?.slug || "",
     instructor: db.instructors?.name || "",

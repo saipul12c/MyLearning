@@ -69,7 +69,9 @@ export interface Enrollment {
   paymentProofUrl?: string;
   rejectionReason?: string;
   paymentRetryCount: number;
-  price: number;
+  paymentAmount: number;
+  voucherId?: string;
+  discountAmount?: number;
 }
 
 export interface ContactMessage {
@@ -121,7 +123,10 @@ export async function enrollCourse(
   totalLessons: number,
   level: string,
   totalAssessmentItems: number = 0,
-  isFree?: boolean
+  isFree?: boolean,
+  paymentAmount: number = 0,
+  voucherId?: string,
+  discountAmount: number = 0
 ): Promise<{ success: boolean; enrollment?: Enrollment; error?: string }> {
   try {
     // 1. Check for existing enrollment
@@ -180,6 +185,9 @@ export async function enrollCourse(
         total_lessons: totalLessons,
         total_items: totalItems,
         final_project_completed: false,
+        payment_amount: paymentAmount,
+        voucher_id: voucherId,
+        discount_amount: discountAmount,
       })
       .select()
       .single();
@@ -219,6 +227,29 @@ export async function uploadPaymentProof(
         `/dashboard/admin/enrollments?id=${enrollmentId}`
     );
 
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateEnrollmentPrice(
+  enrollmentId: string,
+  paymentAmount: number,
+  voucherId: string,
+  discountAmount: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from("enrollments")
+      .update({
+        payment_amount: paymentAmount,
+        voucher_id: voucherId,
+        discount_amount: discountAmount
+      })
+      .eq("id", enrollmentId);
+
+    if (error) throw error;
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -818,7 +849,9 @@ function mapDbToEnrollment(
     paymentProofUrl: db.payment_proof_url,
     rejectionReason: db.rejection_reason,
     paymentRetryCount: db.payment_retry_count || 0,
-    price: db.payment_amount || 0,
+    paymentAmount: db.payment_amount || 0,
+    voucherId: db.voucher_id,
+    discountAmount: db.discount_amount || 0
   };
 }
 

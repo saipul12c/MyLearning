@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { BookOpen, Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
+import Logo from "./Logo";
 
 export default function Footer() {
   return (
@@ -11,15 +12,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="lg:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center">
-                <BookOpen size={20} className="text-white" />
-              </div>
-              <span className="text-xl font-bold">
-                <span className="gradient-text">My</span>
-                <span className="text-white">Learning</span>
-              </span>
-            </Link>
+            <Logo href="/" withText={true} className="mb-4" />
             <p className="text-slate-400 text-sm leading-relaxed mb-6">
               Platform belajar online terbaik untuk mengembangkan skill digital
               Anda. Belajar dari instruktur berpengalaman dengan kurikulum terkini.
