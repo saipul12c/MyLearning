@@ -2,10 +2,9 @@
   command = "npm run build"
   publish = ".next"
 
-[build.environment]
-  # Tell Netlify to ignore the secrets scanning for these intentionally public keys.
-  # This prevents the build from failing even if these strings appear in the JS bundle.
-  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_GEMINI_API_KEY"
+# Note: Environment variables like SECRETS_SCAN_OMIT_KEYS should be set 
+# ONLY in the Netlify UI (Site Settings > Build & deploy > Environment variables)
+# to avoid conflicts with the security scanner.
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
