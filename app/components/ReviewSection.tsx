@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Star, MessageSquare, AlertCircle, CheckCircle2, User, Send } from "lucide-react";
 import { Review, getCourseReviews, addReview } from "@/lib/reviews";
+import VerifiedBadge from "./VerifiedBadge";
 import { useAuth } from "@/app/components/AuthContext";
 import { getUserEnrollments } from "@/lib/enrollment";
 
@@ -143,7 +144,10 @@ export default function ReviewSection({ courseSlug, courseTitle }: ReviewSection
                     <User size={20} />
                   </div>
                   <div>
-                    <Link href={`/profile/${review.userId}`} className="text-white font-bold text-sm hover:text-purple-400 transition-colors">{review.userName}</Link>
+                    <Link href={`/profile/${review.userId}`} className="text-white font-bold text-sm hover:text-purple-400 transition-colors flex items-center gap-1">
+                      {review.userName}
+                      {(review.userRole === 'admin' || review.userRole === 'instructor') && <VerifiedBadge size={12} />}
+                    </Link>
                     <p className="text-[10px] text-slate-500">{new Date(review.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
                   </div>
                 </div>

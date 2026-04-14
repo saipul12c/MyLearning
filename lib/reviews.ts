@@ -12,6 +12,7 @@ export interface Review {
   rating: number; // 1-5
   comment: string;
   createdAt: string;
+  userRole?: string;
 }
 
 export async function getAllReviews(): Promise<Review[]> {
@@ -24,7 +25,7 @@ export async function getAllReviews(): Promise<Review[]> {
       created_at,
       user_id,
       courses ( slug ),
-      user_profiles ( full_name )
+      user_profiles ( full_name, role )
     `)
     .eq("is_approved", true)
     .order("created_at", { ascending: false })
@@ -40,6 +41,7 @@ export async function getAllReviews(): Promise<Review[]> {
     rating: r.rating,
     comment: r.comment,
     createdAt: r.created_at,
+    userRole: (r.user_profiles as any)?.role,
   }));
 }
 
@@ -61,7 +63,7 @@ export async function getLatestTestimonials(limit: number = 15): Promise<Testimo
       created_at,
       user_id,
       courses ( title, slug ),
-      user_profiles ( full_name, bio )
+      user_profiles ( full_name, bio, role )
     `)
     .eq("is_approved", true)
     .order("created_at", { ascending: false })
@@ -82,6 +84,7 @@ export async function getLatestTestimonials(limit: number = 15): Promise<Testimo
     rating: r.rating,
     comment: r.comment,
     createdAt: r.created_at,
+    userRole: (r.user_profiles as any)?.role,
   }));
 }
 
@@ -95,7 +98,7 @@ export async function getCourseReviews(courseSlug: string): Promise<Review[]> {
       created_at,
       user_id,
       courses!inner ( slug ),
-      user_profiles ( full_name )
+      user_profiles ( full_name, role )
     `)
     .eq("is_approved", true)
     .eq("courses.slug", courseSlug)
@@ -112,6 +115,7 @@ export async function getCourseReviews(courseSlug: string): Promise<Review[]> {
     rating: r.rating,
     comment: r.comment,
     createdAt: r.created_at,
+    userRole: (r.user_profiles as any)?.role,
   }));
 }
 

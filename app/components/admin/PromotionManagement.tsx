@@ -7,6 +7,7 @@ import {
   deletePromotion, 
   Promotion 
 } from "@/lib/promotions";
+import { uploadPromotionImage } from "@/lib/storage";
 import { 
   Plus, 
   Search, 
@@ -21,7 +22,8 @@ import {
   Link as LinkIcon,
   Loader2,
   X,
-  AlertCircle
+  AlertCircle,
+  Camera
 } from "lucide-react";
 import Image from "next/image";
 
@@ -32,6 +34,7 @@ export default function PromotionManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Partial<Promotion> | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchPromotions();
@@ -62,6 +65,20 @@ export default function PromotionManagement() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingPromo(null);
+    setUploading(false);
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file || !editingPromo) return;
+    
+    setUploading(true);
+    const { url, error } = await uploadPromotionImage(file);
+    if (error) {
+      alert("Gagal mengunggah gambar: " + (error.message || error));
+    } else if (url) {
+      setEditingPromo({ ...editingPromo, imageUrl: url });
+    }
+    setUploading(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -184,158 +201,200 @@ export default function PromotionManagement() {
 
       {/* Promotion Modal */}
       {isModalOpen && editingPromo && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto">
-          <div className="absolute inset-0" onClick={handleCloseModal} />
-          <div className="relative bg-[#0c0c14] border border-white/10 w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-3xl my-8">
-            <form onSubmit={handleSave}>
-              <div className="p-8 border-b border-white/5 bg-white/2 flex items-center justify-between">
-                <h2 className="text-white font-bold text-xl tracking-tight">
-                  {editingPromo.id ? "Edit Promotion" : "Create New Promotion"}
-                </h2>
-                <button type="button" onClick={handleCloseModal} className="p-2 hover:bg-white/5 rounded-full text-slate-500 transition-colors"><X size={20} /></button>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-fade-in sm:p-6 lg:p-10">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={handleCloseModal} />
+          
+          <div className="relative bg-[#0c0c14] border border-white/10 w-full max-w-xl max-h-[90vh] rounded-[2.5rem] overflow-hidden shadow-3xl flex flex-col scale-in-center">
+            <form onSubmit={handleSave} className="flex flex-col h-full overflow-hidden">
+              {/* Header */}
+              <div className="px-8 py-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-white font-bold text-lg tracking-tight">
+                    {editingPromo.id ? "Sunting Iklan" : "Buat Iklan Baru"}
+                  </h2>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mt-0.5">Banner & Spotlight Masterpiece</p>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={handleCloseModal} 
+                  className="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-full text-slate-500 hover:text-white transition-all shadow-inner"
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                <div className="grid md:grid-cols-2 gap-6">
+              {/* Scrollable Content */}
+              <div className="p-8 space-y-7 overflow-y-auto custom-scrollbar flex-grow bg-gradient-to-b from-transparent to-purple-500/5">
+                <div className="grid grid-cols-1 gap-6">
                   {/* Title */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Title</label>
+                  <div className="space-y-2.5">
+                    <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Judul Utama</label>
                     <input 
                       type="text"
                       value={editingPromo.title}
                       onChange={(e) => setEditingPromo({...editingPromo, title: e.target.value})}
-                      className="input-field"
-                      placeholder="e.g., Get 50% Off Everything"
+                      className="input-field !bg-white/5 focus:!bg-white/10"
+                      placeholder="Contoh: Diskon 50% Semua Kursus"
                       required
                     />
                   </div>
 
-                  {/* Location */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Location</label>
-                    <select 
-                      value={editingPromo.location}
-                      onChange={(e) => setEditingPromo({...editingPromo, location: e.target.value as any})}
-                      className="input-field !py-3"
-                      required
-                    >
-                      <option value="homepage_banner">Homepage Banner</option>
-                      <option value="dashboard_card">Dashboard Card</option>
-                      <option value="course_sidebar">Course Sidebar Spotlight</option>
-                      <option value="course_listing">Course Listing Hero</option>
-                    </select>
-                  </div>
-
-                  {/* Image URL */}
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Image URL</label>
-                    <div className="relative">
-                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                  {/* Location & Priority Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Lokasi</label>
+                      <select 
+                        value={editingPromo.location}
+                        onChange={(e) => setEditingPromo({...editingPromo, location: e.target.value as any})}
+                        className="input-field !py-3 !bg-white/5 focus:!bg-white/10"
+                        required
+                      >
+                        <option value="homepage_banner">Home Banner</option>
+                        <option value="dashboard_card">Dashboard Card</option>
+                        <option value="course_sidebar">Sidebar Spotlight</option>
+                        <option value="course_listing">Hero Listing</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Prioritas</label>
                       <input 
-                        type="url"
-                        value={editingPromo.imageUrl}
-                        onChange={(e) => setEditingPromo({...editingPromo, imageUrl: e.target.value})}
-                        className="input-field !pl-12"
-                        placeholder="https://images.unsplash.com/..."
+                        type="number"
+                        value={editingPromo.priority}
+                        onChange={(e) => setEditingPromo({...editingPromo, priority: parseInt(e.target.value) || 0})}
+                        className="input-field !bg-white/5 focus:!bg-white/10"
                       />
                     </div>
+                  </div>
+
+                  {/* Image Upload/URL */}
+                  <div className="space-y-2.5">
+                    <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Gambar Iklan</label>
+                    <div className="flex gap-2">
+                       <div className="relative flex-1">
+                         <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
+                         <input 
+                           type="url"
+                           value={editingPromo.imageUrl}
+                           onChange={(e) => setEditingPromo({...editingPromo, imageUrl: e.target.value})}
+                           className="input-field !pl-12 !bg-white/5 focus:!bg-white/10 text-xs"
+                           placeholder="URL Gambar atau Unggah..."
+                         />
+                       </div>
+                       <label className="cursor-pointer group shrink-0">
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*" 
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileUpload(file);
+                            }}
+                            disabled={uploading}
+                          />
+                          <div className={`h-full px-4 rounded-xl border border-white/10 flex items-center justify-center transition-all ${uploading ? "opacity-50 cursor-not-allowed bg-white/5" : "bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 text-purple-400"}`}>
+                            {uploading ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
+                          </div>
+                       </label>
+                    </div>
+                    {editingPromo.imageUrl && (
+                      <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-white/5 mt-2 shadow-2xl bg-black/40">
+                         <Image src={editingPromo.imageUrl} alt="Preview" fill className="object-cover" />
+                         <button 
+                           type="button" 
+                           onClick={() => setEditingPromo({...editingPromo, imageUrl: ""})}
+                           className="absolute top-2 right-2 w-7 h-7 bg-red-500/80 hover:bg-red-500 text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
+                         >
+                            <X size={14} />
+                         </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Description */}
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Description</label>
+                  <div className="space-y-2.5">
+                    <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Deskripsi Singkat</label>
                     <textarea 
                       value={editingPromo.description}
                       onChange={(e) => setEditingPromo({...editingPromo, description: e.target.value})}
-                      className="input-field min-h-[100px] resize-none"
-                      placeholder="Briefly describe what this promotion is about..."
+                      className="input-field min-h-[70px] resize-none !bg-white/5 focus:!bg-white/10 text-xs leading-relaxed"
+                      placeholder="Jelaskan isi promo ini secara singkat..."
                     />
                   </div>
 
-                  {/* Link URL */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Link URL</label>
-                    <div className="relative">
-                      <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                  {/* Link & Badge Row */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Link Tujuan</label>
+                      <div className="relative">
+                        <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={14} />
+                        <input 
+                          type="text"
+                          value={editingPromo.linkUrl}
+                          onChange={(e) => setEditingPromo({...editingPromo, linkUrl: e.target.value})}
+                          className="input-field !pl-10 !bg-white/5 focus:!bg-white/10 text-xs"
+                          placeholder="/kursus/..."
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Teks Badge</label>
                       <input 
                         type="text"
-                        value={editingPromo.linkUrl}
-                        onChange={(e) => setEditingPromo({...editingPromo, linkUrl: e.target.value})}
-                        className="input-field !pl-12"
-                        placeholder="https://..."
-                        required
+                        value={editingPromo.badgeText}
+                        onChange={(e) => setEditingPromo({...editingPromo, badgeText: e.target.value})}
+                        className="input-field !bg-white/5 focus:!bg-white/10 text-xs"
+                        placeholder="PARTNER, PROMO, dll"
                       />
                     </div>
                   </div>
 
-                  {/* Badge Text */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Badge Text</label>
-                    <input 
-                      type="text"
-                      value={editingPromo.badgeText}
-                      onChange={(e) => setEditingPromo({...editingPromo, badgeText: e.target.value})}
-                      className="input-field"
-                      placeholder="e.g., PARTNER, PROMO, NEW"
-                    />
-                  </div>
-
-                  {/* Priority */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Priority (Higher First)</label>
-                    <input 
-                      type="number"
-                      value={editingPromo.priority}
-                      onChange={(e) => setEditingPromo({...editingPromo, priority: parseInt(e.target.value) || 0})}
-                      className="input-field"
-                    />
-                  </div>
-
-                  {/* BG Color */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Custom Background (Hex/Gradient)</label>
-                    <input 
-                      type="text"
-                      value={editingPromo.bgColor}
-                      onChange={(e) => setEditingPromo({...editingPromo, bgColor: e.target.value})}
-                      className="input-field font-mono"
-                      placeholder="e.g., #2d1b4d or linear-gradient(...)"
-                    />
-                  </div>
-
                   {/* Switches */}
-                  <div className="flex items-center gap-6 pt-4">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <input 
-                        type="checkbox"
-                        checked={editingPromo.isActive}
-                        onChange={(e) => setEditingPromo({...editingPromo, isActive: e.target.checked})}
-                        className="w-5 h-5 rounded border-white/10 bg-white/5 text-purple-600 focus:ring-purple-500/20"
-                      />
-                      <span className="text-white text-xs font-bold group-hover:text-purple-400 transition-colors">Is Active</span>
+                  <div className="flex items-center gap-6 pt-2">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative">
+                        <input 
+                          type="checkbox"
+                          checked={editingPromo.isActive}
+                          onChange={(e) => setEditingPromo({...editingPromo, isActive: e.target.checked})}
+                          className="peer sr-only"
+                        />
+                        <div className="w-10 h-5 bg-white/10 rounded-full peer-checked:bg-purple-500 transition-all duration-300" />
+                        <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 peer-checked:translate-x-5 shadow-sm" />
+                      </div>
+                      <span className="text-white text-xs font-bold group-hover:text-purple-400 transition-colors">Iklan Aktif</span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <input 
-                        type="checkbox"
-                        checked={editingPromo.isExternal}
-                        onChange={(e) => setEditingPromo({...editingPromo, isExternal: e.target.checked})}
-                        className="w-5 h-5 rounded border-white/10 bg-white/5 text-purple-600 focus:ring-purple-500/20"
-                      />
-                      <span className="text-white text-xs font-bold group-hover:text-purple-400 transition-colors">Open in New Tab</span>
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative">
+                        <input 
+                          type="checkbox"
+                          checked={editingPromo.isExternal}
+                          onChange={(e) => setEditingPromo({...editingPromo, isExternal: e.target.checked})}
+                          className="peer sr-only"
+                        />
+                        <div className="w-10 h-5 bg-white/10 rounded-full peer-checked:bg-cyan-500 transition-all duration-300" />
+                        <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 peer-checked:translate-x-5 shadow-sm" />
+                      </div>
+                      <span className="text-white text-xs font-bold group-hover:text-cyan-400 transition-colors">Tab Baru</span>
                     </label>
                   </div>
                 </div>
               </div>
 
-              <div className="p-8 bg-white/2 border-t border-white/5 flex gap-4">
+              {/* Fixed Footer */}
+              <div className="px-8 py-6 bg-white/[0.03] border-t border-white/5 flex-shrink-0">
                 <button 
                   type="submit" 
-                  disabled={processing}
-                  className="flex-1 btn-primary !py-4 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-2xl shadow-purple-500/20"
+                  disabled={processing || uploading}
+                  className="w-full btn-primary !py-4 font-black uppercase tracking-[0.3em] text-[10px] flex items-center justify-center gap-3 shadow-3xl shadow-purple-500/30 group hover:shadow-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                  {processing ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                  {editingPromo.id ? "Update Promotion" : "Create Promotion"}
+                  {processing ? (
+                    <Loader2 size={18} className="animate-spin text-white" />
+                  ) : (
+                    <Layout size={18} className="group-hover:scale-110 transition-transform text-white/80" />
+                  )}
+                  {editingPromo.id ? "PERBARUI PROMOSI" : "BUAT IKLAN MASTERPIECE"}
                 </button>
               </div>
             </form>

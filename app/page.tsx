@@ -18,18 +18,17 @@ import { getCourses, getPopularCourses, getSystemStats } from "@/lib/courses";
 import { getLatestTestimonials, type Testimonial } from "@/lib/reviews";
 import { getActivePromotions } from "@/lib/promotions";
 import PromotionCard from "./components/PromotionCard";
+import VerifiedBadge from "./components/VerifiedBadge";
 
 export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
 export default async function HomePage() {
-  const [popularCourses, homepagePromos, stats] = await Promise.all([
+  const [popularCourses, homepagePromos, stats, dbTestimonials] = await Promise.all([
     getPopularCourses(8),
     getActivePromotions("homepage_banner"),
-    getSystemStats()
+    getSystemStats(),
+    getLatestTestimonials(15)
   ]);
-  
-  // Dynamic Testimonials
-  const dbTestimonials = await getLatestTestimonials(15);
   
   // Robust Fallback + Shuffle
   const fallbackTestimonials = [
@@ -175,14 +174,13 @@ export default async function HomePage() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {popularCourses.map((course, i) => (
-              <Link
-                href={`/courses/${course.slug}`}
+              <div
                 key={course.id}
                 className="card group overflow-hidden"
                 id={`featured-course-${course.slug}`}
               >
-                {/* Thumbnail */}
-                <div className="relative h-44 bg-[#0c0c14] overflow-hidden">
+                {/* Thumbnail Link */}
+                <Link href={`/courses/${course.slug}`} className="block relative h-44 bg-[#0c0c14] overflow-hidden">
                   {course.thumbnail ? (
                     <Image
                       src={course.thumbnail}
@@ -208,16 +206,21 @@ export default async function HomePage() {
                   <span className="absolute top-3 left-3 badge badge-primary text-xs shadow-lg">
                     {course.category}
                   </span>
-                </div>
+                </Link>
 
                 <div className="p-5">
-                  <h3 className="text-white font-semibold text-sm leading-snug mb-2 line-clamp-2 group-hover:text-purple-300 transition-colors">
-                    {course.title}
-                  </h3>
+                  <Link href={`/courses/${course.slug}`} className="block mb-2">
+                    <h3 className="text-white font-semibold text-sm leading-snug line-clamp-2 group-hover:text-purple-300 transition-colors">
+                      {course.title}
+                    </h3>
+                  </Link>
 
-                  <p className="text-slate-500 text-xs mb-3">
-                    {course.instructor}
-                  </p>
+                  <Link 
+                    href={`/profile/${course.instructorId}`}
+                    className="text-slate-500 text-xs mb-3 flex items-center gap-1 hover:text-purple-400 transition-colors w-fit"
+                  >
+                    {course.instructor} <VerifiedBadge size={12} />
+                  </Link>
 
                   <div className="flex items-center gap-2 text-xs text-slate-400 mb-3">
                     <span className="flex items-center gap-1">
@@ -253,7 +256,7 @@ export default async function HomePage() {
                     )}
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
 
@@ -401,9 +404,13 @@ export default async function HomePage() {
                         .join("")}
                     </div>
                     <div>
-                      <div className="text-white font-medium text-sm">
-                        {testimonial.userName}
-                      </div>
+                        <Link 
+                          href={`/profile/${testimonial.userId}`}
+                          className="text-white font-medium text-sm flex items-center gap-1.5 hover:text-purple-400 transition-colors"
+                        >
+                          {testimonial.userName}
+                          {(testimonial.userRole === 'admin' || testimonial.userRole === 'instructor') && <VerifiedBadge size={12} />}
+                        </Link>
                       <div className="text-slate-500 text-xs text-balance">
                         {testimonial.userBio}
                       </div>

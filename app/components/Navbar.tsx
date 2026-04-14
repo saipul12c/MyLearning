@@ -8,6 +8,7 @@ import { useAuth } from "./AuthContext";
 import Logo from "./Logo";
 import NotificationBell from "./NotificationBell";
 import ConfirmationModal from "./ConfirmationModal";
+import VerifiedBadge from "./VerifiedBadge";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -120,7 +121,12 @@ export default function Navbar() {
                     <p className="text-xs text-slate-500 truncate">{user?.email}</p>
                     {isAdmin && (
                       <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-medium">
-                        <Shield size={10} /> Admin
+                        <Shield size={10} /> Admin <VerifiedBadge size={10} />
+                      </span>
+                    )}
+                    {isInstructor && !isAdmin && (
+                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-xs font-medium">
+                        <VerifiedBadge size={10} /> Instruktur
                       </span>
                     )}
                   </div>
@@ -199,8 +205,9 @@ export default function Navbar() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-white font-bold text-sm truncate">{user?.fullName}</p>
-                    <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+                    <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold flex items-center gap-1">
                       {isAdmin ? "Administrator" : isInstructor ? "Instruktur" : "Siswa"}
+                      {(isAdmin || isInstructor) && <VerifiedBadge size={11} />}
                     </p>
                   </div>
                 </div>

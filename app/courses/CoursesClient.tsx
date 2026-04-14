@@ -10,6 +10,7 @@ import { getLevelLabel, getLevelBg } from "@/lib/enrollment";
 import { type Promotion, trackImpressionsBatch } from "@/lib/promotions";
 import { useEffect } from "react";
 import PromotionCard from "../components/PromotionCard";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 interface CoursesClientProps {
   initialCourses: Course[];
@@ -423,7 +424,12 @@ export default function CoursesClient({ initialCourses, initialCategories, initi
                       <h3 className="text-white font-semibold text-sm leading-snug mb-2 line-clamp-2 group-hover:text-purple-300 transition-colors">
                         {course.title}
                       </h3>
-                      <p className="text-slate-500 text-xs mb-3">{course.instructor}</p>
+                      <Link 
+                        href={`/profile/${course.instructorId}`}
+                        className="text-slate-500 text-xs mb-3 flex items-center gap-1 hover:text-purple-400 transition-colors w-fit"
+                      >
+                        {course.instructor} <VerifiedBadge size={12} />
+                      </Link>
                       <div className="flex items-center gap-2 text-xs text-slate-400 mb-3">
                         <span className="flex items-center gap-1">
                           <Star size={12} className={course.totalReviews > 0 ? "text-yellow-400 fill-yellow-400" : "text-slate-700"} /> 

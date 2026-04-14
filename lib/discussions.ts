@@ -12,6 +12,7 @@ export interface Discussion {
   content: string;
   isResolved: boolean;
   createdAt: string;
+  userRole?: string;
   replies?: Discussion[];
 }
 
@@ -21,7 +22,7 @@ export async function getDiscussionsByLesson(lessonId: string): Promise<Discussi
       .from("discussions")
       .select(`
         *,
-        user:user_profiles(full_name, avatar_url)
+        user:user_profiles(full_name, avatar_url, role)
       `)
       .eq("lesson_id", lessonId)
       .order("created_at", { ascending: true });
@@ -34,6 +35,7 @@ export async function getDiscussionsByLesson(lessonId: string): Promise<Discussi
       userId: d.user_id,
       userName: d.user?.full_name || "Unknown User",
       userAvatar: d.user?.avatar_url,
+      userRole: d.user?.role,
       parentId: d.parent_id,
       content: d.content,
       isResolved: d.is_resolved,

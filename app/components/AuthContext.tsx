@@ -204,8 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoggedIn: !!user,
-        isAdmin: user?.role === "admin",
-        isInstructor: user?.role === "instructor",
+        isAdmin: user?.role?.toLowerCase() === "admin",
+        isInstructor: user?.role?.toLowerCase() === "instructor",
         loading,
         login,
         register,

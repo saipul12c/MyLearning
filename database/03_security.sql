@@ -7,7 +7,8 @@
 CREATE OR REPLACE FUNCTION is_admin() 
 RETURNS boolean AS $$
 BEGIN
-  -- Checks role directly from JWT claims (app_metadata)
+  -- Checks role directly from JWT claims (app_metadata) to avoid infinite recursion
+  -- This is the SAFEST way as it does not query any table.
   RETURN (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin';
 END;
 $$ LANGUAGE plpgsql STABLE;
@@ -38,6 +39,14 @@ DROP POLICY IF EXISTS "Admins can update profiles" ON user_profiles;
 DROP POLICY IF EXISTS "Admins can delete profiles" ON user_profiles;
 
 -- Separate policies to avoid recursion during SELECT
+-- Separate policies to avoid recursion during SELECT
+-- Ensure we dropdown any potentially recursive legacy policies first
+DROP POLICY IF EXISTS "Instructors can view profiles of their students" ON user_profiles;
+DROP POLICY IF EXISTS "Anyone can view users" ON user_profiles;
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON user_profiles;
+CREATE POLICY "Users can insert own profile" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Admins can insert profiles" ON user_profiles FOR INSERT WITH CHECK (is_admin());
 CREATE POLICY "Admins can update profiles" ON user_profiles FOR UPDATE USING (is_admin());
 CREATE POLICY "Admins can delete profiles" ON user_profiles FOR DELETE USING (is_admin());

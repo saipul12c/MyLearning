@@ -484,7 +484,7 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
       );
     });
   } catch (error: any) {
-    console.error("Error fetching user enrollments:", error);
+    console.error("Error fetching user enrollments:", JSON.stringify(error, null, 2));
     // Return empty but log detail; wrapping in a result object would require many UI changes, 
     // so we'll at least ensure we don't swallow critical errors without trace.
     return [];
@@ -502,8 +502,9 @@ export async function getAllEnrollmentsAdmin(
   status: string = "all"
 ): Promise<{ data: Enrollment[]; totalCount: number; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error("Unauthorized");
+    const user = session.user;
 
     const { data: profile } = await supabase
       .from("user_profiles")

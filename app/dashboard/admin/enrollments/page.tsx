@@ -21,20 +21,31 @@ export default function AdminEnrollmentsPage() {
   const [isRejecting, setIsRejecting] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
       try {
         setLoading(true);
         const { data, totalCount: count } = await getAllEnrollmentsAdmin(page, pageSize, statusFilter);
-        setEnrollments(data);
-        setTotalCount(count);
+        
+        if (isMounted) {
+          setEnrollments(data);
+          setTotalCount(count);
+          setError(null);
+        }
       } catch (err: any) {
-        console.error("Fetch enrollments error:", err);
-        setError("Gagal memuat daftar pendaftaran.");
+        if (isMounted) {
+          console.error("Fetch enrollments error:", err);
+          setError("Gagal memuat daftar pendaftaran.");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
+
     fetchData();
+    
+    return () => { isMounted = false; };
   }, [refresh, page, statusFilter]);
 
   const handleFilterChange = (newStatus: string) => {

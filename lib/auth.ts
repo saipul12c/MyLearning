@@ -151,6 +151,9 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     .single();
 
   if (error || !profile) {
+    if (error) console.error(`[AuthAudit] Error fetching profile for ${userId}:`, JSON.stringify(error, null, 2));
+    else console.warn(`[AuthAudit] Profile not found for ${userId}. Defaulting to 'user' role.`);
+    
     return {
       id: userId,
       email,
@@ -170,7 +173,7 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     fullName: profile.full_name,
     phone: profile.phone || "",
     bio: profile.bio || "",
-    role: profile.role as UserRole,
+    role: (profile.role || "user").toString().toLowerCase().trim() as UserRole,
     createdAt: profile.created_at || createdAt,
     avatarUrl: profile.avatar_url,
     isOnline: profile.is_online || false,
@@ -199,7 +202,7 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     fullName: profile.full_name,
     phone: "",
     bio: profile.bio || "",
-    role: profile.role as UserRole,
+    role: (profile.role || "user").toString().toLowerCase().trim() as UserRole,
     createdAt: profile.created_at,
     avatarUrl: profile.avatar_url,
     isOnline: profile.is_online || false,
@@ -238,7 +241,7 @@ export async function updateProfile(
         fullName: data.full_name,
         phone: data.phone || "",
         bio: data.bio || "",
-        role: data.role as UserRole,
+        role: (data.role || "user").toString().toLowerCase().trim() as UserRole,
         createdAt: data.created_at,
         avatarUrl: data.avatar_url,
         isOnline: data.is_online || false,

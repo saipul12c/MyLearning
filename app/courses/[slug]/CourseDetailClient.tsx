@@ -16,6 +16,7 @@ import PreviewModal from "@/app/components/PreviewModal";
 import ReviewSection from "@/app/components/ReviewSection";
 import { getActivePromotions, type Promotion } from "@/lib/promotions";
 import PromotionCard from "@/app/components/PromotionCard";
+import VerifiedBadge from "@/app/components/VerifiedBadge";
 
 interface CourseDetailClientProps {
   course: Course;
@@ -125,7 +126,9 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                   )}
                 </div>
                 <div>
-                  <div className="text-white text-sm font-medium group-hover:text-purple-400 transition-colors">{course.instructor}</div>
+                  <div className="text-white text-sm font-medium group-hover:text-purple-400 transition-colors flex items-center gap-1.5">
+                    {course.instructor} <VerifiedBadge />
+                  </div>
                   <div className="text-slate-500 text-xs flex items-center gap-1">Instruktur <ChevronRight size={10} /></div>
                 </div>
               </Link>

@@ -7,7 +7,7 @@ import { useAuth } from "@/app/components/AuthContext";
 import {
   BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut,
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
-  Phone, Ticket,
+  Phone, Ticket, Megaphone, History,
 } from "lucide-react";
 import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
@@ -25,7 +25,10 @@ const adminMenuItems = [
   { href: "/dashboard/admin/users", label: "Kelola Pengguna", icon: Users },
   { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
   { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
+  { href: "/dashboard/admin/promotions", label: "Manajemen Iklan", icon: Megaphone },
+  { href: "/dashboard/admin/ad-requests", label: "Permintaan Iklan", icon: Ticket },
   { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
+  { href: "/dashboard/admin/revisions", label: "Revisi Sertifikat", icon: History },
   { href: "/dashboard/admin/messages", label: "Pesan Kontak", icon: MessageSquare },
   { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },
   { href: "/dashboard/admin/settings", label: "Pengaturan", icon: Settings },
@@ -35,6 +38,7 @@ const instructorMenuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/admin/analytics", label: "Analitik Saya", icon: Shield },
   { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+  { href: "/dashboard/ads", label: "Iklan Saya", icon: Megaphone },
   { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
   { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
   { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },

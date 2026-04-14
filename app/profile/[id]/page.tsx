@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getPublicProfile, PublicProfile } from "@/lib/profiles";
 import { formatPrice, formatNumber, formatDuration } from "@/lib/utils";
+import VerifiedBadge from "@/app/components/VerifiedBadge";
 
 export default function PublicProfilePage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
@@ -73,13 +74,16 @@ export default function PublicProfilePage(props: { params: Promise<{ id: string 
                     )}
                   </div>
                   {isInstructor && (
-                    <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1.5 rounded-xl shadow-lg border-4 border-[#0f0f1a] animate-bounce-slow">
-                      <CheckCircle2 size={16} />
+                    <div className="absolute -bottom-2 -right-2 bg-[#08080c] p-1 rounded-xl shadow-2xl animate-bounce-slow">
+                      <VerifiedBadge size={24} />
                     </div>
                   )}
                 </div>
 
-                <h1 className="text-2xl font-bold text-white mb-1">{profile.fullName}</h1>
+                <h1 className="text-2xl font-bold text-white mb-1 flex items-center justify-center gap-2">
+                  {profile.fullName}
+                  {isInstructor && <VerifiedBadge size={20} />}
+                </h1>
                 <div className="flex items-center gap-2 mb-4">
                   <span className={`badge text-[10px] uppercase tracking-widest font-bold py-1 ${isInstructor ? "badge-primary" : "bg-white/5 text-slate-400 border-white/10"}`}>
                     {isInstructor ? "Instruktur Terverifikasi" : "Siswa MyLearning"}

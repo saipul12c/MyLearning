@@ -89,6 +89,10 @@ async function uploadToBucket(file: File, bucket: string, folder: string): Promi
   }
 }
 
+export async function uploadPromotionImage(file: File): Promise<{ url: string | null; error: any }> {
+  return uploadToBucket(file, "thumbnails", "promos");
+}
+
 export async function deleteFileFromUrl(url: string, bucket: string = "thumbnails"): Promise<{ success: boolean; error: any }> {
   try {
     // Extract path from URL

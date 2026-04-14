@@ -20,8 +20,14 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  if (isAdmin) return <AdminDashboard userId={user.id} />;
-  if (user.role === "instructor") return <InstructorDashboard userId={user.id} userName={user.fullName} />;
+  if (isAdmin || user.role?.toLowerCase() === "admin") {
+    return <AdminDashboard userId={user.id} />;
+  }
+  
+  if (user.role?.toLowerCase() === "instructor") {
+    return <InstructorDashboard userId={user.id} userName={user.fullName} />;
+  }
+  
   return <UserDashboard userId={user.id} userName={user.fullName} />;
 }
 
@@ -235,22 +241,30 @@ function AdminDashboard({ userId }: { userId: string }) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [userCountValue, enrollResult, msgStats, count] = await Promise.all([
+      
+      // Separate results to prevent one failure from breaking everything
+      const results = await Promise.allSettled([
         getUserCount(),
         getAllEnrollmentsAdmin(),
         getContactMessageStats(),
-        getCourseCount()
+        getCourseCount(),
+        getAllRegisteredUsers() // Re-enabling user list
       ]);
-      
-      setTotalUsers(userCountValue);
-      setAllUsers([]); // Keeping for compatibility, but count is prioritized
-      setAllEnrollments(enrollResult.data);
-      setTotalEnrollments(enrollResult.totalCount);
-      setMessages({ length: msgStats.total, unread: msgStats.unread } as any);
-      setCourseCount(count);
+
+      if (results[0].status === 'fulfilled') setTotalUsers(results[0].value);
+      if (results[1].status === 'fulfilled') {
+        setAllEnrollments(results[1].value.data);
+        setTotalEnrollments(results[1].value.totalCount);
+      }
+      if (results[2].status === 'fulfilled') {
+        setMessages({ length: results[2].value.total, unread: results[2].value.unread } as any);
+      }
+      if (results[3].status === 'fulfilled') setCourseCount(results[3].value);
+      if (results[4].status === 'fulfilled') setAllUsers(results[4].value);
+
     } catch (err: any) {
-      console.error("Admin Dashboard error:", err);
-      setError("Gagal memuat data statistik admin.");
+      console.error("Admin Dashboard overall error:", err);
+      setError("Gagal memuat beberapa data statistik admin.");
     } finally {
       setLoading(false);
     }
@@ -370,11 +384,11 @@ function AdminDashboard({ userId }: { userId: string }) {
                       <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full glass ${
                         enr.status === "active" ? "text-cyan-400 border-cyan-500/20" :
                         enr.status === "completed" ? "text-emerald-400 border-emerald-500/20" :
-                        enr.status === "waiting_verification" ? "text-amber-400 border-amber-500/20" :
+                        (enr.status === "waiting_verification" || enr.status === "pending") ? "text-amber-400 border-amber-500/20" :
                         "text-red-400 border-red-500/20"
                       }`}>
                         {enr.status === "active" ? "Aktif" : enr.status === "completed" ? "Selesai" : 
-                         enr.status === "waiting_verification" ? "Verifikasi" : enr.status}
+                         enr.status === "waiting_verification" ? "Verifikasi" : enr.status === "pending" ? "Menunggu" : enr.status}
                       </span>
                     </div>
                   );
