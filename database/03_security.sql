@@ -3,40 +3,47 @@
 -- MyLearning - Security & RBAC (Role-Based Access Control)
 -- ======================================================
 
--- 0. HELPER FUNCTIONS (Avoid Infinite Recursion)
+-- 0. HELPER FUNCTIONS (JWT-based to Avoid Infinite Recursion)
 CREATE OR REPLACE FUNCTION is_admin() 
 RETURNS boolean AS $$
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM user_profiles 
-    WHERE user_id = auth.uid() 
-    AND role = 'admin'
-  );
+  -- Checks role directly from JWT claims (app_metadata)
+  RETURN (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql STABLE;
 
 CREATE OR REPLACE FUNCTION is_instructor() 
 RETURNS boolean AS $$
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM user_profiles 
-    WHERE user_id = auth.uid() 
-    AND role = 'instructor'
-  );
+  -- Checks role directly from JWT claims (app_metadata)
+  RETURN (auth.jwt() -> 'app_metadata' ->> 'role') = 'instructor';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql STABLE;
 
 
 -- 1. USER PROFILES Policies
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Anyone can view user profile headers" ON user_profiles;
-CREATE POLICY "Anyone can view user profile headers" ON user_profiles FOR SELECT USING (true);
+CREATE POLICY "Anyone can view user profile headers" ON user_profiles 
+FOR SELECT USING (true);
+
 DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
-CREATE POLICY "Users can update own profile" ON user_profiles FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own profile" ON user_profiles 
+FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Admins can manage all profiles" ON user_profiles;
-CREATE POLICY "Admins can manage all profiles" ON user_profiles FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Instructors can see profiles of their students" ON user_profiles;
-CREATE POLICY "Instructors can see profiles of their students" ON user_profiles FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM enrollments e JOIN courses c ON e.course_id = c.id JOIN instructors i ON c.instructor_id = i.id WHERE e.user_id = user_profiles.user_id AND i.user_id = auth.uid()));
+DROP POLICY IF EXISTS "Admins can insert profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Admins can update profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Admins can delete profiles" ON user_profiles;
+
+-- Separate policies to avoid recursion during SELECT
+CREATE POLICY "Admins can insert profiles" ON user_profiles FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "Admins can update profiles" ON user_profiles FOR UPDATE USING (is_admin());
+CREATE POLICY "Admins can delete profiles" ON user_profiles FOR DELETE USING (is_admin());
+
+-- IMPORTANT: We removed the redundant "Instructors can see profiles of their students" policy 
+-- because it was recursive and already covered by the "Anyone can view" policy.
 
 -- 2. INSTRUCTORS Policies
 ALTER TABLE instructors ENABLE ROW LEVEL SECURITY;
@@ -67,18 +74,40 @@ CREATE POLICY "Admins can manage all lessons" ON lessons FOR ALL USING (is_admin
 
 -- 5. ENROLLMENTS Policies
 ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Users can view own enrollments" ON enrollments;
 CREATE POLICY "Users can view own enrollments" ON enrollments FOR SELECT USING (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Instructors can view enrollments for their courses" ON enrollments;
-CREATE POLICY "Instructors can view enrollments for their courses" ON enrollments FOR SELECT USING (EXISTS (SELECT 1 FROM courses JOIN instructors ON courses.instructor_id = instructors.id WHERE courses.id = enrollments.course_id AND instructors.user_id = auth.uid()));
+CREATE POLICY "Instructors can view enrollments for their courses" 
+ON enrollments FOR SELECT 
+USING (
+    EXISTS (
+        SELECT 1 FROM courses c 
+        JOIN instructors i ON c.instructor_id = i.id 
+        WHERE c.id = enrollments.course_id AND i.user_id = auth.uid()
+    )
+);
+
 DROP POLICY IF EXISTS "Users can enroll themselves" ON enrollments;
 CREATE POLICY "Users can enroll themselves" ON enrollments FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Users can update own payment proof" ON enrollments;
 CREATE POLICY "Users can update own payment proof" ON enrollments FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Admins can manage all enrollments" ON enrollments;
 CREATE POLICY "Admins can manage all enrollments" ON enrollments FOR ALL USING (is_admin());
+
 DROP POLICY IF EXISTS "Instructors can update enrollments for their courses" ON enrollments;
-CREATE POLICY "Instructors can update enrollments for their courses" ON enrollments FOR UPDATE USING (EXISTS (SELECT 1 FROM courses JOIN instructors ON courses.instructor_id = instructors.id WHERE courses.id = enrollments.course_id AND instructors.user_id = auth.uid()));
+CREATE POLICY "Instructors can update enrollments for their courses" 
+ON enrollments FOR UPDATE 
+USING (
+    EXISTS (
+        SELECT 1 FROM courses c 
+        JOIN instructors i ON c.instructor_id = i.id 
+        WHERE c.id = enrollments.course_id AND i.user_id = auth.uid()
+    )
+);
 
 -- 6. CONTENT ACCESS (Paywall)
 DROP POLICY IF EXISTS "Access lesson content" ON lessons;
@@ -147,10 +176,49 @@ CREATE POLICY "Admins can manage messages" ON contact_messages FOR ALL USING (is
 
 -- 11. CERTIFICATES
 ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view certificates" ON certificates;
+CREATE POLICY "Public can view certificates" ON certificates FOR SELECT USING (true);
+
 DROP POLICY IF EXISTS "Users can view own certificates" ON certificates;
 CREATE POLICY "Users can view own certificates" ON certificates FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can request revision for their own certificate" ON certificates;
+CREATE POLICY "Users can request revision for their own certificate"
+ON certificates FOR UPDATE
+USING (auth.uid() = user_id AND revision_count < 1)
+WITH CHECK (auth.uid() = user_id AND revision_status = 'pending');
+
 DROP POLICY IF EXISTS "Admins can manage all certificates" ON certificates;
 CREATE POLICY "Admins can manage all certificates" ON certificates FOR ALL USING (is_admin());
+
 DROP POLICY IF EXISTS "Instructors can view certificates for their courses" ON certificates;
-CREATE POLICY "Instructors can view certificates for their courses" ON certificates FOR SELECT USING (is_instructor() AND EXISTS (SELECT 1 FROM courses JOIN instructors ON courses.instructor_id = instructors.id WHERE courses.id = certificates.course_id AND instructors.user_id = auth.uid()));
--- System can manage all (service_role doesn't need policy, but SECURITY DEFINER functions will work)
+CREATE POLICY "Instructors can view certificates for their courses" 
+ON certificates FOR SELECT 
+USING (
+    (is_instructor() AND EXISTS (
+        SELECT 1 FROM courses c 
+        JOIN instructors i ON c.instructor_id = i.id 
+        WHERE c.id = certificates.course_id AND i.user_id = auth.uid()
+    ))
+);
+
+-- 12. PROMOTIONS & ADS
+ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view active promotions" ON promotions;
+CREATE POLICY "Anyone can view active promotions" ON promotions FOR SELECT USING (is_active = true OR is_admin());
+DROP POLICY IF EXISTS "Admins can manage all promotions" ON promotions;
+CREATE POLICY "Admins can manage all promotions" ON promotions FOR ALL USING (is_admin());
+
+ALTER TABLE promotion_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view and manage own requests" ON promotion_requests;
+CREATE POLICY "Users can view and manage own requests" ON promotion_requests FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins can manage all requests" ON promotion_requests;
+CREATE POLICY "Admins can manage all requests" ON promotion_requests FOR ALL USING (is_admin());
+
+ALTER TABLE promotion_impression_logs ENABLE ROW LEVEL SECURITY;
+-- Logs are primarily written via SECURITY DEFINER functions, so we only need to restrict SELECT
+DROP POLICY IF EXISTS "Only admins can view logs" ON promotion_impression_logs;
+CREATE POLICY "Only admins can view logs" ON promotion_impression_logs FOR SELECT USING (is_admin());
+DROP POLICY IF EXISTS "System can insert logs" ON promotion_impression_logs;
+CREATE POLICY "System can insert logs" ON promotion_impression_logs FOR INSERT WITH CHECK (true); -- Functions use this

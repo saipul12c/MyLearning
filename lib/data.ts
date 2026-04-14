@@ -59,6 +59,7 @@ export interface Course {
   discountPrice?: number;
   adminDiscountPrice?: number;
   category: string;
+  categoryId: string;
   categorySlug: string;
   instructor: string;
   instructorId: string;
@@ -81,6 +82,7 @@ export interface Course {
   previewVideoUrl?: string;
   tags?: string[];
   lessons?: Lesson[];
+  availableVouchers?: { id: string; code: string; discountType: string; discountValue: number }[];
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getAllEnrollmentsAdmin, forceExpireEnrollment, completeCourseAdmin, verifyPayment, REJECTION_REASONS } from "@/lib/enrollment";
-import { BookMarked, CheckCircle, XCircle, Clock, Filter, Eye, ThumbsUp, ThumbsDown, X } from "lucide-react";
+import { BookMarked, CheckCircle, XCircle, Clock, Filter, Eye, ThumbsUp, ThumbsDown, X, Tag } from "lucide-react";
 import Image from "next/image";
 import ErrorState from "@/app/components/ui/ErrorState";
 import { formatPrice } from "@/lib/data";
@@ -254,6 +254,23 @@ export default function AdminEnrollmentsPage() {
                   <div>
                     <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Kursus</p>
                     <p className="text-purple-400 font-medium text-xs truncate">{selectedProof.courseTitle}</p>
+                  </div>
+                  {selectedProof.discountAmount > 0 && (
+                    <div className="col-span-2 mt-2 pt-2 border-t border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Tag size={12} className="text-emerald-400" />
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Voucher:</span>
+                        <span className="text-emerald-400 font-black text-xs">{(selectedProof as any).voucher?.code || "DISKON"}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mr-2">Potongan:</span>
+                        <span className="text-white font-bold text-xs">-{formatPrice(selectedProof.discountAmount)}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="col-span-2 mt-2 pt-2 border-t border-white/5 flex items-center justify-between bg-white/2 p-2 rounded-lg">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Total Bayar (Sesuai Struk):</span>
+                    <span className="text-cyan-400 font-black text-sm">{formatPrice(selectedProof.paymentAmount)}</span>
                   </div>
                 </div>
               </div>

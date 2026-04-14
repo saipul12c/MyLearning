@@ -295,8 +295,26 @@ CREATE TABLE IF NOT EXISTS certificates (
   issued_at TIMESTAMPTZ DEFAULT NOW(),
   instructor_name VARCHAR(200),
   course_title VARCHAR(500),
-  user_name VARCHAR(200)
+  user_name VARCHAR(200),
+  
+  -- Revision Tracking
+  requested_name VARCHAR(200),
+  revision_reason TEXT,
+  revision_status VARCHAR(20) DEFAULT NULL CHECK (revision_status IN ('pending', 'approved', 'rejected')),
+  revision_count INTEGER DEFAULT 0,
+  admin_notes TEXT,
+  processed_at TIMESTAMPTZ,
+  processed_by UUID REFERENCES user_profiles(user_id)
 );
+
+-- Ensure revision tracking columns exist for re-runnability on existing tables
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS requested_name VARCHAR(200);
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS revision_reason TEXT;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS revision_status VARCHAR(20) DEFAULT NULL CHECK (revision_status IN ('pending', 'approved', 'rejected'));
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS revision_count INTEGER DEFAULT 0;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS processed_by UUID REFERENCES user_profiles(user_id);
 
 CREATE TABLE IF NOT EXISTS contact_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -308,6 +326,90 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   admin_notes TEXT,
   replied_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- 11. PROMOTIONS & ADS
+-- ============================================
+CREATE TABLE IF NOT EXISTS promotions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  link_url TEXT,
+  location VARCHAR(50) NOT NULL,
+  badge_text VARCHAR(50) DEFAULT 'PARTNER',
+  is_active BOOLEAN DEFAULT TRUE,
+  is_external BOOLEAN DEFAULT TRUE,
+  priority INTEGER DEFAULT 0,
+  bg_color VARCHAR(50),
+  
+  -- Impression Logic
+  target_impressions INTEGER DEFAULT 0, -- 0 means unlimited
+  current_impressions INTEGER DEFAULT 0,
+  current_clicks INTEGER DEFAULT 0,
+  start_date TIMESTAMPTZ,
+  end_date TIMESTAMPTZ,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Archival table for old ads to prevent bloating promotions table
+CREATE TABLE IF NOT EXISTS promotion_archives (
+  id UUID PRIMARY KEY,
+  course_id UUID,
+  user_id UUID,
+  title VARCHAR(200),
+  description TEXT,
+  location VARCHAR(50),
+  target_impressions INTEGER,
+  current_impressions INTEGER,
+  current_clicks INTEGER,
+  total_price INTEGER,
+  start_date TIMESTAMPTZ,
+  end_date TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tracking table for fraud prevention
+CREATE TABLE IF NOT EXISTS promotion_impression_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    promo_id UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+    user_id UUID, -- NULL for guests
+    ip_address TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_promo_logs_lookup ON promotion_impression_logs(promo_id, user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_promo_logs_ip ON promotion_impression_logs(ip_address, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS promotion_requests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+  course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  link_url TEXT,
+  location VARCHAR(50) NOT NULL,
+  
+  -- Request Logic
+  target_impressions INTEGER NOT NULL,
+  duration_days INTEGER NOT NULL,
+  total_price INTEGER NOT NULL,
+  amount_paid INTEGER DEFAULT 0,
+  payment_proof_url TEXT,
+  
+  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'waiting_verification', 'active', 'completed', 'rejected')),
+  admin_notes TEXT,
+  processed_at TIMESTAMPTZ,
+  processed_by UUID REFERENCES user_profiles(user_id),
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================
@@ -355,4 +457,20 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id,
 CREATE INDEX IF NOT EXISTS idx_assessment_def_course ON assessment_definitions(course_id);
 CREATE INDEX IF NOT EXISTS idx_assessment_ques_def ON assessment_questions(assessment_id);
 
+-- Optimized Promotion Discovery Indexes
+CREATE INDEX IF NOT EXISTS idx_promotions_perf_discovery ON promotions(location, is_active, priority DESC) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_promotions_expiry ON promotions(end_date) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_promotions_course_id ON promotions(course_id);
+
 -- NOTE: TRIGGERS AND FUNCTIONS ARE MOVED TO 02_logic.sql
+
+-- ============================================
+-- 13. SECURITY (Row Level Security)
+-- ============================================
+
+-- RLS Policies for user_profiles, enrollments, and certificates 
+-- are now centralized in 03_security.sql to avoid infinite recursion
+-- and ensure consistent Role-Based Access Control (RBAC).
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;

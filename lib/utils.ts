@@ -2,6 +2,9 @@
  * Generic Utility Functions for MyLearning
  */
 
+export const PLATFORM_DIRECTOR = "Muhammad Syaiful Mukmin";
+export const PLATFORM_NAME = "MyLearning";
+
 /**
  * Format number to Indonesian Rupiah currency string
  */

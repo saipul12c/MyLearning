@@ -16,6 +16,7 @@ import QuizModal from "@/app/components/QuizModal";
 import AssignmentModal from "@/app/components/AssignmentModal";
 import LessonPlayer from "@/app/components/LessonPlayer";
 import FinalProjectForm from "@/app/components/FinalProjectForm";
+import RevisionModal from "@/app/components/RevisionModal";
 import Skeleton from "@/app/components/ui/Skeleton";
 import ErrorState from "@/app/components/ui/ErrorState";
 import ActiveCourseCard from "./ActiveCourseCard";
@@ -48,6 +49,7 @@ export default function MyCoursesPage() {
   const [activeCourseData, setActiveCourseData] = useState<any>(null);
   const [activeAssessments, setActiveAssessments] = useState<any>(null);
   const [activeInstructor, setActiveInstructor] = useState<any>(null);
+  const [showRevisionModal, setShowRevisionModal] = useState<Enrollment | null>(null);
 
   const forceRefresh = useCallback(() => setRefresh((r) => r + 1), []);
 
@@ -312,22 +314,56 @@ export default function MyCoursesPage() {
                     </div>
                   </div>
                   
-                  <div>
-                    <h3 className="text-white font-bold text-lg mb-2 leading-tight">{enr.courseTitle}</h3>
-                    <div className="flex items-center gap-2 mb-6">
-                      {certExpired ? (
-                        <span className="text-[10px] font-black uppercase tracking-tighter text-amber-500 flex items-center gap-1.5"><AlertTriangle size={12} /> Sertifikat Kadaluarsa</span>
-                      ) : (
-                        <span className="text-[10px] font-black uppercase tracking-tighter text-emerald-500 flex items-center gap-1.5"><Award size={12} /> Sertifikat Aktif</span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <button onClick={() => handleDownloadCert(enr)}
-                        className={`w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] transition-all ${certExpired ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"}`}>
-                        <Download size={14} className={certExpired ? "" : "animate-bounce"} /> {certExpired ? "DOWNLOAD (EXPIRED)" : "DOWNLOAD SERTIFIKAT"}
-                      </button>
+                    <div>
+                      <h3 className="text-white font-bold text-lg mb-2 leading-tight">{enr.courseTitle}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mb-6">
+                        {certExpired ? (
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-amber-500 flex items-center gap-1.5 bg-amber-500/10 px-2 py-1 rounded-lg"><AlertTriangle size={12} /> Sertifikat Kadaluarsa</span>
+                        ) : (
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-emerald-500 flex items-center gap-1.5 bg-emerald-500/10 px-2 py-1 rounded-lg"><Award size={12} /> Sertifikat Aktif</span>
+                        )}
+                        
+                        {enr.certificateRevisionStatus === "pending" && (
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-blue-400 flex items-center gap-1.5 bg-blue-500/10 px-2 py-1 rounded-lg"><Clock size={12} /> Revisi Sedang Diproses</span>
+                        )}
+                        {enr.certificateRevisionStatus === "approved" && (
+                          <span className="text-[10px] font-black uppercase tracking-tighter text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-2 py-1 rounded-lg"><CheckCircle size={12} /> Nama Telah Diperbarui</span>
+                        )}
+                        {enr.certificateRevisionStatus === "rejected" && (
+                          <div className="w-full mt-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                            <span className="text-[10px] font-black uppercase tracking-tighter text-red-500 flex items-center gap-1.5 mb-1"><XCircle size={12} /> Revisi Ditolak</span>
+                            <p className="text-[10px] text-red-400/80 leading-relaxed italic">{enr.certificateRevisionNotes || "Tidak ada alasan yang diberikan oleh admin."}</p>
+                          </div>
+                        )}
+                      </div>
                       
-                      {certExpired && (
+                      <div className="flex flex-col gap-2">
+                        <button onClick={() => handleDownloadCert(enr)}
+                          className={`w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] transition-all ${certExpired ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"}`}>
+                          <Download size={14} className={certExpired ? "" : "animate-bounce"} /> {certExpired ? "DOWNLOAD (EXPIRED)" : "DOWNLOAD SERTIFIKAT"}
+                        </button>
+
+                        {/* Revision Button Logic */}
+                        {(() => {
+                           const now = new Date();
+                           const issuedAt = enr.certificateIssuedAt ? new Date(enr.certificateIssuedAt) : null;
+                           const isWithin30Days = issuedAt && (now.getTime() - issuedAt.getTime()) <= (30 * 24 * 60 * 60 * 1000);
+                           const canRequestRevision = enr.certificateId && (enr.certificateRevisionCount || 0) < 1 && isWithin30Days && enr.certificateRevisionStatus !== 'pending';
+                           
+                           if (canRequestRevision) {
+                             return (
+                               <button 
+                                 onClick={() => setShowRevisionModal(enr)}
+                                 className="w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/10 transition-all"
+                               >
+                                 <FileText size={14} /> Ajukan Perbaikan Nama (Max 1x)
+                               </button>
+                             );
+                           }
+                           return null;
+                        })()}
+                        
+                        {certExpired && (
                         <button 
                           onClick={async () => {
                             if (confirm("Sertifikat Anda sudah kadaluarsa. Anda wajib mengulang kursus dari 0% untuk mendapatkan sertifikat baru. Lanjutkan?")) {
@@ -387,6 +423,14 @@ export default function MyCoursesPage() {
           isExpired={certData.isExpired} 
           certificateId={certData.certificateId}
           onClose={() => setCertData(null)} 
+        />
+      )}
+      {showRevisionModal && (
+        <RevisionModal 
+          certificateId={showRevisionModal.certificateId || ""}
+          currentName={user.fullName}
+          onClose={() => setShowRevisionModal(null)}
+          onSuccess={() => forceRefresh()}
         />
       )}
       {activeQuiz && active && (

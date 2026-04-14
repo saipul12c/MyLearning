@@ -8,7 +8,8 @@ import { type Course, type Category } from "@/lib/data";
 import { formatPrice, formatNumber } from "@/lib/utils";
 import { getCourses, getCategories } from "@/lib/courses";
 import { getLevelLabel, getLevelBg, enrollCourse, getActiveEnrollment, getExpiryDays } from "@/lib/enrollment";
-import { Star, Users, Clock, BookOpen, Search, X, AlertCircle, CheckCircle } from "lucide-react";
+import { Star, Users, Clock, BookOpen, Search, X, AlertCircle, CheckCircle, Megaphone, Plus } from "lucide-react";
+import PromotionRequestModal from "@/app/components/PromotionRequestModal";
 
 export default function DashboardCoursesPage() {
   const { user } = useAuth();
@@ -20,6 +21,8 @@ export default function DashboardCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [selectedCourseForPromo, setSelectedCourseForPromo] = useState<Course | null>(null);
   
   // Debounced search query
   const [searchQuery, setSearchQuery] = useState("");
@@ -172,17 +175,28 @@ export default function DashboardCoursesPage() {
                       <span className="text-white font-bold text-sm">{formatPrice(course.price)}</span>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleEnroll(course)}
-                    disabled={!!activeEnrollment}
-                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
-                      activeEnrollment
-                        ? "bg-white/5 text-slate-600 cursor-not-allowed"
-                        : "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30"
-                    }`}
-                  >
-                    Ambil Kursus
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => {
+                            setSelectedCourseForPromo(course);
+                            setIsPromoModalOpen(true);
+                        }}
+                        className="text-xs px-3 py-1.5 rounded-lg font-bold bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1"
+                    >
+                        <Megaphone size={12} /> Promosi
+                    </button>
+                    <button
+                        onClick={() => handleEnroll(course)}
+                        disabled={!!activeEnrollment}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                        activeEnrollment
+                            ? "bg-white/5 text-slate-600 cursor-not-allowed"
+                            : "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30"
+                        }`}
+                    >
+                        Ambil Kursus
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -196,6 +210,13 @@ export default function DashboardCoursesPage() {
           <p className="text-white font-semibold">Tidak ada kursus ditemukan</p>
           <p className="text-slate-500 text-sm">Coba ubah filter pencarian</p>
         </div>
+      )}
+
+      {isPromoModalOpen && selectedCourseForPromo && (
+        <PromotionRequestModal 
+          course={selectedCourseForPromo}
+          onClose={() => setIsPromoModalOpen(false)}
+        />
       )}
     </div>
   );

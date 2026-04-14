@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { ChevronDown, HelpCircle, MessageCircle, Search, Bot, Send, Sparkles, Loader2, X } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { ChevronDown, HelpCircle, MessageCircle, Search, Bot, Send, Sparkles, Loader2, X, History, Lightbulb, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { getFAQGeminiResponse } from "@/lib/gemini";
 import ReactMarkdown from "react-markdown";
@@ -119,12 +119,39 @@ export default function FAQPage() {
   const [activeCategory, setActiveCategory] = useState(0);
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // AI States
-  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [showAIResult, setShowAIResult] = useState(false);
   const [aiMessage, setAiMessage] = useState("");
-  const [aiHistory, setAiHistory] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
+  const [currentAIResult, setCurrentAIResult] = useState<{ question: string; answer: string } | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const aiResultRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic Suggestions logic
+  const suggestions = useMemo(() => {
+    const categoryColors: Record<string, string> = {
+      "Umum": "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+      "Pembayaran": "bg-orange-500/10 text-orange-400 border-orange-500/20",
+      "Teknis": "bg-purple-500/10 text-purple-400 border-purple-500/20",
+      "Sertifikat": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+    };
+
+    // Flatten questions and pick 3
+    const allQuestions = faqData.flatMap(cat => 
+      cat.items.map(item => ({
+        text: item.question,
+        color: categoryColors[cat.name] || "bg-white/5 text-slate-400 border-white/10"
+      }))
+    );
+
+    // Pick 3 stable "random" or interesting ones
+    // For now, let's just pick one from each of the first 3 categories
+    return [
+      allQuestions[0], // Apa itu MyLearning
+      allQuestions[4], // Metode pembayaran
+      allQuestions[12] // Mendapat sertifikat
+    ].filter(Boolean);
+  }, []);
 
   const toggleItem = (key: string) => {
     setOpenItems((prev) => {
@@ -140,7 +167,7 @@ export default function FAQPage() {
 
   const filteredResults = useMemo(() => {
     if (!searchQuery.trim()) return null;
-    
+
     const results: { category: string; item: FAQItem; idx: number; catIdx: number }[] = [];
     faqData.forEach((cat, catIdx) => {
       cat.items.forEach((item, idx) => {
@@ -155,20 +182,26 @@ export default function FAQPage() {
     return results;
   }, [searchQuery]);
 
-  const handleAskAI = async (e?: React.FormEvent) => {
+  const handleAskAI = async (e?: React.FormEvent, customMsg?: string) => {
     if (e) e.preventDefault();
-    if (!aiMessage.trim() || isAiLoading) return;
+    const query = customMsg || aiMessage;
+    if (!query.trim() || isAiLoading) return;
 
-    const userMsg = aiMessage;
     setAiMessage("");
-    setAiHistory(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsAiLoading(true);
+    setShowAIResult(true);
+    setCurrentAIResult({ question: query, answer: "" }); // Placeholder for loading
+
+    // Scroll to result card
+    setTimeout(() => {
+      aiResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
 
     try {
-      const response = await getFAQGeminiResponse(userMsg, faqData);
-      setAiHistory(prev => [...prev, { role: 'assistant', content: response }]);
+      const response = await getFAQGeminiResponse(query, faqData);
+      setCurrentAIResult({ question: query, answer: response });
     } catch (error) {
-      setAiHistory(prev => [...prev, { role: 'assistant', content: "Maaf, terjadi kesalahan teknis. Silakan coba lagi nanti." }]);
+      setCurrentAIResult({ question: query, answer: "Maaf, terjadi kesalahan teknis. Silakan coba lagi nanti." });
     } finally {
       setIsAiLoading(false);
     }
@@ -194,27 +227,131 @@ export default function FAQPage() {
           </p>
 
           {/* Search bar & AI Button */}
-          <div className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-              <input
-                type="text"
-                placeholder="Cari pertanyaan kamu di sini..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all placeholder:text-slate-600 shadow-xl"
-              />
+          <div className="max-w-2xl mx-auto space-y-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                <input
+                  type="text"
+                  placeholder="Cari pertanyaan kamu di sini..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setAiMessage(e.target.value);
+                  }}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all placeholder:text-slate-600 shadow-xl font-medium"
+                />
+              </div>
+              <button
+                onClick={() => handleAskAI()}
+                className="btn-primary py-4 px-8 flex items-center justify-center gap-2 group shadow-[0_0_20px_rgba(147,51,234,0.3)] hover:shadow-[0_0_25px_rgba(147,51,234,0.5)] transition-all font-bold"
+              >
+                <Sparkles size={18} className="group-hover:animate-pulse" />
+                Tanya AI Boss
+              </button>
             </div>
-            <button 
-              onClick={() => setIsAIOpen(true)}
-              className="btn-primary py-4 px-6 flex items-center justify-center gap-2 group shadow-[0_0_20px_rgba(147,51,234,0.3)] hover:shadow-[0_0_25px_rgba(147,51,234,0.5)]"
-            >
-              <Sparkles size={18} className="group-hover:animate-pulse" />
-              Tanya AI Boss
-            </button>
+
+            {/* Suggestions Chips */}
+            <div className="flex flex-wrap items-center justify-between gap-y-3 pt-3 px-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] flex items-center gap-1.5 mr-1">
+                  <Sparkles size={10} className="text-amber-500" /> Saran:
+                </span>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setSearchQuery(s.text);
+                      setAiMessage(s.text);
+                      handleAskAI(undefined, s.text);
+                    }}
+                    className={`text-[10px] px-3 py-1.5 rounded-xl border transition-all hover:bg-white/5 active:scale-95 font-semibold flex items-center gap-2 ${s.color}`}
+                  >
+                    <Lightbulb size={10} className="opacity-50" /> {s.text}
+                  </button>
+                ))}
+              </div>
+              <button className="text-[9px] text-slate-500 hover:text-white flex items-center gap-1.5 px-2 py-1 transition-colors font-bold uppercase tracking-widest opacity-60 hover:opacity-100 italic">
+                <History size={10} /> Riwayat
+              </button>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* AI Result Card Section */}
+      {showAIResult && (
+        <section ref={aiResultRef} className="py-8 animate-in slide-in-from-top-4 duration-500 px-4">
+          <div className="max-w-4xl mx-auto px-4 sm:px-8 py-8 md:py-12 bg-[#041a16]/40 backdrop-blur-3xl border border-emerald-500/20 rounded-[3rem] relative shadow-3xl shadow-emerald-900/10">
+            {/* Confidence Badge */}
+            <div className="absolute top-8 right-8 flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full px-4 py-2">
+                <TrendingUp size={14} className="animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Confidence: 98%</span>
+              </div>
+              <button onClick={() => setShowAIResult(false)} className="p-2 hover:bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center gap-4 mb-10">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                <Bot size={28} className="text-emerald-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-emerald-400 tracking-tight">Jawaban AI</h2>
+                <p className="text-slate-500 text-xs font-medium uppercase tracking-[0.2em]">Pencarian cerdas melalui basis data & FAQ</p>
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              {/* User Message */}
+              <div className="animate-in fade-in duration-700">
+                <p className="text-[10px] font-black text-emerald-500/50 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Pertanyaan Anda:
+                </p>
+                <div className="bg-white/2 border border-white/5 rounded-[2rem] p-8 md:p-10 font-black italic text-white/40 text-lg md:text-xl leading-relaxed">
+                  &quot;{currentAIResult?.question}&quot;
+                </div>
+              </div>
+
+              {/* AI Response */}
+              <div className="animate-in fade-in duration-1000 slide-in-from-bottom-2">
+                <p className="text-[10px] font-black text-emerald-500/50 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Jawaban AI:
+                </p>
+                <div className="bg-[#0c1214] border border-white/5 rounded-[2rem] p-8 md:p-12 relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+
+                  {isAiLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-4">
+                      <Loader2 className="animate-spin text-emerald-400" size={32} />
+                      <p className="text-emerald-400/50 text-[10px] font-black uppercase tracking-widest animate-pulse">Menghimpun jawaban terbaik...</p>
+                    </div>
+                  ) : (
+                    <article className="prose prose-invert prose-emerald max-w-none prose-p:leading-[1.8] prose-p:text-slate-300 prose-p:font-medium prose-strong:text-emerald-400 prose-li:text-slate-400">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {currentAIResult?.answer || ""}
+                      </ReactMarkdown>
+                    </article>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Info */}
+            <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                <div className="w-1 h-1 bg-emerald-500 rounded-full" /> Dijawab Oleh Model LearningAI Berdasarkan Data MyLearning
+              </p>
+              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                SESSIONID: 0V5T7
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="py-16 min-h-[600px]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -226,11 +363,10 @@ export default function FAQPage() {
                   <button
                     key={cat.name}
                     onClick={() => setActiveCategory(idx)}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                      activeCategory === idx
+                    className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${activeCategory === idx
                         ? "bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg shadow-purple-500/20"
                         : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5"
-                    }`}
+                      }`}
                   >
                     <span>{cat.icon}</span> {cat.name}
                   </button>
@@ -257,17 +393,15 @@ export default function FAQPage() {
                         </span>
                         <ChevronDown
                           size={18}
-                          className={`text-slate-400 flex-shrink-0 transition-transform duration-300 ${
-                            isOpen ? "rotate-180 text-purple-400" : ""
-                          }`}
+                          className={`text-slate-400 flex-shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180 text-purple-400" : ""
+                            }`}
                         />
                       </button>
                       <div
-                        className={`transition-all duration-300 ease-in-out ${
-                          isOpen
+                        className={`transition-all duration-300 ease-in-out ${isOpen
                             ? "max-h-96 opacity-100"
                             : "max-h-0 opacity-0"
-                        } overflow-hidden`}
+                          } overflow-hidden`}
                       >
                         <div className="px-5 pb-5 text-slate-400 text-sm leading-relaxed border-t border-white/5 pt-4">
                           {item.answer}
@@ -286,7 +420,7 @@ export default function FAQPage() {
                 <h3 className="text-xl font-bold text-white">
                   Hasil pencarian untuk "{searchQuery}"
                 </h3>
-                <button 
+                <button
                   onClick={() => setSearchQuery("")}
                   className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
                 >
@@ -316,17 +450,15 @@ export default function FAQPage() {
                           </div>
                           <ChevronDown
                             size={18}
-                            className={`text-slate-400 flex-shrink-0 transition-transform duration-300 ${
-                              isOpen ? "rotate-180" : ""
-                            }`}
+                            className={`text-slate-400 flex-shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180" : ""
+                              }`}
                           />
                         </button>
                         <div
-                          className={`transition-all duration-300 ease-in-out ${
-                            isOpen
+                          className={`transition-all duration-300 ease-in-out ${isOpen
                               ? "max-h-96 opacity-100"
                               : "max-h-0 opacity-0"
-                          } overflow-hidden`}
+                            } overflow-hidden`}
                         >
                           <div className="px-5 pb-5 text-slate-400 text-sm leading-relaxed border-t border-white/5 pt-4">
                             {res.item.answer}
@@ -340,8 +472,8 @@ export default function FAQPage() {
                 <div className="text-center py-20 card bg-white/5 border-dashed border-white/10">
                   <HelpCircle size={48} className="mx-auto text-slate-600 mb-4" />
                   <p className="text-slate-500">Maaf, kami tidak menemukan jawaban yang sesuai.</p>
-                  <button 
-                    onClick={() => setIsAIOpen(true)}
+                  <button
+                    onClick={() => handleAskAI()}
                     className="mt-4 text-purple-400 hover:underline font-medium"
                   >
                     Coba tanya Asisten AI kami?
@@ -372,7 +504,7 @@ export default function FAQPage() {
                   <Link href="/contact" className="btn-primary px-8">
                     Hubungi Kami
                   </Link>
-                  <button onClick={() => setIsAIOpen(true)} className="px-8 py-3 rounded-xl bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all font-medium">
+                  <button onClick={() => handleAskAI()} className="px-8 py-3 rounded-xl bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all font-medium">
                     Asisten AI
                   </button>
                 </div>
@@ -382,113 +514,7 @@ export default function FAQPage() {
         </div>
       </section>
 
-      {/* AI Chat Drawer/Modal */}
-      {isAIOpen && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-300">
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
-            onClick={() => setIsAIOpen(false)}
-          />
-          
-          <div className="relative w-full max-w-lg h-[600px] max-h-[85vh] glass-strong rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-500">
-            {/* Header */}
-            <div className="p-4 bg-gradient-to-r from-purple-600 to-cyan-500 flex items-center justify-between text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md">
-                  <Bot size={22} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm">FAQ Smart Assistant</h4>
-                  <p className="text-[10px] opacity-80 uppercase tracking-widest font-bold">Online & Ready</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setIsAIOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Chat Body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0f0a1a]/40 custom-scrollbar">
-              {aiHistory.length === 0 && (
-                <div className="text-center py-10 px-6">
-                  <Bot size={48} className="mx-auto text-purple-400/50 mb-4" />
-                  <p className="text-slate-300 font-medium mb-1">Halo! Saya asisten pintar MyLearning.</p>
-                  <p className="text-slate-500 text-xs">Tanyakan apa saja seputar platform kami, saya akan menjawab berdasarkan FAQ resmi kami.</p>
-                  
-                  <div className="mt-8 flex flex-wrap justify-center gap-2">
-                    {["Cara daftar?", "Metode bayar?", "Ada sertifikat?", "Bisa belajar di HP?"].map(suggest => (
-                      <button 
-                        key={suggest}
-                        onClick={() => {
-                          setAiMessage(suggest);
-                        }}
-                        className="text-[10px] px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-purple-500/50 transition-all"
-                      >
-                        {suggest}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {aiHistory.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in`}>
-                  <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-purple-600 text-white rounded-br-none' 
-                      : 'bg-white/10 text-slate-100 rounded-bl-none border border-white/5'
-                  }`}>
-                    {msg.role === 'assistant' ? (
-                      <article className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </article>
-                    ) : (
-                      msg.content
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {isAiLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-white/5 rounded-2xl px-4 py-3 border border-white/5 flex items-center gap-2 text-slate-400 text-sm">
-                    <Loader2 size={16} className="animate-spin text-purple-400" />
-                    <span>AI sedang berpikir...</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Input */}
-            <div className="p-4 border-t border-white/10 bg-[#0f0a1a]/80 backdrop-blur-md">
-              <form onSubmit={handleAskAI} className="flex gap-2 relative">
-                <input
-                  type="text"
-                  value={aiMessage}
-                  onChange={(e) => setAiMessage(e.target.value)}
-                  placeholder="Ketik pertanyaanmu..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-4 pr-12 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500/50 transition-all"
-                />
-                <button
-                  type="submit"
-                  disabled={isAiLoading || !aiMessage.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-purple-500 hover:text-cyan-400 disabled:text-slate-600 transition-colors"
-                >
-                  <Send size={20} />
-                </button>
-              </form>
-              <p className="text-[10px] text-slate-500 text-center mt-3">
-                Powered by Gemini Flash • Berdasarkan FAQ MyLearning
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* AI Modal removed in favor of inline result card */}
     </>
   );
 }

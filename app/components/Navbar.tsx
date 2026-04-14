@@ -7,6 +7,7 @@ import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut, User, Shield } from 
 import { useAuth } from "./AuthContext";
 import Logo from "./Logo";
 import NotificationBell from "./NotificationBell";
+import ConfirmationModal from "./ConfirmationModal";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -18,10 +19,11 @@ const navLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, isLoggedIn, isAdmin, logout } = useAuth();
+  const { user, isLoggedIn, isAdmin, isInstructor, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,8 +57,8 @@ export default function Navbar() {
   return (
     <header
       id="main-navbar"
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "glass-strong py-3 shadow-lg shadow-black/20" : "py-4 bg-transparent"
+      className={`sticky top-0 left-0 right-0 z-[90] transition-all duration-300 ${
+        scrolled ? "glass-strong py-2 shadow-lg shadow-black/20" : "py-4 bg-[#0c0c14]/50 backdrop-blur-sm"
       }`}
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -100,8 +102,12 @@ export default function Navbar() {
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors"
                   id="user-menu-button"
                 >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-xs font-bold">
-                  {initials}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden border border-white/10">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                  ) : (
+                    initials
+                  )}
                 </div>
                 <span className="text-sm text-slate-300 max-w-[120px] truncate">{user?.fullName}</span>
                 {isAdmin && <Shield size={14} className="text-amber-400" />}
@@ -128,9 +134,8 @@ export default function Navbar() {
                   </div>
                   <div className="border-t border-white/5 py-1">
                     <button
-                      onClick={async () => {
-                        await logout();
-                        setDropdownOpen(false);
+                      onClick={() => {
+                        setShowLogoutConfirm(true);
                       }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors"
                     >
@@ -184,13 +189,27 @@ export default function Navbar() {
           <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
             {isLoggedIn ? (
               <>
+                <div className="flex items-center gap-3 px-4 py-4 mb-2 bg-white/5 rounded-xl border border-white/5">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold overflow-hidden border border-white/10">
+                    {user?.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white font-bold text-sm truncate">{user?.fullName}</p>
+                    <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+                      {isAdmin ? "Administrator" : isInstructor ? "Instruktur" : "Siswa"}
+                    </p>
+                  </div>
+                </div>
                 <Link href="/dashboard" className="btn-primary w-full text-sm !py-2.5 flex items-center justify-center gap-2">
                   <LayoutDashboard size={16} /> Dashboard
                 </Link>
                 <button 
-                  onClick={async () => {
-                    await logout();
-                    setMobileOpen(false);
+                  onClick={() => {
+                    setShowLogoutConfirm(true);
                   }} 
                   className="btn-secondary w-full text-sm !py-2.5 flex items-center justify-center gap-2 text-red-400"
                 >
@@ -206,6 +225,19 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+      <ConfirmationModal 
+        isOpen={showLogoutConfirm}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin keluar dari akun MyLearning Anda?"
+        confirmLabel="Ya, Keluar"
+        onConfirm={async () => {
+          await logout();
+          setShowLogoutConfirm(false);
+          setDropdownOpen(false);
+          setMobileOpen(false);
+        }}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </header>
   );
 }

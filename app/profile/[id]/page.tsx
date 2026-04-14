@@ -44,7 +44,7 @@ export default function PublicProfilePage(props: { params: Promise<{ id: string 
     );
   }
 
-  const isInstructor = profile.role === "admin" && profile.specialization;
+  const isInstructor = (profile.role === "admin" || profile.role === "instructor") && (profile.specialization || profile.coursesTaught?.length! > 0);
 
   return (
     <div className="flex-1 bg-[#08080c]">

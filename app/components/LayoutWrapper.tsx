@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import LiveCS from "./LiveCS";
+import AnnouncementBar from "./AnnouncementBar";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -12,18 +13,22 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   if (isDashboard) {
     return (
       <>
-        {children}
+        <AnnouncementBar />
+        <div className="flex flex-col min-h-screen">
+            {children}
+        </div>
         <LiveCS />
       </>
     );
   }
 
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
+      <AnnouncementBar />
       <Navbar />
-      <main className="flex-1 pt-16">{children}</main>
+      <main className="flex-1">{children}</main>
       <Footer />
       <LiveCS />
-    </>
+    </div>
   );
 }

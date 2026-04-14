@@ -14,13 +14,19 @@ import {
   Zap,
 } from "lucide-react";
 import { formatPrice, formatNumber } from "@/lib/utils";
-import { getCourses, getPopularCourses } from "@/lib/courses";
+import { getCourses, getPopularCourses, getSystemStats } from "@/lib/courses";
 import { getLatestTestimonials, type Testimonial } from "@/lib/reviews";
+import { getActivePromotions } from "@/lib/promotions";
+import PromotionCard from "./components/PromotionCard";
 
 export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
 export default async function HomePage() {
-  const popularCourses = await getPopularCourses(8);
+  const [popularCourses, homepagePromos, stats] = await Promise.all([
+    getPopularCourses(8),
+    getActivePromotions("homepage_banner"),
+    getSystemStats()
+  ]);
   
   // Dynamic Testimonials
   const dbTestimonials = await getLatestTestimonials(15);
@@ -78,7 +84,7 @@ export default async function HomePage() {
   ];
 
   // Logic to mix and rotate
-  const baseData = dbTestimonials.length >= 6 ? dbTestimonials : fallbackTestimonials;
+  const baseData = dbTestimonials.length >= 3 ? dbTestimonials : fallbackTestimonials;
   const testimonials = [...baseData]
     .sort(() => Math.random() - 0.5)
     .slice(0, 6);
@@ -103,7 +109,7 @@ export default async function HomePage() {
             </h1>
 
             <p className="text-lg sm:text-xl text-slate-400 leading-relaxed max-w-2xl mb-8 animate-fade-in-up delay-200">
-              Akses 200+ kursus berkualitas dari instruktur berpengalaman.
+              Akses {stats.totalCourses}+ kursus berkualitas dari instruktur berpengalaman.
               Belajar kapan saja, di mana saja, dengan kurikulum yang selalu
               up-to-date.
             </p>
@@ -131,9 +137,9 @@ export default async function HomePage() {
             {/* Stats */}
             <div className="flex flex-wrap gap-8 animate-fade-in-up delay-400">
               {[
-                { icon: Users, value: "50,000+", label: "Siswa Aktif" },
-                { icon: BookOpen, value: "200+", label: "Kursus" },
-                { icon: Award, value: "50+", label: "Instruktur Ahli" },
+                { icon: Users, value: `${formatNumber(stats.totalStudents)}+`, label: "Siswa Aktif" },
+                { icon: BookOpen, value: `${stats.totalCourses}+`, label: "Kursus" },
+                { icon: Award, value: `${stats.totalInstructors}+`, label: "Instruktur Ahli" },
               ].map((stat) => (
                 <div key={stat.label} className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
@@ -263,6 +269,19 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ===== PROMOTION SECTION ===== */}
+      {homepagePromos.length > 0 && (
+        <section className="py-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="space-y-10">
+              {homepagePromos.map((promo, index) => (
+                <PromotionCard key={promo.id} promotion={promo} variant="banner" priorityLabel={index === 0} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== WHY CHOOSE US ===== */}
       <section className="py-20 grid-pattern relative">
@@ -420,7 +439,7 @@ export default async function HomePage() {
                 <span className="gradient-text">Mulai Belajar</span>?
               </h2>
               <p className="text-slate-400 text-lg max-w-xl mx-auto mb-8">
-                Bergabunglah dengan ribuan siswa yang telah meningkatkan skill
+                Bergabunglah dengan {formatNumber(stats.totalStudents)}+ siswa yang telah meningkatkan skill
                 dan karir mereka bersama MyLearning.
               </p>
               <Link

@@ -3,15 +3,17 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/app/components/AuthContext";
 import { getActiveEnrollment, getUserEnrollments, getAllEnrollmentsAdmin, getRemainingDays, getContactMessages, getContactMessageStats } from "@/lib/enrollment";
+import { getActivePromotions, type Promotion } from "@/lib/promotions";
 import { getAllRegisteredUsers, getUserCount, type SafeUser } from "@/lib/auth";
 import { getCourses, getCourseCount } from "@/lib/courses";
 import { getLevelLabel, type Enrollment } from "@/lib/enrollment";
 import Link from "next/link";
-import { BookOpen, Users, Award, Clock, TrendingUp, AlertTriangle, ArrowRight, CheckCircle, XCircle, MessageSquare, Loader2 } from "lucide-react";
+import { BookOpen, Users, Award, Clock, TrendingUp, AlertTriangle, ArrowRight, CheckCircle, XCircle, MessageSquare, Loader2, Megaphone } from "lucide-react";
 import Skeleton, { SkeletonCircle } from "../components/ui/Skeleton";
 import InstructorDashboard from "../components/InstructorDashboard";
 import ErrorState from "../components/ui/ErrorState";
 import SignatureManager from "../components/SignatureManager";
+import PromotionCard from "../components/PromotionCard";
 
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
@@ -24,23 +26,27 @@ export default function DashboardPage() {
 }
 
 function UserDashboard({ userId, userName }: { userId: string; userName: string }) {
+  const { user } = useAuth();
   const [activeEnrollment, setActiveEnrollment] = useState<Enrollment | null>(null);
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
   const [courseCount, setCourseCount] = useState(0);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [active, all, count] = await Promise.all([
+      const [active, all, count, promos] = await Promise.all([
         getActiveEnrollment(userId),
         getUserEnrollments(userId),
-        getCourseCount()
+        getCourseCount(),
+        getActivePromotions("dashboard_card")
       ]);
       setActiveEnrollment(active);
       setAllEnrollments(all);
       setCourseCount(count);
+      setPromotions(promos);
     } catch (err: any) {
       console.error("Dashboard error:", err);
       setError("Gagal memuat data dashboard. Silakan coba lagi nanti.");
@@ -90,14 +96,30 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
   const expired = allEnrollments.filter((e) => e.status === "expired").length;
   const remaining = activeEnrollment ? getRemainingDays(activeEnrollment) : 0;
 
+  const initials = userName
+    .split(" ")
+    .map((n) => n[0])
+    .join("");
+
   return (
     <div className="max-w-5xl space-y-8 animate-fade-in">
       {/* Welcome */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">
-          Selamat Datang, <span className="gradient-text">{userName.split(" ")[0]}</span>! 👋
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">Lihat progress belajar Anda hari ini</p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-400 p-0.5 shadow-xl shadow-purple-500/10">
+          <div className="w-full h-full rounded-2xl overflow-hidden bg-slate-900 flex items-center justify-center border-2 border-[#0f0f1a]">
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={userName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xl font-bold text-white">{initials}</span>
+            )}
+          </div>
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Selamat Datang, <span className="gradient-text">{userName.split(" ")[0]}</span>! 👋
+          </h1>
+          <p className="text-slate-400 text-sm">Lihat progress belajar Anda hari ini</p>
+        </div>
       </div>
 
       {/* Stats */}
@@ -181,6 +203,21 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
           </div>
         </Link>
       </div>
+
+      {/* Promotions spotlight */}
+      {promotions.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-4 bg-purple-500 rounded-full" />
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Penawaran Khusus</h2>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {promotions.map((promo) => (
+              <PromotionCard key={promo.id} promotion={promo} variant="card" />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -268,6 +305,14 @@ function AdminDashboard({ userId }: { userId: string }) {
           <p className="text-slate-400 text-sm mt-1">Overview & Real-time Platform Statistics</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/dashboard/admin/ad-requests" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-purple-500/30">
+            <Megaphone size={14} className="group-hover:scale-110 transition-transform text-purple-400" />
+            Antrian Iklan
+          </Link>
+          <Link href="/dashboard/admin/promotions" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
+            <Megaphone size={14} className="group-hover:scale-110 transition-transform" />
+            Kelola Aktif
+          </Link>
           <Link href="/dashboard/admin/courses" className="btn-primary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
             <BookOpen size={14} className="group-hover:scale-110 transition-transform" />
             Manajemen Kursus

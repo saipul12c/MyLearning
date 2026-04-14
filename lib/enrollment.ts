@@ -4,7 +4,7 @@
 
 import { supabase } from "./supabase";
 import { createNotification, notifyAdmins } from "./notifications";
-import { incrementVoucherUsage } from "./vouchers";
+import { incrementVoucherUsage, validateVoucher, Voucher } from "./vouchers";
 
 export type EnrollmentStatus = "pending" | "waiting_verification" | "active" | "paid" | "completed" | "expired" | "rejected" | "failed" | "refunded";
 
@@ -78,6 +78,11 @@ export interface Enrollment {
   // Admin-only fields (joined from user_profiles)
   userName?: string;
   userAvatarUrl?: string;
+  // Revision fields
+  certificateRevisionStatus?: "pending" | "approved" | "rejected";
+  certificateRevisionCount?: number;
+  certificateRevisionNotes?: string;
+  certificateIssuedAt?: string;
 }
 
 export interface ContactMessage {
@@ -163,20 +168,53 @@ export async function enrollCourse(
       };
     }
 
-    // 3. Create New Enrollment
-    const totalItems = totalLessons + totalAssessmentItems;
-    const expiryDays = getExpiryDays(level);
-
-    // Fetch course_id from courses table to satisfy NOT NULL constraint
+    // 3. Fetch course data and validate price/vouchers server-side
     const { data: courseData, error: courseError } = await supabase
       .from("courses")
-      .select("id")
+      .select("id, price, instructor_id")
       .eq("slug", courseSlug)
       .maybeSingle();
 
     if (courseError || !courseData) {
       return { success: false, error: "Kursus tidak ditemukan di sistem." };
     }
+
+    let finalPaymentAmount = courseData.price;
+    let finalDiscountAmount = 0;
+    let validatedVoucher: Voucher | undefined;
+
+    // Server-side voucher validation
+    if (voucherId) {
+      // We need the voucher code first
+      const { data: vData } = await supabase.from("vouchers").select("code").eq("id", voucherId).single();
+      if (vData) {
+        const valRes = await validateVoucher(
+          vData.code, 
+          courseData.id, 
+          courseData.instructor_id, 
+          courseData.price, 
+          userId
+        );
+        
+        if (!valRes.success) {
+          return { success: false, error: `Voucher tidak valid: ${valRes.error}` };
+        }
+        
+        finalDiscountAmount = valRes.discountAmount || 0;
+        finalPaymentAmount = courseData.price - finalDiscountAmount;
+        validatedVoucher = valRes.voucher;
+      }
+    }
+
+    // Ensure price is never negative
+    if (finalPaymentAmount < 0) finalPaymentAmount = 0;
+    
+    // Check if free (either base price is 0 or discount makes it 0)
+    const isActuallyFree = finalPaymentAmount === 0;
+
+    // 4. Create New Enrollment
+    const totalItems = totalLessons + totalAssessmentItems;
+    const expiryDays = getExpiryDays(level);
 
     const { data, error } = await supabase
       .from("enrollments")
@@ -185,24 +223,24 @@ export async function enrollCourse(
         course_id: courseData.id,
         course_slug: courseSlug,
         course_title: courseTitle,
-        payment_status: isFree ? "paid" : "pending",
+        payment_status: isActuallyFree ? "paid" : "pending",
         progress_percentage: 0,
         expiry_days: expiryDays,
         total_lessons: totalLessons,
         total_items: totalItems,
         final_project_completed: false,
-        payment_amount: paymentAmount,
-        voucher_id: voucherId,
-        discount_amount: discountAmount,
+        payment_amount: finalPaymentAmount,
+        voucher_id: validatedVoucher?.id,
+        discount_amount: finalDiscountAmount,
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    // Increment voucher usage if free enrollment and voucher used
-    if (isFree && voucherId && data) {
-      await incrementVoucherUsage(voucherId, userId, data.id);
+    // Increment voucher usage immediately if free
+    if (isActuallyFree && validatedVoucher && data) {
+      await incrementVoucherUsage(validatedVoucher.id, userId, data.id);
     }
 
     return { success: true, enrollment: mapDbToEnrollment(data) };
@@ -247,7 +285,7 @@ export async function uploadPaymentProof(
 export async function updateEnrollmentPrice(
   enrollmentId: string,
   paymentAmount: number,
-  voucherId: string,
+  voucherId: string | null,
   discountAmount: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -265,6 +303,16 @@ export async function updateEnrollmentPrice(
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Removes applied voucher from enrollment and restores original price
+ */
+export async function removeVoucherFromEnrollment(
+  enrollmentId: string,
+  originalPrice: number
+): Promise<{ success: boolean; error?: string }> {
+  return updateEnrollmentPrice(enrollmentId, originalPrice, null, 0);
 }
 
 export async function verifyPayment(
@@ -313,7 +361,23 @@ export async function verifyPayment(
 
     // Increment voucher usage if applicable
     if (approve && enr.voucher_id) {
-        await incrementVoucherUsage(enr.voucher_id, enr.user_id, enrollmentId);
+        // RE-VALIDATE: Ensure voucher hasn't expired or hit limit while waiting
+        const { data: vData } = await supabase.from("vouchers").select("code").eq("id", enr.voucher_id).single();
+        if (vData) {
+          const { data: course } = await supabase.from("courses").select("instructor_id").eq("id", enr.course_id).single();
+          const val = await validateVoucher(vData.code, enr.course_id, course?.instructor_id, enr.payment_amount + enr.discount_amount, enr.user_id);
+          
+          if (!val.success) {
+            // If validation fails now, we still consider payment approved but log the error
+            console.warn(`Voucher ${vData.code} no longer valid during verification: ${val.error}`);
+            // Optionally: notify admin or revert discount (though reverting is complex after payment)
+          } else {
+            const res = await incrementVoucherUsage(enr.voucher_id, enr.user_id, enrollmentId);
+            if (!res.success) {
+              console.error(`Failed to increment voucher usage: ${res.error}`);
+            }
+          }
+        }
     }
 
     // Trigger Notification for Student
@@ -341,6 +405,13 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
         *,
         courses (
           instructor_id
+        ),
+        certificates (
+          id,
+          revision_status,
+          revision_count,
+          admin_notes,
+          issued_at
         )
       `)
       .eq("user_id", userId)
@@ -398,7 +469,14 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
       const assignments = assignmentProgressMap[enr.id] || { ids: [], subs: [] };
       
       return mapDbToEnrollment(
-        { ...enr, instructor_id: (enr as any).courses?.instructor_id }, 
+        { 
+          ...enr, 
+          instructor_id: (enr as any).courses?.instructor_id,
+          certificate_revision_status: (enr as any).certificates?.revision_status,
+          certificate_revision_count: (enr as any).certificates?.revision_count,
+          certificate_revision_notes: (enr as any).certificates?.admin_notes,
+          certificate_issued_at: (enr as any).certificates?.issued_at
+        }, 
         lessons, 
         quizzes, 
         assignments.ids, 
@@ -440,6 +518,7 @@ export async function getAllEnrollmentsAdmin(
       .from("enrollments")
       .select(`
         *,
+        voucher:vouchers(code),
         user:user_profiles (full_name, avatar_url)
       `, { count: 'exact' });
 
@@ -647,7 +726,9 @@ async function updateEnrollmentProgress(enrollmentId: string) {
   // Fetch fresh data from Supabase. 
   // The progress_percentage column is automatically calculated by PostgreSQL triggers 
   // (trigger_update_progress_*) whenever lesson_progress, quiz_progress, or assignment_progress changes.
-  // Fetch fresh data from Supabase with user info
+  // The certificate generation and status upgrade to 'completed' is also handled by 
+  // the DB trigger 'trg_auto_generate_certificate' in 11_certificates_fixed.sql.
+  
   const { data: enr, error: fetchError } = await supabase
     .from("enrollments")
     .select("*, user:user_profiles(full_name), course:courses(instructors(name, signature_id))")
@@ -658,75 +739,21 @@ async function updateEnrollmentProgress(enrollmentId: string) {
   
   const percentage = Number(enr.progress_percentage || 0);
   
-  // Handle Side Effects: Completion & Certificate
-  // Only trigger this if we reached 100% and it hasn't been completed yet
-  if (percentage >= 100 && enr.payment_status === 'paid') {
-    const year = new Date().getFullYear();
-    // Use part of enrollment ID to ensure uniqueness and prevent collisions
-    const shortId = enrollmentId.split('-')[0].toUpperCase();
-    const randomHex = () => Math.random().toString(16).substring(2, 6).toUpperCase();
-    const newCertId = `ML-${year}-${shortId}-${randomHex()}`;
-    const completedAt = new Date().toISOString();
-    
-    // validUntil = 2 years exactly
-    const validUntil = new Date();
-    validUntil.setFullYear(validUntil.getFullYear() + 2);
+  // Handle Side Effects: Notifications
+  // We check if it's now 'completed' (which was set by the DB trigger)
+  // and if we haven't sent the notification yet.
+  if (percentage >= 100 && enr.payment_status === 'completed') {
+    // Cleanup old certificates for this course/user (Max 3, Max 6 years)
+    await cleanupExpiredCertificates(enr.user_id, enr.course_id);
 
-    const { error: updateError } = await supabase
-      .from("enrollments")
-      .update({
-        payment_status: "completed",
-        completed_at: completedAt,
-        certificate_id: newCertId,
-        certificate_valid_until: validUntil.toISOString()
-      })
-      .eq("id", enrollmentId);
-    
-    if (!updateError) {
-      // Write to certificates table
-      // Note: We remove uniqueness check for enrollment_id at application level to allow history
-      // Write to certificates table (Allow History)
-      const userData: any = enr.user;
-      const courseData: any = enr.course;
-      const rawInstructor = courseData?.instructors;
-      const instructorName = (Array.isArray(rawInstructor) ? rawInstructor[0]?.name : rawInstructor?.name) || "Instruktur MyLearning";
-      const instructorSignatureId = Array.isArray(rawInstructor) ? rawInstructor[0]?.signature_id : rawInstructor?.signature_id;
-
-      // Get any admin signature as platform signature
-      const { data: adminProfile } = await supabase
-          .from("user_profiles")
-          .select("signature_id")
-          .eq("role", "admin")
-          .not("signature_id", "is", null)
-          .order("signature_last_updated", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-      await supabase.from("certificates").insert({
-          enrollment_id: enrollmentId,
-          user_id: enr.user_id,
-          course_id: enr.course_id,
-          certificate_number: newCertId,
-          course_title: enr.course_title,
-          issued_at: completedAt,
-          instructor_name: instructorName,
-          user_name: userData?.full_name || "Siswa MyLearning",
-          instructor_signature_id: instructorSignatureId,
-          admin_signature_id: adminProfile?.signature_id
-      });
-
-      // Cleanup old certificates for this course/user (Max 3, Max 6 years)
-      await cleanupExpiredCertificates(enr.user_id, enr.course_id);
-
-      // Trigger Notification for Student
-      await createNotification({
-          userId: enr.user_id,
-          title: "Kursus Selesai! 🎉",
-          message: `Selamat! Anda telah menyelesaikan kursus "${enr.course_title}". Sertifikat Anda sudah tersedia.`,
-          type: 'success',
-          linkUrl: `/dashboard/my-courses`
-      });
-    }
+    // Trigger Notification for Student
+    await createNotification({
+        userId: enr.user_id,
+        title: "Kursus Selesai! 🎉",
+        message: `Selamat! Anda telah menyelesaikan kursus "${enr.course_title}". Sertifikat Anda sudah tersedia.`,
+        type: 'success',
+        linkUrl: `/dashboard/my-courses`
+    });
   }
 }
 
@@ -911,7 +938,13 @@ function mapDbToEnrollment(
     paymentRetryCount: db.payment_retry_count || 0,
     paymentAmount: db.payment_amount || 0,
     voucherId: db.voucher_id,
-    discountAmount: db.discount_amount || 0
+    discountAmount: db.discount_amount || 0,
+    userName: db.user?.full_name,
+    userAvatarUrl: db.user?.avatar_url,
+    certificateRevisionStatus: db.certificate_revision_status,
+    certificateRevisionCount: db.certificate_revision_count,
+    certificateRevisionNotes: db.certificate_revision_notes || db.admin_notes, // Fallback to either name
+    certificateIssuedAt: db.certificate_issued_at,
   };
 }
 

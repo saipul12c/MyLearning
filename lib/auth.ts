@@ -181,6 +181,10 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
 }
 
 export async function getPublicUser(userId: string): Promise<SafeUser | null> {
+  // Validate if userId is a valid UUID before querying to avoid Postgres error 22P02
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId);
+  if (!isUUID) return null;
+
   const { data: profile, error } = await supabase
     .from("user_profiles")
     .select("*")

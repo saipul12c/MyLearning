@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, Save, Loader2, Plus, Trash2, CheckCircle, AlertCircle, 
+  ArrowLeft, Save, Loader2, Plus, Trash2, CheckCircle, AlertCircle, Check, 
   Image as ImageIcon, Play, FileText, ChevronUp, ChevronDown, Edit, X, Eye,
   Brain, Target, Upload, Info, BookOpen, Clock, Settings, List, Award, Timer, HelpCircle,
   Type, ListOrdered, Bold, Italic, Link2, Code, Heading1, Heading2, Sparkles
@@ -132,6 +132,7 @@ export default function CourseForm({ courseId }: Props) {
 
   const [isReordering, setIsReordering] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [initialInstructorId, setInitialInstructorId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadResources() {
@@ -175,6 +176,7 @@ export default function CourseForm({ courseId }: Props) {
               requirements: course.requirements || [""],
               lessons: course.lessons || []
             });
+            setInitialInstructorId(course.instructor_id);
             
             const realAssessments = await getCourseAssessments(course.slug);
             if (realAssessments) setAssessments(realAssessments);
@@ -486,7 +488,12 @@ export default function CourseForm({ courseId }: Props) {
                       disabled={isInstructor && !isAdmin}
                     >
                        <option value="">Pilih Instruktur</option>
-                       {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                       {instructors.map(i => (
+                         <option key={i.id} value={i.id}>
+                           {i.name} {i.id === initialInstructorId ? "(Penulis Asli)" : ""}
+                         </option>
+                       ))}
+
                     </select>
                  </div>
               </div>
@@ -539,12 +546,17 @@ export default function CourseForm({ courseId }: Props) {
               {formData.thumbnail && <img src={formData.thumbnail} className="w-full h-48 object-cover rounded-xl border border-white/10" />}
            </div>
 
-           {/* Description Card */}
-           <div className="card p-8 space-y-6">
-              <h2 className="text-lg font-bold text-white">Konten Deskripsi</h2>
-              <textarea className="input w-full h-24" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Deskripsi Singkat" />
-              <textarea className="input w-full h-48 font-mono text-sm" value={formData.detailedDescription} onChange={e => setFormData({...formData, detailedDescription: e.target.value})} placeholder="Deskripsi Detail (Markdown)" />
-           </div>
+            <div className="card p-8 space-y-6">
+               <h2 className="text-lg font-bold text-white">Konten Deskripsi</h2>
+               <div className="space-y-2">
+                 <textarea className="input w-full h-24" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Deskripsi Singkat" />
+                 <p className="text-[10px] text-slate-500 px-1">Ringkasan materi (maks 200 karakter) yang muncul di kartu kursus.</p>
+               </div>
+               <div className="space-y-2">
+                 <textarea className="input w-full h-48 font-mono text-sm" value={formData.detailedDescription} onChange={e => setFormData({...formData, detailedDescription: e.target.value})} placeholder="Deskripsi Detail (Markdown)" />
+                 <p className="text-[10px] text-slate-500 px-1 italic">Mendukung format Markdown untuk penulisan kurikulum dan poin-poin penting.</p>
+               </div>
+            </div>
         </div>
       )}
 
@@ -1056,18 +1068,38 @@ export default function CourseForm({ courseId }: Props) {
                            </div>
                            <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1.5">
-                                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Tipe</label>
+                                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 text-slate-500">Tipe</label>
                                  <div className="input-premium w-full !bg-white/10 text-slate-400 flex items-center gap-2 capitalize">
                                     <Brain size={14} /> {assessmentModal.type.replace('_', ' ')}
                                  </div>
                               </div>
-                              <div className="space-y-1.5 flex items-end">
-                                 <label className="flex items-center gap-3 w-full p-3.5 rounded-xl border border-white/5 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors">
-                                    <input type="checkbox" className="w-4 h-4 rounded border-white/10 bg-white/5 text-purple-500 focus:ring-purple-500/50" defaultChecked={assessmentModal.data?.is_required !== false} onChange={e => assessmentModal.data = {...assessmentModal.data, is_required: e.target.checked}} />
-                                    <span className="text-sm font-bold text-white">Wajib Dikerjakan</span>
-                                 </label>
+                              <div className="space-y-1.5">
+                                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 text-slate-500">Materi Terkait</label>
+                                 <select 
+                                   className="input-premium w-full !bg-white/5 text-sm" 
+                                   defaultValue={assessmentModal.data?.lesson_id || ""} 
+                                   onChange={e => assessmentModal.data = {...assessmentModal.data, lesson_id: e.target.value || null}}
+                                 >
+                                   <option value="">-- Akhir Pembelajaran --</option>
+                                   {formData.lessons.map(l => (
+                                     <option key={l.id} value={l.id}>{l.title}</option>
+                                   ))}
+                                 </select>
                               </div>
                            </div>
+                           <div className="space-y-1.5 pt-2">
+                              <label className="flex items-center gap-3 w-full p-4 rounded-2xl border border-white/5 bg-white/5 cursor-pointer hover:bg-white/10 transition-all group">
+                                 <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${assessmentModal.data?.is_required !== false ? 'bg-purple-500 border-purple-500 shadow-lg shadow-purple-500/20' : 'border-white/20 group-hover:border-white/40'}`}>
+                                    <input type="checkbox" className="hidden" defaultChecked={assessmentModal.data?.is_required !== false} onChange={e => assessmentModal.data = {...assessmentModal.data, is_required: e.target.checked}} />
+                                    {assessmentModal.data?.is_required !== false && <Check size={12} className="text-white" strokeWidth={4} />}
+                                 </div>
+                                 <div className="flex flex-col">
+                                   <span className="text-sm font-bold text-white">Wajib Dikerjakan</span>
+                                   <span className="text-[10px] text-slate-500 font-medium">Siswa harus menyelesaikan ini untuk lulus kursus.</span>
+                                 </div>
+                              </label>
+                           </div>
+
                         </div>
                      </div>
                   ) : (

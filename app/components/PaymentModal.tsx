@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight } from "lucide-react";
 import Image from "next/image";
-import { Enrollment, uploadPaymentProof, updateEnrollmentPrice } from "@/lib/enrollment";
+import { Enrollment, uploadPaymentProof, updateEnrollmentPrice, removeVoucherFromEnrollment } from "@/lib/enrollment";
 import { validateVoucher, Voucher } from "@/lib/vouchers";
 import { formatPrice } from "@/lib/utils";
 
@@ -56,6 +56,19 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
       setAppliedVoucher(null);
       setDiscountAmount(0);
       setFinalPrice(initialPrice);
+    }
+  };
+
+  const handleRemoveVoucher = async () => {
+    setError(null);
+    const res = await removeVoucherFromEnrollment(enrollment.id, initialPrice);
+    if (res.success) {
+      setAppliedVoucher(null);
+      setDiscountAmount(0);
+      setFinalPrice(initialPrice);
+      setVoucherCode("");
+    } else {
+      setError("Gagal menghapus voucher.");
     }
   };
 
@@ -193,9 +206,22 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
                     </button>
                   </div>
                   {appliedVoucher && (
-                    <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 pl-1">
-                      <CheckCircle2 size={10} /> Voucher berhasil diterapkan: Potongan {formatPrice(discountAmount)}
-                    </p>
+                    <div className="space-y-1 pl-1">
+                      <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                        <CheckCircle2 size={10} /> Voucher berhasil diterapkan: Potongan {formatPrice(discountAmount)}
+                        <button 
+                          onClick={handleRemoveVoucher}
+                          className="ml-2 text-red-400 hover:text-red-300 underline cursor-pointer"
+                        >
+                          Hapus
+                        </button>
+                      </p>
+                      {appliedVoucher.discountType === 'percentage' && appliedVoucher.maxDiscount > 0 && discountAmount >= appliedVoucher.maxDiscount && (
+                        <p className="text-[9px] text-amber-400/80 italic">
+                          * Terkena batas maksimal potongan {formatPrice(appliedVoucher.maxDiscount)}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 

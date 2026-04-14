@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { X, ArrowRight, ArrowLeft, CheckCircle, XCircle, RotateCcw, Award } from "lucide-react";
+import { useState, useEffect } from "react";
+import Image from "next/image";
+import { X, ArrowRight, ArrowLeft, CheckCircle, XCircle, RotateCcw, Award, Sparkles } from "lucide-react";
 import type { Quiz } from "@/lib/assessments";
+import { getActivePromotions, Promotion, trackImpression } from "@/lib/promotions";
+import PromotionCard from "./PromotionCard";
 
 interface QuizModalProps {
   quiz: Quiz;
@@ -19,6 +22,8 @@ export default function QuizModal({ quiz, enrollmentId, alreadyPassed, previousS
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [passed, setPassed] = useState(false);
+  const [successPromo, setSuccessPromo] = useState<Promotion | null>(null);
+  const [hasTracked, setHasTracked] = useState(false);
 
   const question = quiz.questions[currentQ];
   const allAnswered = answers.every((a) => a !== -1);
@@ -43,7 +48,24 @@ export default function QuizModal({ quiz, enrollmentId, alreadyPassed, previousS
     setCurrentQ(0);
     setScore(0);
     setPassed(false);
+    setSuccessPromo(null);
+    setHasTracked(false);
   };
+
+  useEffect(() => {
+    if (submitted && passed) {
+      getActivePromotions("quiz_success").then(promos => {
+        if (promos.length > 0) setSuccessPromo(promos[0]);
+      });
+    }
+  }, [submitted, passed]);
+
+  useEffect(() => {
+    if (successPromo && !hasTracked) {
+      trackImpression(successPromo.id);
+      setHasTracked(true);
+    }
+  }, [successPromo, hasTracked]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -171,6 +193,35 @@ export default function QuizModal({ quiz, enrollmentId, alreadyPassed, previousS
                 );
               })}
             </div>
+
+            {/* Reward Ad for Successful Quiz */}
+            {passed && successPromo && (
+                <div className="mb-8 p-1 rounded-[2rem] bg-gradient-to-r from-amber-500/20 to-purple-500/20 border border-white/10 animate-fade-in group">
+                    <div className="p-6 bg-[#0c0c14] rounded-[1.8rem] space-y-4">
+                        <div className="flex items-center gap-2 text-amber-500 text-[10px] font-black uppercase tracking-widest">
+                            <Sparkles size={12} /> Hadiah Spesial Untukmu
+                        </div>
+                        <div className="flex flex-col md:flex-row items-center gap-6">
+                            {successPromo.imageUrl && (
+                                <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-white/5 shadow-xl">
+                                    <Image src={successPromo.imageUrl} alt={successPromo.title} fill className="object-cover" />
+                                </div>
+                            )}
+                            <div className="flex-1 text-center md:text-left">
+                                <h4 className="text-white font-bold">{successPromo.title}</h4>
+                                <p className="text-slate-500 text-xs mt-1 italic">{successPromo.description}</p>
+                                <a 
+                                    href={successPromo.linkUrl} 
+                                    target={successPromo.isExternal ? "_blank" : "_self"}
+                                    className="inline-flex items-center gap-1.5 text-[10px] font-black text-purple-400 hover:text-purple-300 transition-all uppercase tracking-widest mt-3"
+                                >
+                                    Ambil Sekarang <ArrowRight size={12} />
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex items-center justify-center gap-3">
               {!passed && (

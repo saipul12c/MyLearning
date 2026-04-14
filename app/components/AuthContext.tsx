@@ -87,16 +87,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   }, [refreshUser]);
 
-  // Heartbeat for online status
+  // Heartbeat for online status & Real-time Profile Listener
   useEffect(() => {
     if (!user) return;
 
-    // Set online immediately
+    // 1. Online Status Heartbeat
     updateOnlineStatus(user.id, true);
-
-    const interval = setInterval(() => {
+    const statusInterval = setInterval(() => {
       updateOnlineStatus(user.id, true);
-    }, 60000); // Every minute
+    }, 60000); 
+
+    // 2. Real-time Profile Refresh
+    // This ensures that updates (like avatar changed) from other tabs/devices
+    // reflect immediately without a manual refresh
+    const profileChannel = supabase
+      .channel(`profile-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          console.log("Real-time profile update received:", payload);
+          await refreshUser();
+        }
+      )
+      .subscribe();
+
+    // 3. Real-time Enrollment Listener
+    // This ensures that if an Admin approves a payment or updates progress
+    // the dashboard updates instantly
+    const enrollmentChannel = supabase
+      .channel(`enrollments-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'enrollments',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          console.log("Real-time enrollment update received:", payload);
+          // If we are in a dashboard page, the page state might need a refresh
+          // or we can trigger a global refresh here too
+          await refreshUser();
+        }
+      )
+      .subscribe();
 
     const handleOffline = () => {
       updateOnlineStatus(user.id, false);
@@ -105,11 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener("beforeunload", handleOffline);
     
     return () => {
-      clearInterval(interval);
+      clearInterval(statusInterval);
+      supabase.removeChannel(profileChannel);
+      supabase.removeChannel(enrollmentChannel);
       handleOffline();
       window.removeEventListener("beforeunload", handleOffline);
     };
-  }, [user]);
+  }, [user, refreshUser]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);

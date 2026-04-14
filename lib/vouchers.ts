@@ -11,6 +11,7 @@ export interface Voucher {
   usageLimit: number;
   usedCount: number;
   expiryDate?: string;
+  maxDiscount: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -20,73 +21,27 @@ export async function validateVoucher(
   courseId: string, 
   instructorId: string,
   price: number,
-  userId?: string // Optional for guest check, mandatory for personal limit check
+  userId?: string
 ): Promise<{ success: boolean; discountAmount?: number; voucher?: Voucher; error?: string }> {
   try {
-    const { data: voucher, error } = await supabase
-      .from("vouchers")
-      .select("*")
-      .eq("code", code)
-      .eq("is_active", true)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("validate_voucher_optimized", {
+      p_code: code,
+      p_course_id: courseId,
+      p_instructor_id: instructorId,
+      p_price: price,
+      p_user_id: userId
+    });
 
     if (error) throw error;
-    if (!voucher) return { success: false, error: "Kode voucher tidak valid atau sudah tidak aktif." };
-
-    // 1. Expiry Check
-    if (voucher.expiry_date && new Date(voucher.expiry_date) < new Date()) {
-      return { success: false, error: "Kode voucher sudah kadaluarsa." };
+    
+    if (!data.success) {
+      return { success: false, error: data.error };
     }
-
-    // 2. Usage Limit Check (Global)
-    if (voucher.usage_limit > 0 && voucher.used_count >= voucher.usage_limit) {
-      return { success: false, error: "Kuota voucher sudah habis." };
-    }
-
-    // 3. User Specific Limit Check (New)
-    if (userId) {
-      const { data: usage } = await supabase
-        .from("voucher_usage")
-        .select("id")
-        .eq("voucher_id", voucher.id)
-        .eq("user_id", userId)
-        .maybeSingle();
-      
-      if (usage) {
-        return { success: false, error: "Anda sudah pernah menggunakan kode voucher ini." };
-      }
-    }
-
-    // 4. Min Purchase Check
-    if (voucher.min_purchase > 0 && price < voucher.min_purchase) {
-      return { success: false, error: `Minimal pembelian untuk voucher ini adalah Rp ${voucher.min_purchase.toLocaleString('id-ID')}` };
-    }
-
-    // 5. Scope Check (Course)
-    if (voucher.course_id && voucher.course_id !== courseId) {
-      return { success: false, error: "Voucher ini tidak berlaku untuk kursus ini." };
-    }
-
-    // 6. Scope Check (Instructor)
-    if (voucher.instructor_id && voucher.instructor_id !== instructorId) {
-      return { success: false, error: "Voucher ini tidak berlaku untuk kursus dari instruktur ini." };
-    }
-
-    // Calculate Discount
-    let discountAmount = 0;
-    if (voucher.discount_type === 'percentage') {
-      discountAmount = Math.floor((price * voucher.discount_value) / 100);
-    } else {
-      discountAmount = voucher.discount_value;
-    }
-
-    // Ensure discount doesn't exceed price
-    discountAmount = Math.min(discountAmount, price);
 
     return { 
       success: true, 
-      discountAmount, 
-      voucher: mapDbToVoucher(voucher) 
+      discountAmount: data.discount_amount, 
+      voucher: mapDbToVoucher(data.voucher) 
     };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -172,6 +127,7 @@ function mapDbToVoucher(v: any): Voucher {
     usageLimit: v.usage_limit,
     usedCount: v.used_count,
     expiryDate: v.expiry_date,
+    maxDiscount: v.max_discount || 0,
     isActive: v.is_active,
     createdAt: v.created_at
   };

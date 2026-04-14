@@ -39,7 +39,7 @@ export async function getInstructorCourses(userId: string): Promise<Course[]> {
       total_lessons, rating, total_reviews, total_students,
       is_published, is_featured, created_at, updated_at,
       learning_points, requirements,
-      categories(name, slug),
+      categories(id, name, slug),
       instructors(name, slug, avatar_url, website_url, linkedin_url)
     `)
     .eq("instructor_id", profile.id)
@@ -61,6 +61,7 @@ export async function getInstructorCourses(userId: string): Promise<Course[]> {
     price: db.price,
     discountPrice: db.discount_price,
     category: db.categories?.name || "",
+    categoryId: db.categories?.id || "",
     categorySlug: db.categories?.slug || "",
     instructor: db.instructors?.name || "",
     instructorId: db.instructors?.slug || "",

@@ -6,7 +6,7 @@ import Image from "next/image";
 import { 
   Star, Users, Clock, Globe, ChevronRight, CheckCircle, 
   PlayCircle, Brain, FileText, Target, BarChart3, Award, 
-  Lock, Infinity, BookOpen 
+  Lock, Infinity, BookOpen, Tag 
 } from "lucide-react";
 import { type Course, type Lesson } from "@/lib/data";
 import { formatPrice, formatNumber, formatDuration } from "@/lib/utils";
@@ -14,6 +14,8 @@ import { getCourseAssessments, type CourseAssessments } from "@/lib/assessments"
 import CourseEnrollButton from "./CourseEnrollButton";
 import PreviewModal from "@/app/components/PreviewModal";
 import ReviewSection from "@/app/components/ReviewSection";
+import { getActivePromotions, type Promotion } from "@/lib/promotions";
+import PromotionCard from "@/app/components/PromotionCard";
 
 interface CourseDetailClientProps {
   course: Course;
@@ -22,13 +24,33 @@ interface CourseDetailClientProps {
 export default function CourseDetailClient({ course }: CourseDetailClientProps) {
   const [selectedPreview, setSelectedPreview] = useState<Lesson | null>(null);
   const [assessments, setAssessments] = useState<CourseAssessments | null>(null);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+
+  const freeLessons = (course.lessons || []).filter(l => l.isFreePreview);
+  const allPreviews = course.previewVideoUrl 
+    ? [
+        {
+          id: "course-preview",
+          title: "Cuplikan Kursus",
+          videoUrl: course.previewVideoUrl,
+          durationMinutes: 0,
+          isFreePreview: true,
+          description: "Tonton cuplikan singkat materi apa saja yang akan Anda pelajari dalam kursus ini."
+        } as Lesson,
+        ...freeLessons
+      ]
+    : freeLessons;
   
   useEffect(() => {
-    async function loadAssessments() {
-      const data = await getCourseAssessments(course.slug);
-      setAssessments(data);
+    async function loadData() {
+      const [assessmentsData, promosData] = await Promise.all([
+        getCourseAssessments(course.slug),
+        getActivePromotions("course_sidebar", course.categoryId)
+      ]);
+      setAssessments(assessmentsData);
+      setPromotions(promosData);
     }
-    loadAssessments();
+    loadData();
   }, [course.slug]);
 
   const liveStats = {
@@ -260,11 +282,46 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                         {assessments?.finalProject && <div className="flex items-center gap-3 text-slate-400"><Target size={16} className="text-emerald-400 flex-shrink-0" /><span>1 Proyek Akhir</span></div>}
                         <div className="flex items-center gap-3 text-slate-400"><Infinity size={16} className="text-blue-400 flex-shrink-0" /><span>Akses seumur hidup</span></div>
                         <div className="flex items-center gap-3 text-slate-400"><BarChart3 size={16} className="text-orange-400 flex-shrink-0" /><span>Level: {course.level}</span></div>
-                        <div className="flex items-center gap-3 text-slate-400"><Award size={16} className="text-amber-400 flex-shrink-0" /><span>Sertifikat penyelesaian</span></div>
+                        <div className="flex items-center gap-3 text-slate-400"><Award size={16} className="text-amber-400 flex-shrink-0" /><span className="truncate">Sertifikat penyelesaian</span></div>
                       </div>
                     </div>
+
+                    {/* Available Vouchers Section */}
+                    {course.availableVouchers && course.availableVouchers.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-white/5">
+                        <h3 className="text-white font-semibold text-xs mb-3 uppercase tracking-widest flex items-center gap-2">
+                          <Tag size={14} className="text-emerald-400" /> Voucher Tersedia
+                        </h3>
+                        <div className="space-y-2">
+                          {course.availableVouchers.map((v) => (
+                            <div key={v.id} className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between group">
+                              <div>
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">Gunakan Kode:</div>
+                                <div className="text-emerald-400 font-black text-sm">{v.code}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">Potongan:</div>
+                                <div className="text-white font-bold text-xs">
+                                  {v.discountType === 'fixed' ? formatPrice(v.discountValue) : `${v.discountValue}%`}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[9px] text-slate-500 mt-3 italic line-clamp-1 truncate">* Salin kode dan masukkan saat checkout.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Promotions Spotlight */}
+                {promotions.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    {promotions.slice(0, 1).map((promo) => (
+                      <PromotionCard key={promo.id} promotion={promo} variant="spotlight" />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -282,8 +339,10 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
       {selectedPreview && (
         <PreviewModal 
           lesson={selectedPreview} 
+          allPreviews={allPreviews}
           courseTitle={course.title}
           onClose={() => setSelectedPreview(null)}
+          onLessonChange={(lesson) => setSelectedPreview(lesson)}
           onEnroll={() => {
             setSelectedPreview(null);
             document.getElementById("enroll-section")?.scrollIntoView({ behavior: "smooth" });

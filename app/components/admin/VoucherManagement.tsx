@@ -37,6 +37,7 @@ export default function VoucherManagement({ role }: Props) {
     usage_limit: 0,
     expiry_date: "",
     course_id: "",
+    max_discount: 0,
     is_active: true
   });
 
@@ -109,7 +110,7 @@ export default function VoucherManagement({ role }: Props) {
       setFormData({
         code: "", discount_type: "fixed", discount_value: 0,
         min_purchase: 0, usage_limit: 0, expiry_date: "",
-        course_id: "", is_active: true
+        course_id: "", max_discount: 0, is_active: true
       });
       fetchData();
     } else {
@@ -175,9 +176,10 @@ export default function VoucherManagement({ role }: Props) {
                     <div className="flex items-center gap-4 text-[10px] text-slate-500 font-bold uppercase tracking-tight">
                        <span className="text-purple-400">
                          Potongan: {voucher.discountType === 'percentage' ? `${voucher.discountValue}%` : formatPrice(voucher.discountValue)}
+                         {voucher.discountType === 'percentage' && voucher.maxDiscount > 0 && ` (Maks ${formatPrice(voucher.maxDiscount)})`}
                        </span>
-                       <span className="flex items-center gap-1"><Users size={12} /> Terpakai: {voucher.usedCount} {voucher.usageLimit > 0 && `/ ${voucher.usageLimit}`}</span>
-                       {voucher.expiryDate && <span className="flex items-center gap-1"><Calendar size={12} /> Exp: {new Date(voucher.expiryDate).toLocaleDateString('id-ID')}</span>}
+                       <span className="flex items-center gap-1"><Users size={12} /> {voucher.usedCount} {voucher.usageLimit > 0 && `/ ${voucher.usageLimit}`} Terpakai</span>
+                       {voucher.expiryDate && <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(voucher.expiryDate).toLocaleDateString('id-ID')}</span>}
                     </div>
                   </div>
                </div>
@@ -248,6 +250,20 @@ export default function VoucherManagement({ role }: Props) {
                        />
                     </div>
                  </div>
+
+                 {formData.discount_type === 'percentage' && (
+                   <div className="space-y-1.5 animate-in slide-in-from-top-2">
+                      <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Maksimal Potongan (Rp) - Opsional</label>
+                      <input 
+                        type="number" 
+                        className="input-premium w-full" 
+                        placeholder="Contoh: 50000"
+                        value={formData.max_discount}
+                        onChange={(e) => setFormData({...formData, max_discount: Number(e.target.value)})}
+                      />
+                      <p className="text-[9px] text-slate-500 ml-1">Batasi jumlah maksimal diskon yang didapat siswa.</p>
+                   </div>
+                 )}
 
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">

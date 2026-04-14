@@ -14,8 +14,9 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
-import { getInstructors } from "@/lib/courses";
+import { getInstructors, getSystemStats } from "@/lib/courses";
 import { formatNumber } from "@/lib/utils";
+import InstructorCarousel from "../components/InstructorCarousel";
 
 export const metadata: Metadata = {
   title: "About",
@@ -24,7 +25,10 @@ export const metadata: Metadata = {
 };
 
 export default async function AboutPage() {
-  const allInstructors = await getInstructors();
+  const [allInstructors, stats] = await Promise.all([
+    getInstructors(),
+    getSystemStats()
+  ]);
   
   return (
     <>
@@ -157,44 +161,7 @@ export default async function AboutPage() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {allInstructors.map((instructor) => (
-              <div
-                key={instructor.name}
-                className="card p-6 text-center group"
-              >
-                {/* Avatar */}
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-400 mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold group-hover:scale-105 transition-transform duration-300">
-                  {instructor.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </div>
-                <h3 className="text-white font-semibold text-lg mb-1">
-                  {instructor.name}
-                </h3>
-                <p className="text-purple-400 text-sm font-medium mb-3">
-                  {instructor.expertise}
-                </p>
-                <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                  {instructor.bio}
-                </p>
-                <div className="flex justify-center gap-4 text-xs text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <Star
-                      size={12}
-                      className="text-yellow-400 fill-yellow-400"
-                    />
-                    {instructor.rating}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users size={12} />
-                    {formatNumber(instructor.totalStudents)} siswa
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <InstructorCarousel instructors={allInstructors} />
         </div>
       </section>
 
@@ -205,13 +172,13 @@ export default async function AboutPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
               {[
                 {
-                  value: "50,000+",
+                  value: `${formatNumber(stats.totalStudents)}+`,
                   label: "Siswa Terdaftar",
                   icon: Users,
                 },
-                { value: "200+", label: "Kursus Tersedia", icon: BookOpen },
-                { value: "50+", label: "Instruktur Ahli", icon: Award },
-                { value: "95%", label: "Rating Kepuasan", icon: Star },
+                { value: `${stats.totalCourses}+`, label: "Kursus Tersedia", icon: BookOpen },
+                { value: `${stats.totalInstructors}+`, label: "Instruktur Ahli", icon: Award },
+                { value: `${stats.ratingPercentage}%`, label: "Rating Kepuasan", icon: Star },
               ].map((stat) => (
                 <div key={stat.label}>
                   <stat.icon
@@ -291,7 +258,7 @@ export default async function AboutPage() {
             <div className="relative z-10">
               <h2 className="text-3xl font-extrabold mb-4">
                 Bergabung dengan{" "}
-                <span className="gradient-text">50,000+</span> Siswa Lainnya
+                <span className="gradient-text">{formatNumber(stats.totalStudents)}+</span> Siswa Lainnya
               </h2>
               <p className="text-slate-400 text-lg max-w-xl mx-auto mb-8">
                 Mulai perjalanan belajar Anda hari ini dan raih karir impian

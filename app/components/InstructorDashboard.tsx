@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { getInstructorCourses, getInstructorStats } from "@/lib/instructor";
 import { type Course } from "@/lib/data";
 import Link from "next/link";
-import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink } from "lucide-react";
+import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink, Megaphone } from "lucide-react";
 import Skeleton from "./ui/Skeleton";
 import SignatureManager from "./SignatureManager";
 
@@ -55,10 +55,16 @@ export default function InstructorDashboard({ userId, userName }: InstructorDash
           <h1 className="text-2xl font-bold text-white tracking-tight">Instructor <span className="gradient-text">Panel</span></h1>
           <p className="text-slate-400 text-sm mt-1">Hello, Instructor {userName.split(" ")[0]}! Kelola materi dan murid Anda.</p>
         </div>
-        <Link href="/dashboard/admin/courses/new" className="btn-primary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
-          <Plus size={14} className="group-hover:rotate-90 transition-transform" />
-          Buat Kursus Baru
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/ads" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-white/10 hover:border-purple-500/30">
+            <Megaphone size={14} className="group-hover:scale-110 transition-transform text-purple-400" />
+            Promosi Saya
+          </Link>
+          <Link href="/dashboard/admin/courses/new" className="btn-primary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
+            <Plus size={14} className="group-hover:rotate-90 transition-transform" />
+            Buat Kursus Baru
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -67,7 +73,7 @@ export default function InstructorDashboard({ userId, userName }: InstructorDash
           { icon: Users, label: "Total Murid", value: stats.totalStudents, color: "text-purple-400", bg: "from-purple-500/15 to-purple-500/5" },
           { icon: BookOpen, label: "Kursus Diajar", value: stats.totalCourses, color: "text-cyan-400", bg: "from-cyan-500/15 to-cyan-500/5" },
           { icon: Star, label: "Rating Instruktur", value: stats.rating.toFixed(1), color: "text-amber-400", bg: "from-amber-500/15 to-amber-500/5" },
-          { icon: TrendingUp, label: "Earnings Status", value: "Verified", color: "text-emerald-400", bg: "from-emerald-500/15 to-emerald-500/5" },
+          { icon: TrendingUp, label: "Status Akun", value: stats.totalCourses > 0 ? "Aktif" : "Menunggu Kursus", color: stats.totalCourses > 0 ? "text-emerald-400" : "text-amber-400", bg: stats.totalCourses > 0 ? "from-emerald-500/15 to-emerald-500/5" : "from-amber-500/15 to-amber-500/5" },
         ].map((stat) => (
           <div key={stat.label} className="card p-5 group hover:border-white/20 transition-all duration-300">
             <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.bg} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>

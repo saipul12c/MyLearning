@@ -10,6 +10,7 @@ import {
   Phone, Ticket,
 } from "lucide-react";
 import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
+import ConfirmationModal from "@/app/components/ConfirmationModal";
 
 const userMenuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -46,6 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, isLoggedIn, isAdmin, isInstructor, logout, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     if (!loading && !isLoggedIn) {
@@ -100,8 +102,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* User Info */}
         <div className="px-5 py-4 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {initials}
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden border border-white/10">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user?.fullName} className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-sm text-white font-medium truncate">{user?.fullName}</p>
@@ -150,7 +156,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ChevronLeft size={18} /> Kembali ke Situs
           </Link>
           <button
-            onClick={() => { logout(); router.push("/"); }}
+            onClick={() => setShowLogoutConfirm(true)}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors"
           >
             <LogOut size={18} /> Keluar
@@ -179,6 +185,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </ErrorBoundary>
         </main>
       </div>
+      <ConfirmationModal 
+        isOpen={showLogoutConfirm}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin keluar dari akun MyLearning Anda?"
+        confirmLabel="Ya, Keluar"
+        onConfirm={async () => {
+          await logout();
+          setShowLogoutConfirm(false);
+          router.push("/");
+        }}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   );
 }
