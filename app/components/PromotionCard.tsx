@@ -2,7 +2,7 @@
 
 import { Promotion, trackImpression, trackClick } from "@/lib/promotions";
 import { useEffect, useState } from "react";
-import { ExternalLink, ArrowRight, Sparkles } from "lucide-react";
+import { ExternalLink, ArrowRight, Sparkles, Clock, Share2, Flame } from "lucide-react";
 import Image from "next/image";
 
 interface PromotionCardProps {
@@ -12,9 +12,59 @@ interface PromotionCardProps {
   priorityLabel?: boolean;
 }
 
+function useCountdown(endDate?: string) {
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number } | null>(null);
+  const [isUrgent, setIsUrgent] = useState(false);
+
+  useEffect(() => {
+    if (!endDate) return;
+
+    const update = () => {
+      const diff = new Date(endDate).getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft(null);
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      setTimeLeft({ days, hours, minutes });
+      setIsUrgent(days < 3);
+    };
+
+    update();
+    const interval = setInterval(update, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [endDate]);
+
+  return { timeLeft, isUrgent };
+}
+
+function handleShare(promotion: Promotion) {
+  const shareData = {
+    title: promotion.title,
+    text: promotion.description,
+    url: promotion.linkUrl,
+  };
+
+  if (navigator.share) {
+    navigator.share(shareData).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(promotion.linkUrl).then(() => {
+      // Quick visual feedback
+      const el = document.getElementById(`share-btn-${promotion.id}`);
+      if (el) {
+        el.textContent = "Copied!";
+        setTimeout(() => { el.textContent = ""; }, 1500);
+      }
+    }).catch(() => {});
+  }
+}
+
 export default function PromotionCard({ promotion, variant = "banner", isPreview = false, priorityLabel = false }: PromotionCardProps) {
   const [hasTracked, setHasTracked] = useState(false);
   const isExternal = promotion.isExternal;
+  const { timeLeft, isUrgent } = useCountdown(promotion.endDate);
 
   useEffect(() => {
     if (promotion && !hasTracked && !isPreview) {
@@ -44,6 +94,21 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
       sessionStorage.setItem(clickKey, 'true');
     }
   };
+
+  // Countdown badge component
+  const CountdownBadge = () => {
+    if (!timeLeft) return null;
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+        isUrgent 
+          ? "bg-red-500/15 text-red-400 border-red-500/30 animate-pulse" 
+          : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      }`}>
+        {isUrgent ? <Flame size={10} className="animate-pulse" /> : <Clock size={10} />}
+        {timeLeft.days > 0 ? `${timeLeft.days}h ${timeLeft.hours}j` : `${timeLeft.hours}j ${timeLeft.minutes}m`}
+      </div>
+    );
+  };
   
   if (variant === "banner") {
     return (
@@ -70,9 +135,17 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
           )}
           
           <div className="flex-1 text-center md:text-left space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">
-              <Sparkles size={12} />
-              {promotion.badgeText || "FEATURED PARTNER"}
+            <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">
+                <Sparkles size={12} />
+                {promotion.badgeText || "FEATURED PARTNER"}
+              </div>
+              <CountdownBadge />
+              {isUrgent && (
+                <span className="text-[9px] font-black text-red-400 uppercase tracking-widest animate-pulse">
+                  Segera Berakhir!
+                </span>
+              )}
             </div>
             
             <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
@@ -83,16 +156,26 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
               {promotion.description}
             </p>
             
-            <a 
-              href={promotion.linkUrl}
-              onClick={handleClick}
-              target={isExternal ? "_blank" : "_self"}
-              rel={isExternal ? "noopener noreferrer" : ""}
-              className="btn-primary !py-4 px-8 inline-flex items-center gap-2 group/btn shadow-xl shadow-purple-500/20"
-            >
-              Learn More
-              {isExternal ? <ExternalLink size={18} /> : <ArrowRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />}
-            </a>
+            <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
+              <a 
+                href={promotion.linkUrl}
+                onClick={handleClick}
+                target={isExternal ? "_blank" : "_self"}
+                rel={isExternal ? "noopener noreferrer" : ""}
+                className="btn-primary !py-4 px-8 inline-flex items-center gap-2 group/btn shadow-xl shadow-purple-500/20"
+              >
+                Learn More
+                {isExternal ? <ExternalLink size={18} /> : <ArrowRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />}
+              </a>
+              <button
+                id={`share-btn-${promotion.id}`}
+                onClick={() => handleShare(promotion)}
+                className="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                aria-label="Bagikan promosi"
+              >
+                <Share2 size={16} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -124,6 +207,11 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
           <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-[8px] font-black text-purple-400 uppercase tracking-widest">
             {promotion.badgeText || "PROMO"}
           </div>
+          {isUrgent && (
+            <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-red-500/20 backdrop-blur-md border border-red-500/30 text-[8px] font-black text-red-400 uppercase tracking-widest animate-pulse flex items-center gap-1">
+              <Flame size={8} /> SEGERA
+            </div>
+          )}
         </div>
         <div className="p-4 space-y-2">
           <h3 className="text-white font-bold text-sm leading-tight group-hover:text-purple-400 transition-colors">
@@ -133,9 +221,16 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
             {promotion.description}
           </p>
           <div className="pt-2 flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-              PROMOTED <ExternalLink size={10} />
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                PROMOTED <ExternalLink size={10} />
+              </span>
+              {timeLeft && (
+                <span className={`text-[9px] font-bold ${isUrgent ? "text-red-400" : "text-amber-400"}`}>
+                  {timeLeft.days > 0 ? `${timeLeft.days}h lagi` : `${timeLeft.hours}j lagi`}
+                </span>
+              )}
+            </div>
             <ArrowRight size={14} className="text-purple-500 -translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all" />
           </div>
         </div>
@@ -149,10 +244,22 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
       <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-cyan-500/5 blur-2xl rounded-full" />
       <div className="relative z-10 space-y-4">
         <div className="flex items-center justify-between">
-           <span className="text-[9px] font-black text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
-            {promotion.badgeText || "SPOTLIGHT"}
-           </span>
-           {isExternal && <ExternalLink size={12} className="text-slate-600" />}
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
+              {promotion.badgeText || "SPOTLIGHT"}
+            </span>
+            <CountdownBadge />
+          </div>
+          <div className="flex items-center gap-1.5">
+            {isExternal && <ExternalLink size={12} className="text-slate-600" />}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleShare(promotion); }}
+              className="p-1 rounded hover:bg-white/5 text-slate-600 hover:text-white transition-colors"
+              aria-label="Bagikan"
+            >
+              <Share2 size={11} />
+            </button>
+          </div>
         </div>
         <div className="space-y-1">
           <h4 className="text-white font-bold text-sm">{promotion.title}</h4>

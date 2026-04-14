@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X, ChevronRight, ChevronLeft, CheckCircle, PlayCircle, BookOpen, Clock, ArrowRight, Brain, FileQuestion, Lock, Loader2 } from "lucide-react";
 import { type Lesson } from "@/lib/data";
 import DiscussionSection from "./DiscussionSection";
+import NativeAdCard from "./NativeAdCard";
 
 interface LessonPlayerProps {
   courseTitle: string;
@@ -437,6 +438,11 @@ export default function LessonPlayer({
                 </button>
               );
             })}
+         </div>
+
+         {/* Ad Slot - Lesson Sidebar */}
+         <div className="px-3 py-2 border-t border-white/5">
+           <NativeAdCard location="lesson_sidebar" variant="compact" />
          </div>
 
          <div className="p-6 border-t border-white/5 bg-slate-900/80 backdrop-blur-sm">

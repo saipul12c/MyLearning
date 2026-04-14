@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Mail, Phone, MapPin } from "lucide-react";
 import Logo from "./Logo";
+import NativeAdCard from "./NativeAdCard";
 
 export default function Footer() {
   return (
@@ -104,8 +105,13 @@ export default function Footer() {
           </div>
         </div>
 
+        {/* Partner Pilihan - Native Ad Slot */}
+        <div className="mt-10 pt-8 border-t border-white/5">
+          <NativeAdCard location="footer_native" variant="compact" className="max-w-lg" />
+        </div>
+
         {/* Bottom bar */}
-        <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="mt-8 pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-slate-500 text-sm">
             &copy; {new Date().getFullYear()} MyLearning. All rights reserved.
           </p>

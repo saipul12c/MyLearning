@@ -19,12 +19,16 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   bio TEXT,
   avatar_url TEXT,
   role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'instructor', 'user')),
+  is_banned BOOLEAN DEFAULT FALSE,
+  ban_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Ensure columns exist for re-runnability
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS email VARCHAR(300);
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS ban_reason TEXT;
 DO $$ 
 BEGIN 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_profiles' AND column_name='fts') THEN

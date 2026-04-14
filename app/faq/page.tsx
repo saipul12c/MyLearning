@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getFAQGeminiResponse } from "@/lib/gemini";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import NativeAdCard from "@/app/components/NativeAdCard";
 
 interface FAQItem {
   question: string;
@@ -478,6 +479,11 @@ export default function FAQPage() {
                   >
                     Coba tanya Asisten AI kami?
                   </button>
+                  
+                  {/* Search Recovery Ad */}
+                  <div className="mt-8 max-w-md mx-auto">
+                    <NativeAdCard location="search_recovery" variant="compact" />
+                  </div>
                 </div>
               )}
             </div>

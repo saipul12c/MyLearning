@@ -224,12 +224,12 @@ option {
   color: #f1f5f9;
 }
 
-textarea.input {
+textarea.input, textarea.input-field {
   resize: vertical;
   min-height: 120px;
 }
 
-.input-premium {
+.input-premium, .input-field {
   width: 100%;
   padding: 1rem 1.25rem;
   background: rgba(255, 255, 255, 0.03);
@@ -241,10 +241,21 @@ textarea.input {
   outline: none;
 }
 
-.input-premium:focus {
+.input-premium:focus, .input-field:focus {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(124, 58, 237, 0.5);
   box-shadow: 0 0 20px rgba(124, 58, 237, 0.1);
+}
+
+.input-field::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Base custom styles for dropdown options to override default browser white bg */
+.input-premium option, .input-field option {
+  background: #0f0a1a;
+  color: white;
+  padding: 12px;
 }
 
 .glass-card {
@@ -458,6 +469,87 @@ textarea.input {
   20%, 80% { transform: translate3d(2px, 0, 0); }
   30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
   40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+/* ===== AD SYSTEM ANIMATIONS ===== */
+@keyframes slideUpBounce {
+  0% { transform: translateY(100%); opacity: 0; }
+  60% { transform: translateY(-8px); opacity: 1; }
+  80% { transform: translateY(3px); }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideDown {
+  0% { transform: translateY(-100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes textSlide {
+  0% { transform: translateY(0); opacity: 1; }
+  45% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-100%); opacity: 0; }
+  55% { transform: translateY(100%); opacity: 0; }
+  60% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-up-bounce {
+  animation: slideUpBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.4s ease forwards;
+}
+
+@keyframes slideDownExit {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+.animate-slide-down-exit {
+  animation: slideDownExit 0.4s ease forwards;
+}
+
+@keyframes shimmerPremium {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-shimmer-premium {
+  background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.02) 75%);
+  background-size: 400% 100%;
+  animation: shimmerPremium 2s infinite ease-in-out;
+}
+
+@keyframes gradientBorderRotate {
+  100% { transform: rotate(1turn); }
+}
+
+.animate-gradient-border-rotate {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  z-index: -1;
+  background: conic-gradient(from 0deg, transparent 0 340deg, #7c3aed 360deg);
+  animation: gradientBorderRotate 3s linear infinite;
+}
+
+@keyframes countdownBar {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}
+
+.animate-countdown-bar {
+  animation: countdownBar linear forwards;
+}
+
+@keyframes fadeScale {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-scale {
+  animation: fadeScale 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* ===== CHAT MARKDOWN STYLING ===== */

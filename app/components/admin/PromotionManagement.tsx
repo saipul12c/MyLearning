@@ -58,6 +58,9 @@ export default function PromotionManagement() {
       isActive: true,
       isExternal: true,
       priority: 0,
+      targetImpressions: 0,
+      startDate: new Date().toISOString().slice(0, 16),
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     });
     setIsModalOpen(true);
   };
@@ -139,13 +142,34 @@ export default function PromotionManagement() {
           <Loader2 className="animate-spin text-purple-500" size={40} />
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Loading promos...</p>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="card py-20 text-center border-dashed border-white/5">
-           <ImageIcon size={48} className="text-slate-800 mx-auto mb-4" />
-           <h3 className="text-white font-bold text-lg">No Promotions Found</h3>
-           <p className="text-slate-500 text-sm">Create your first promotion banner or card.</p>
-        </div>
       ) : (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+             <div className="card p-4 border-white/5 bg-white/[0.02]">
+                <div className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">Total Active</div>
+                <div className="text-2xl font-black text-white">{promotions.filter(p => p.isActive).length} <span className="text-sm font-bold text-slate-500">/ {promotions.length}</span></div>
+             </div>
+             <div className="card p-4 border-white/5 bg-white/[0.02]">
+                <div className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">Total Views</div>
+                <div className="text-2xl font-black text-white">{promotions.reduce((acc, p) => acc + p.currentImpressions, 0).toLocaleString()}</div>
+             </div>
+             <div className="card p-4 border-white/5 bg-white/[0.02]">
+                <div className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">Avg CTR</div>
+                <div className="text-2xl font-black text-purple-400">
+                  {promotions.reduce((acc, p) => acc + p.currentImpressions, 0) > 0 
+                    ? (promotions.reduce((acc, p) => acc + p.currentClicks, 0) / promotions.reduce((acc, p) => acc + p.currentImpressions, 0) * 100).toFixed(2) 
+                    : "0.00"}%
+                </div>
+             </div>
+          </div>
+          
+          {filtered.length === 0 ? (
+            <div className="card py-20 text-center border-dashed border-white/5">
+               <ImageIcon size={48} className="text-slate-800 mx-auto mb-4" />
+               <h3 className="text-white font-bold text-lg">No Promotions Found</h3>
+               <p className="text-slate-500 text-sm">Create your first promotion banner or card.</p>
+            </div>
+          ) : (
         <div className="grid gap-4">
           {filtered.map((promo) => (
             <div key={promo.id} className="card p-4 group hover:border-purple-500/30 transition-all">
@@ -198,6 +222,8 @@ export default function PromotionManagement() {
           ))}
         </div>
       )}
+      </>
+      )}
 
       {/* Promotion Modal */}
       {isModalOpen && editingPromo && (
@@ -227,16 +253,21 @@ export default function PromotionManagement() {
               <div className="p-8 space-y-7 overflow-y-auto custom-scrollbar flex-grow bg-gradient-to-b from-transparent to-purple-500/5">
                 <div className="grid grid-cols-1 gap-6">
                   {/* Title */}
-                  <div className="space-y-2.5">
-                    <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Judul Utama</label>
+                  <div className="space-y-2.5 relative">
+                    <div className="flex items-center justify-between ml-1">
+                       <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Judul Iklan</label>
+                       <span className="text-[10px] text-slate-500 font-bold">{editingPromo.title?.length || 0}/50</span>
+                    </div>
                     <input 
                       type="text"
                       value={editingPromo.title}
                       onChange={(e) => setEditingPromo({...editingPromo, title: e.target.value})}
-                      className="input-field !bg-white/5 focus:!bg-white/10"
-                      placeholder="Contoh: Diskon 50% Semua Kursus"
+                      className="input-field !bg-white/5 focus:!bg-white/10 shadow-inner"
+                      placeholder="Contoh: Promo Kelas Spesial 50%"
+                      maxLength={50}
                       required
                     />
+                    <p className="text-[10px] text-slate-500 ml-1 italic max-w-sm">Gunakan judul yang singkat dan memikat (Call-to-Action) untuk menarik minat klik.</p>
                   </div>
 
                   {/* Location & Priority Row */}
@@ -249,20 +280,64 @@ export default function PromotionManagement() {
                         className="input-field !py-3 !bg-white/5 focus:!bg-white/10"
                         required
                       >
-                        <option value="homepage_banner">Home Banner</option>
-                        <option value="dashboard_card">Dashboard Card</option>
-                        <option value="course_sidebar">Sidebar Spotlight</option>
-                        <option value="course_listing">Hero Listing</option>
+                        <option value="global_announcement">Global Top Bar (1.6x)</option>
+                        <option value="homepage_banner">Homepage Banner (1.3x)</option>
+                        <option value="homepage_inline">Homepage Inline (1.0x)</option>
+                        <option value="dashboard_card">Dashboard Card (1.1x)</option>
+                        <option value="course_sidebar">Course Sidebar Spotlight (1.0x)</option>
+                        <option value="course_listing">Course Listing Standard (1.2x)</option>
+                        <option value="course_listing_spotlight">Course Listing Spotlight (1.4x)</option>
+                        <option value="lesson_sidebar">Lesson Sidebar (0.9x)</option>
+                        <option value="quiz_success">Quiz Success Notification (1.5x)</option>
+                        <option value="verify_page">Certificate Verify Page (0.9x)</option>
+                        <option value="search_recovery">Empty Search Recovery (0.8x)</option>
+                        <option value="footer_native">Footer Native Ad (0.8x)</option>
+                        <option value="sticky_bottom">Sticky Bottom Ad (1.5x)</option>
+                        <option value="interstitial">Full Screen Interstitial (2.0x)</option>
+                        <option value="video_card">Autoplay Video Card (1.5x)</option>
                       </select>
                     </div>
                     <div className="space-y-2.5">
-                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Prioritas</label>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Prioritas Tampil</label>
                       <input 
                         type="number"
                         value={editingPromo.priority}
                         onChange={(e) => setEditingPromo({...editingPromo, priority: parseInt(e.target.value) || 0})}
                         className="input-field !bg-white/5 focus:!bg-white/10"
                       />
+                      <p className="text-[10px] text-slate-500 ml-1 italic">Makin tinggi prioritas, makin atas diurutkan.</p>
+                    </div>
+                  </div>
+
+                  {/* Date & Impressions */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Tanggal Mulai</label>
+                      <input 
+                        type="datetime-local"
+                        value={editingPromo.startDate?.slice(0, 16) || ''}
+                        onChange={(e) => setEditingPromo({...editingPromo, startDate: new Date(e.target.value).toISOString()})}
+                        className="input-field !bg-white/5 focus:!bg-white/10 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Berakhir Pada</label>
+                      <input 
+                        type="datetime-local"
+                        value={editingPromo.endDate?.slice(0, 16) || ''}
+                        onChange={(e) => setEditingPromo({...editingPromo, endDate: new Date(e.target.value).toISOString()})}
+                        className="input-field !bg-white/5 focus:!bg-white/10 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Limit Tayangan</label>
+                      <input 
+                        type="number"
+                        value={editingPromo.targetImpressions || 0}
+                        onChange={(e) => setEditingPromo({...editingPromo, targetImpressions: parseInt(e.target.value) || 0})}
+                        className="input-field !bg-white/5 focus:!bg-white/10 text-xs"
+                      />
+                      <p className="text-[10px] text-slate-500 ml-1 italic">0 = Tanpa batas</p>
                     </div>
                   </div>
 
@@ -312,13 +387,18 @@ export default function PromotionManagement() {
 
                   {/* Description */}
                   <div className="space-y-2.5">
-                    <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Deskripsi Singkat</label>
+                    <div className="flex items-center justify-between ml-1">
+                       <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Deskripsi Konten</label>
+                       <span className="text-[10px] text-slate-500 font-bold">{editingPromo.description?.length || 0}/150</span>
+                    </div>
                     <textarea 
                       value={editingPromo.description}
                       onChange={(e) => setEditingPromo({...editingPromo, description: e.target.value})}
-                      className="input-field min-h-[70px] resize-none !bg-white/5 focus:!bg-white/10 text-xs leading-relaxed"
-                      placeholder="Jelaskan isi promo ini secara singkat..."
+                      className="input-field min-h-[90px] resize-none !bg-white/5 focus:!bg-white/10 text-xs leading-relaxed"
+                      placeholder="Jelaskan detail keuntungan promo ini..."
+                      maxLength={150}
                     />
+                    <p className="text-[10px] text-slate-500 ml-1 italic">Tampil pada banner tipe 'card' atau 'spotlight'. Boleh memakai karakter emoji.</p>
                   </div>
 
                   {/* Link & Badge Row */}

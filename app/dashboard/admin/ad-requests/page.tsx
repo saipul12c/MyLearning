@@ -22,7 +22,9 @@ import {
   Link as LinkIcon,
   X,
   CreditCard,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronRight,
+  Filter
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -36,6 +38,7 @@ export default function AdRequestsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("waiting_verification");
 
   useEffect(() => {
     if (isAdmin) fetchRequests();
@@ -208,15 +211,36 @@ export default function AdRequestsPage() {
           ))}
       </div>
 
-      {requests.length === 0 ? (
-        <div className="card py-20 text-center border-dashed border-white/5">
-           <Megaphone size={48} className="text-slate-800 mx-auto mb-4" />
-           <h3 className="text-white font-bold text-lg">Tidak Ada Antrian Pengajuan</h3>
-           <p className="text-slate-500 text-sm">Semua pengajuan iklan telah diproses.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {requests.map((req) => (
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-3 border-b border-white/5 pb-4 overflow-x-auto">
+         <Filter size={14} className="text-slate-500 flex-shrink-0" />
+         {['all', 'waiting_verification', 'active', 'rejected', 'completed'].map(status => (
+            <button
+               key={status}
+               onClick={() => setStatusFilter(status)}
+               className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
+                  statusFilter === status ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+               }`}
+            >
+               {status === 'all' ? 'Semua' : status === 'waiting_verification' ? 'Pending' : status}
+            </button>
+         ))}
+      </div>
+
+      {(() => {
+        const filteredRequests = requests.filter(r => statusFilter === 'all' || r.status === statusFilter);
+        if (filteredRequests.length === 0) {
+          return (
+            <div className="card py-20 text-center border-dashed border-white/5">
+              <Megaphone size={48} className="text-slate-800 mx-auto mb-4" />
+              <h3 className="text-white font-bold text-lg">Tidak Ada Pengajuan</h3>
+              <p className="text-slate-500 text-sm">Tidak ada pengajuan iklan dengan status tersebut.</p>
+            </div>
+          );
+        }
+        return (
+          <div className="grid gap-4">
+            {filteredRequests.map((req) => (
             <div 
               key={req.id} 
               className={`card p-5 group hover:border-purple-500/30 transition-all cursor-pointer ${selectedRequest?.id === req.id ? 'border-purple-500/50 ring-1 ring-purple-500/20 shadow-2xl' : ''}`}
@@ -256,12 +280,13 @@ export default function AdRequestsPage() {
 
                  <div className="flex items-center gap-2 px-6 border-l border-white/5">
                     <ChevronRight size={24} className="text-slate-700 group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
-                 </div>
-              </div>
+                  </div>
+               </div>
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       {/* Detail Modal */}
       {selectedRequest && (
@@ -387,12 +412,4 @@ export default function AdRequestsPage() {
       )}
     </div>
   );
-}
-
-function ChevronRight({ size, className }: { size: number; className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <path d="m9 18 6-6-6-6"/>
-        </svg>
-    );
 }

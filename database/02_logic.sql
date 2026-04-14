@@ -470,7 +470,7 @@ BEGIN
 
         -- Log the impression
         INSERT INTO promotion_impression_logs (promo_id, user_id, ip_address)
-        VALUES (promo_id, p_user_id, v_final_ip);
+        VALUES (increment_ad_impressions.promo_id, p_user_id, v_final_ip);
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

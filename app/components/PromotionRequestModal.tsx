@@ -55,6 +55,24 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
   const [paymentProof, setPaymentProof] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const LOCATION_DESCRIPTIONS: Record<PromotionLocation, string> = {
+    global_announcement: "Pita promosi warna-warni yang selalu melekat di paling atas layar seluruh halaman web.",
+    homepage_banner: "Banner raksasa / karosel di atas beranda yang sangat menyita perhatian.",
+    homepage_inline: "Diselipkan secara natural menyerupai kursus biasa di lini beranda.",
+    dashboard_card: "Kartu khusus di dashboard pelajar, cocok untuk promosi retensi pelanggan.",
+    course_sidebar: "Sorotan premium di bilah sisi materi kursus yang sering dilihat secara vertikal.",
+    course_listing: "Berada tepat di tengah halaman pencarian (katalog kursus) standar.",
+    course_listing_spotlight: "Banner dominan di halaman pencarian, dijamin menangkap mata audiens.",
+    lesson_sidebar: "Tampil di bilah samping saat pelajar sedang asyik menonton video pembelajaran.",
+    quiz_success: "Muncul seketika sebagai kejutan (pop-up) ketika pelajar berhasil menyelesaikan kuis.",
+    verify_page: "Penempatan khusus pada halaman verifikasi sertifikat kursus yang sangat bergengsi.",
+    search_recovery: "Menjadi rekomendasi cerdas ketika pencarian kursus pelajar tidak membuahkan hasil.",
+    footer_native: "Penempatan elegan yang menyatu pada bagian terbawah situs (footer).",
+    sticky_bottom: "Pop-up bar bawah layar yang terus mengikuti ketika pelajar menggulir layar secara dinamis.",
+    interstitial: "Iklan besar yang mengambil alih layar sesaat, layaknya tayangan TV premium berbatas waktu.",
+    video_card: "Iklan video otomatis yang terputar senyap seakan menceritakan detail promonya langsung."
+  };
+
   const totalPrice = useMemo(() => {
     return calculateAdPrice(views, duration, location);
   }, [views, duration, location]);
@@ -137,12 +155,27 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
                     onChange={(e) => setLocation(e.target.value as PromotionLocation)}
                     className="input-field !py-3 bg-white/5 border-white/10 text-white"
                   >
-                    <option value="homepage_banner">Homepage Banner (1.3x)</option>
                     <option value="global_announcement">Global Top Bar (1.6x)</option>
-                    <option value="course_listing">Course Listing (1.2x)</option>
+                    <option value="homepage_banner">Homepage Banner (1.3x)</option>
+                    <option value="homepage_inline">Homepage Inline (1.0x)</option>
                     <option value="dashboard_card">Dashboard Card (1.1x)</option>
-                    <option value="course_sidebar">Sidebar Spotlight (1.0x)</option>
+                    <option value="course_sidebar">Course Sidebar Spotlight (1.0x)</option>
+                    <option value="course_listing">Course Listing Standard (1.2x)</option>
+                    <option value="course_listing_spotlight">Course Listing Spotlight (1.4x)</option>
+                    <option value="lesson_sidebar">Lesson Sidebar (0.9x)</option>
+                    <option value="quiz_success">Quiz Success Notification (1.5x)</option>
+                    <option value="verify_page">Certificate Verify Page (0.9x)</option>
+                    <option value="search_recovery">Empty Search Recovery (0.8x)</option>
+                    <option value="footer_native">Footer Native Ad (0.8x)</option>
+                    <option value="sticky_bottom">Sticky Bottom Ad (1.5x)</option>
+                    <option value="interstitial">Full Screen Interstitial (2.0x)</option>
+                    <option value="video_card">Autoplay Video Card (1.5x)</option>
                   </select>
+                  <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl mt-2">
+                     <p className="text-[11px] text-purple-200 leading-relaxed font-medium">
+                        {LOCATION_DESCRIPTIONS[location]}
+                     </p>
+                  </div>
                 </div>
 
                 {/* Live Preview Display (Responsive) */}
@@ -154,12 +187,13 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
                       <div className="w-full h-full scale-[0.8] md:scale-100 origin-center transition-all duration-500">
                         <PromotionCard 
                           isPreview
-                          variant={location === 'course_sidebar' ? 'spotlight' : location === 'homepage_banner' || location === 'global_announcement' ? 'banner' : 'card'}
+                          variant={location.includes('sidebar') || location.includes('spotlight') ? 'spotlight' : (location.includes('banner') || location.includes('announcement') || location.includes('sticky')) ? 'banner' : 'card'}
                           promotion={{
                             id: 'preview',
                             title: `Promo: ${course.title}`,
                             description: course.description?.substring(0, 100) || "Lihat materi kursus terbaik kami...",
                             imageUrl: course.thumbnail || "",
+                            videoUrl: location === 'video_card' ? 'dummy.mp4' : undefined,
                             linkUrl: "#",
                             location: location,
                             badgeText: location === 'global_announcement' ? 'PENGUMUMAN' : 'PARTNER',

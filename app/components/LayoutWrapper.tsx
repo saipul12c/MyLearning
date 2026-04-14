@@ -5,6 +5,7 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import LiveCS from "./LiveCS";
 import AnnouncementBar from "./AnnouncementBar";
+import StickyBottomAd from "./StickyBottomAd";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -29,6 +30,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       <main className="flex-1">{children}</main>
       <Footer />
       <LiveCS />
+      <StickyBottomAd />
     </div>
   );
 }

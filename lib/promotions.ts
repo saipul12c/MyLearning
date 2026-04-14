@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 
 export type PromotionLocation = 
   | "homepage_banner" 
+  | "homepage_inline"
   | "dashboard_card" 
   | "course_sidebar" 
   | "course_listing" 
@@ -10,7 +11,11 @@ export type PromotionLocation =
   | "search_recovery" 
   | "quiz_success" 
   | "lesson_sidebar"
-  | "course_listing_spotlight";
+  | "course_listing_spotlight"
+  | "footer_native"
+  | "sticky_bottom"
+  | "interstitial"
+  | "video_card";
 
 export interface Promotion {
   id: string;
@@ -21,11 +26,13 @@ export interface Promotion {
   imageUrl: string;
   linkUrl: string;
   location: PromotionLocation;
-  badgeText: string;
+  badgeText?: string; // Optional custom text for the badge (e.g. "PARTNER", "DISCOUNT")
+  brandName?: string; // Optional brand name for native ads
   isActive: boolean;
   isExternal: boolean;
   priority: number;
   bgColor?: string;
+  videoUrl?: string;
   
   // Impressions & Analytics
   targetImpressions: number;
@@ -67,6 +74,7 @@ export const CPM_MAX = 16000;  // 1k-5k Views
 
 export const LOCATION_MULTIPLIERS: Record<PromotionLocation, number> = {
   homepage_banner: 1.3,
+  homepage_inline: 1.2,
   dashboard_card: 1.1,
   course_sidebar: 1.0,
   course_listing: 1.2,
@@ -76,6 +84,10 @@ export const LOCATION_MULTIPLIERS: Record<PromotionLocation, number> = {
   quiz_success: 1.2,
   lesson_sidebar: 1.0,
   course_listing_spotlight: 1.4,
+  footer_native: 0.8,
+  sticky_bottom: 1.5,
+  interstitial: 2.0,
+  video_card: 1.5,
 };
 
 // Pricing Calculator Logic with Volume Discount (Semakin banyak beli, semakin murah rate-nya)
@@ -112,6 +124,7 @@ export function mapDbToPromotion(db: any): Promotion {
     isExternal: db.is_external,
     priority: db.priority,
     bgColor: db.bg_color,
+    videoUrl: db.video_url,
     targetImpressions: db.target_impressions,
     currentImpressions: db.current_impressions,
     currentClicks: db.current_clicks || 0,
@@ -212,6 +225,68 @@ export async function trackClick(promoId: string) {
   }
 }
 
+export async function trackDismiss(promoId: string) {
+  try {
+    // Track dismissals in sessionStorage to prevent re-showing
+    const dismissKey = `ad_dismissed_${promoId}`;
+    sessionStorage.setItem(dismissKey, 'true');
+    
+    // Optionally track to backend for analytics (non-critical)
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('ad_events').insert({
+        promotion_id: promoId,
+        event_type: 'dismiss',
+        user_id: user?.id,
+      });
+    } catch {
+      // Backend tracking is optional
+    }
+  } catch (err) {
+    // Silently fail — dismissal tracking is non-critical
+  }
+}
+
+export function isAdDismissed(promoId: string): boolean {
+  try {
+    return sessionStorage.getItem(`ad_dismissed_${promoId}`) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function isAdDismissedPersistent(promoId: string): boolean {
+  try {
+    return localStorage.getItem(`ad_dismissed_persist_${promoId}`) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function hasSeenInterstitialThisSession(): boolean {
+  try {
+    return sessionStorage.getItem('interstitial_ad_seen') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function markInterstitialAsSeen() {
+  try {
+    sessionStorage.setItem('interstitial_ad_seen', 'true');
+  } catch {
+    // Silently fail
+  }
+}
+
+export function dismissAdPersistent(promoId: string) {
+  try {
+    localStorage.setItem(`ad_dismissed_persist_${promoId}`, 'true');
+  } catch {
+    // Silently fail
+  }
+}
+
 // Admin & User Ops
 export async function getAllPromotionRequests(): Promise<PromotionRequest[]> {
     const { data } = await supabase
@@ -309,6 +384,7 @@ export async function upsertPromotion(promo: Partial<Promotion>): Promise<{ succ
       is_external: promo.isExternal,
       priority: promo.priority,
       bg_color: promo.bgColor,
+      video_url: promo.videoUrl,
       target_impressions: promo.targetImpressions,
       current_impressions: promo.currentImpressions,
       current_clicks: promo.currentClicks,
@@ -337,6 +413,39 @@ export async function deletePromotion(id: string): Promise<{ success: boolean; e
     const { error } = await supabase.from("promotions").delete().eq("id", id);
     if (error) throw error;
     return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getAdPerformanceSummary(userId?: string) {
+  try {
+    let query = supabase.from("promotions").select("id, status, target_impressions, current_impressions, current_clicks, location, is_active");
+    if (userId) {
+      query = query.eq("user_id", userId);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const summary = {
+      totalImpressions: 0,
+      totalClicks: 0,
+      activeCampaigns: 0,
+      averageCtr: 0,
+    };
+
+    if (data && data.length > 0) {
+      data.forEach(p => {
+        summary.totalImpressions += (p.current_impressions || 0);
+        summary.totalClicks += (p.current_clicks || 0);
+        if (p.is_active) summary.activeCampaigns++;
+      });
+      if (summary.totalImpressions > 0) {
+        summary.averageCtr = (summary.totalClicks / summary.totalImpressions) * 100;
+      }
+    }
+
+    return { success: true, data: summary };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

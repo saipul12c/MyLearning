@@ -19,6 +19,7 @@ import { getLatestTestimonials, type Testimonial } from "@/lib/reviews";
 import { getActivePromotions } from "@/lib/promotions";
 import PromotionCard from "./components/PromotionCard";
 import VerifiedBadge from "./components/VerifiedBadge";
+import NativeAdCard from "./components/NativeAdCard";
 
 export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
@@ -363,6 +364,13 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ===== INLINE AD SECTION ===== */}
+      <section className="py-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <NativeAdCard location="homepage_inline" variant="inline" />
         </div>
       </section>
 
