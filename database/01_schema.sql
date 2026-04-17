@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS email VARCHAR(300);
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS ban_reason TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS website_url TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS specialization TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS experience TEXT;
+
 DO $$ 
 BEGIN 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_profiles' AND column_name='fts') THEN
@@ -467,6 +472,36 @@ CREATE INDEX IF NOT EXISTS idx_promotions_expiry ON promotions(end_date) WHERE i
 CREATE INDEX IF NOT EXISTS idx_promotions_course_id ON promotions(course_id);
 
 -- NOTE: TRIGGERS AND FUNCTIONS ARE MOVED TO 02_logic.sql
+
+
+-- ============================================
+-- 14. STORAGE BUCKETS
+-- ============================================
+-- Public Buckets
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('thumbnails', 'thumbnails', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Private Buckets
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('payments', 'payments', false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('chat_attachments', 'chat_attachments', false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('submissions', 'submissions', false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('videos', 'videos', false)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 13. SECURITY (Row Level Security)

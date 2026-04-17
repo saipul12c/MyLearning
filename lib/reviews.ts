@@ -163,6 +163,28 @@ export async function addReview({ courseSlug, userId, userName, rating, comment 
       });
 
     if (error) throw error;
+
+    // Trigger Notification for Instructor
+    try {
+        const { data: instData } = await supabase
+            .from("courses")
+            .select("title, instructor:instructors(user_id)")
+            .eq("id", courseData.id)
+            .single();
+        
+        const instructorUserId = (instData as any)?.instructor?.user_id;
+        if (instructorUserId) {
+            const { createNotification } = await import("./notifications");
+            await createNotification({
+                userId: instructorUserId,
+                title: "Ulasan Kursus Baru ⭐",
+                message: `${userName} memberikan rating ${rating}/5 pada kursus "${instData?.title}".`,
+                type: 'success',
+                linkUrl: `/dashboard/admin/courses`
+            });
+        }
+    } catch (ignore) {}
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to add review" };

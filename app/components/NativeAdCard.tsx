@@ -11,16 +11,23 @@ interface NativeAdCardProps {
   className?: string;
   /** Style: "inline" blends between sections, "compact" is smaller, "featured" is prominent */
   variant?: "inline" | "compact" | "featured";
+  /** Pre-fetched promo data to eliminate network waterfall */
+  initialPromo?: Promotion | null;
 }
 
-export default function NativeAdCard({ location, categoryId, className = "", variant = "inline" }: NativeAdCardProps) {
-  const [promo, setPromo] = useState<Promotion | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function NativeAdCard({ location, categoryId, className = "", variant = "inline", initialPromo = null }: NativeAdCardProps) {
+  const [promo, setPromo] = useState<Promotion | null>(initialPromo);
+  const [loading, setLoading] = useState(!initialPromo);
   const [visible, setVisible] = useState(true);
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (initialPromo) {
+        setLoading(false);
+        return;
+    }
+
     async function fetchAd() {
       try {
         const promos = await getActivePromotions(location, categoryId);
@@ -33,7 +40,7 @@ export default function NativeAdCard({ location, categoryId, className = "", var
       }
     }
     fetchAd();
-  }, [location, categoryId]);
+  }, [location, categoryId, initialPromo]);
 
   // IntersectionObserver for lazy impression tracking
   useEffect(() => {

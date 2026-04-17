@@ -5,7 +5,6 @@ import { useAuth } from "@/app/components/AuthContext";
 import { 
   getAllPromotionRequests, 
   upsertPromotionRequest, 
-  upsertPromotion,
   PromotionRequest 
 } from "@/lib/promotions";
 import { createNotification } from "@/lib/notifications";
@@ -56,39 +55,16 @@ export default function AdRequestsPage() {
     
     setIsProcessing(true);
     
-    // 1. Create the live promotion
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(startDate.getDate() + req.durationDays);
+    // Update request status to 'active'
+    // NOTE: SQL trigger handle_ad_approval() automatically creates the live promotion
+    // when the status changes to 'active', so we do NOT manually call upsertPromotion()
+    const res = await upsertPromotionRequest({
+      ...req,
+      status: "active",
+    });
 
-    const livePromo = {
-      courseId: req.courseId,
-      userId: req.userId,
-      title: req.title,
-      description: req.description,
-      imageUrl: req.imageUrl,
-      linkUrl: req.linkUrl,
-      location: req.location,
-      badgeText: "FEATURED",
-      isActive: true,
-      isExternal: false,
-      priority: 5, // Priority for paid ads
-      targetImpressions: req.targetImpressions,
-      currentImpressions: 0,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-    };
-
-    const promoRes = await upsertPromotion(livePromo);
-    
-    if (promoRes.success) {
-      // 2. Update the request status
-      await upsertPromotionRequest({
-        ...req,
-        status: "active",
-      });
-
-      // 3. Send notification to instructor
+    if (res.success) {
+      // Send notification to instructor
       await createNotification({
         userId: req.userId,
         title: "Iklan Disetujui! 🚀",
@@ -100,7 +76,7 @@ export default function AdRequestsPage() {
       await fetchRequests();
       setSelectedRequest(null);
     } else {
-      alert("Gagal mengaktifkan promo: " + promoRes.error);
+      alert("Gagal mengaktifkan promo: " + res.error);
     }
     
     setIsProcessing(false);

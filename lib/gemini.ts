@@ -258,3 +258,94 @@ Pertanyaan Pengguna: ${userMessage}
     return "Maaf, terjadi kesalahan saat menghubungi asisten AI. Silakan coba lagi nanti.";
   }
 }
+
+/**
+ * Generates structured quiz questions for a course
+ */
+export async function generateAIQuizQuestions(
+  courseTitle: string,
+  topic: string,
+  num: number = 5
+): Promise<any[]> {
+  try {
+    const prompt = `
+Generate ${num} pertanyaan kuis pilihan ganda (Multiple Choice) untuk kursus: "${courseTitle}" dengan topik spesifik: "${topic}".
+
+FORMAT RESPONSE HARUS JSON ARRAY:
+[
+  {
+    "question_text": "Teks pertanyaan",
+    "options": ["Opsi A", "Opsi B", "Opsi C", "Opsi D"],
+    "correct_answer_index": 0,
+    "explanation": "Penjelasan singkat kenapa ini benar",
+    "hint": "Petunjuk kecil",
+    "points": 1
+  }
+]
+
+ATURAN:
+1. Pastikan pertanyaan menantang dan relevan dengan topik.
+2. Jawaban benar harus bervariasi indeksnya.
+3. Langsung kembalikan JSON, jangan ada teks pembuka/penutup.
+`;
+
+    const response = await executeWithRetry(() => ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        temperature: 0.8,
+        responseMimeType: "application/json"
+      }
+    }));
+
+    const responseText = (response as any).text || (response as any).candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error("AI Quiz Gen Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generates an assignment for a course
+ */
+export async function generateAIAssessmentContent(
+  courseTitle: string,
+  assessmentTitle: string,
+  type: 'assignment' | 'final_project'
+): Promise<{ instructions: string; evaluation_criteria: string; description?: string; title?: string }> {
+  try {
+    const prompt = `
+Generate konten untuk ${type === 'assignment' ? 'Tugas Praktik' : 'Projek Akhir'} pada kursus: "${courseTitle}".
+Judul Assessment: "${assessmentTitle}".
+
+Format Output JSON:
+{
+  "title": "Judul yang lebih menarik (opsional)",
+  "description": "Deskripsi singkat project/tugas",
+  "instructions": "Instruksi pengerjaan detail (Markdown)",
+  "evaluation_criteria": "Kriteria penilaian (Markdown)"
+}
+
+INSTRUKSI:
+1. Buat instruksi yang menantang dan mendasar pada industri nyata.
+2. Gunakan Bahasa Indonesia yang profesional.
+3. Langsung kembalikan JSON.
+`;
+
+    const response = await executeWithRetry(() => ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        temperature: 0.7,
+        responseMimeType: "application/json"
+      }
+    }));
+
+    const responseText = (response as any).text || (response as any).candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error("AI Assessment Gen Error:", error);
+    throw error;
+  }
+}

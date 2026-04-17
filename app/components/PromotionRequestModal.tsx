@@ -24,13 +24,14 @@ import {
   Info
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
-import { uploadPaymentProofToStorage } from "@/lib/storage";
+import { uploadPaymentProofToStorage, uploadPromotionImage } from "@/lib/storage";
 import { useAuth } from "./AuthContext";
 import PromotionCard from "./PromotionCard";
 import { Promotion } from "@/lib/promotions";
 
 interface PromotionRequestModalProps {
-  course: Course;
+  course?: Course;
+  mode?: "custom" | "course";
   onClose: () => void;
 }
 
@@ -44,8 +45,8 @@ const VIEW_PACKAGES = [
 
 const DURATION_OPTIONS = [1, 3, 7, 30, 60, 90];
 
-export default function PromotionRequestModal({ course, onClose }: PromotionRequestModalProps) {
-  const { user } = useAuth();
+export default function PromotionRequestModal({ course: initialCourse, mode, onClose }: PromotionRequestModalProps) {
+  const { user, isInstructor, isAdmin } = useAuth();
   const [step, setStep] = useState(1);
   const [location, setLocation] = useState<PromotionLocation>("homepage_banner");
   const [views, setViews] = useState(1000);
@@ -54,8 +55,68 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
   const [submitting, setSubmitting] = useState(false);
   const [paymentProof, setPaymentProof] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(initialCourse || null);
+  const [customTitle, setCustomTitle] = useState(initialCourse ? `Promo: ${initialCourse.title}` : "");
+  const [customDesc, setCustomDesc] = useState(initialCourse?.description?.substring(0, 150) || "");
+  const [customImage, setCustomImage] = useState(initialCourse?.thumbnail || "");
+  const [customLink, setCustomLink] = useState(initialCourse ? `/courses/${initialCourse.slug}` : "");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  
+  const initialMode = initialCourse ? "course" : (mode || "custom");
+  
+  // Instructor courses for selection
+  const [myCourses, setMyCourses] = useState<Course[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
+  useEffect(() => {
+    if ((isInstructor || isAdmin) && !initialCourse) {
+      const fetchMyCourses = async () => {
+        const { getCourses } = await import("@/lib/courses");
+        const { getInstructorProfile } = await import("@/lib/instructor");
+        
+        setLoadingCourses(true);
+        try {
+          let instructorId;
+          if (isInstructor && !isAdmin && user) {
+            const prof = await getInstructorProfile(user.id);
+            if (prof) instructorId = prof.id;
+          }
+          
+          const data = await getCourses({ 
+            instructorId: instructorId,
+            status: 'published'
+          });
+          setMyCourses(data);
+          
+          if (initialMode === "course" && data.length > 0 && !selectedCourse) {
+             setSelectedCourse(data[0]);
+             setCustomTitle(`Promo: ${data[0].title}`);
+             setCustomDesc(data[0].description?.substring(0, 150) || "");
+             setCustomImage(data[0].thumbnail || "");
+             setCustomLink(`/courses/${data[0].slug}`);
+          }
+        } catch (err) {
+          console.error("Error fetching courses for promo:", err);
+        }
+        setLoadingCourses(false);
+      };
+      fetchMyCourses();
+    }
+  }, [isInstructor, isAdmin, user, initialCourse]);
+
+  // Handle course selection
+  useEffect(() => {
+    if (selectedCourse && !initialCourse) {
+       setCustomTitle(`Promo: ${selectedCourse.title}`);
+       setCustomDesc(selectedCourse.description?.substring(0, 150) || "");
+       setCustomImage(selectedCourse.thumbnail || "");
+       setCustomLink(`/courses/${selectedCourse.slug}`);
+    }
+  }, [selectedCourse, initialCourse]);
 
   const LOCATION_DESCRIPTIONS: Record<PromotionLocation, string> = {
+    all: "Ditayangkan di SELURUH lokasi iklan yang tersedia secara bersamaan! Jangkauan maksimal.",
     global_announcement: "Pita promosi warna-warni yang selalu melekat di paling atas layar seluruh halaman web.",
     homepage_banner: "Banner raksasa / karosel di atas beranda yang sangat menyita perhatian.",
     homepage_inline: "Diselipkan secara natural menyerupai kursus biasa di lini beranda.",
@@ -70,7 +131,9 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
     footer_native: "Penempatan elegan yang menyatu pada bagian terbawah situs (footer).",
     sticky_bottom: "Pop-up bar bawah layar yang terus mengikuti ketika pelajar menggulir layar secara dinamis.",
     interstitial: "Iklan besar yang mengambil alih layar sesaat, layaknya tayangan TV premium berbatas waktu.",
-    video_card: "Iklan video otomatis yang terputar senyap seakan menceritakan detail promonya langsung."
+    video_card: "Iklan video otomatis yang terputar senyap seakan menceritakan detail promonya langsung.",
+    privacy_sidebar: "Penempatan eksklusif di bilah sisi halaman Kebijakan Privasi yang memberikan kesan formal dan terpercaya.",
+    privacy_policy_inline: "Disisipkan secara elegan di antara poin-poin hukum kebijakan privasi, menjangkau audiens yang teliti."
   };
 
   const totalPrice = useMemo(() => {
@@ -85,11 +148,11 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
     
     const res = await upsertPromotionRequest({
       userId: user.id,
-      courseId: course.id,
-      title: `Promo: ${course.title}`,
-      description: course.description || "No description provided.",
-      imageUrl: course.thumbnail || "",
-      linkUrl: `/courses/${course.slug}`,
+      courseId: selectedCourse?.id,
+      title: customTitle,
+      description: customDesc || "No description provided.",
+      imageUrl: customImage || selectedCourse?.thumbnail || "",
+      linkUrl: customLink || (selectedCourse ? `/courses/${selectedCourse.slug}` : "#"),
       location,
       targetImpressions: views,
       durationDays: duration,
@@ -114,27 +177,42 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
     setUploading(true);
     const { url, error: uploadError } = await uploadPaymentProofToStorage(file);
     if (uploadError) {
-      setError("Gagal mengunggah bukti transer.");
+      setError("Gagal mengunggah bukti transfer.");
     } else {
       setPaymentProof(url);
     }
     setUploading(false);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    const { url, error: uploadError } = await uploadPromotionImage(file);
+    if (uploadError) {
+      setError("Gagal mengunggah gambar iklan.");
+    } else if (url) {
+      setCustomImage(url);
+    }
+    setUploadingImage(false);
+  };
+
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-6 animate-fade-in">
       <div className="absolute inset-0" onClick={onClose} />
       
-      <div className="relative bg-[#0c0c14] border border-white/10 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-3xl my-8">
+      <div className="relative flex flex-col bg-[#0c0c14] border border-white/10 w-full max-w-2xl max-h-[90vh] rounded-[3rem] overflow-y-auto hide-scrollbar shadow-3xl">
         {/* Header */}
-        <div className="p-8 border-b border-white/5 bg-white/2 flex items-center justify-between">
+        <div className="sticky top-0 z-20 p-6 sm:p-8 border-b border-white/5 bg-[#0c0c14]/95 backdrop-blur-md flex items-center justify-between">
           <div className="flex items-center gap-4">
-             <div className="w-12 h-12 rounded-2xl bg-purple-600/20 flex items-center justify-center">
-                <Megaphone className="text-purple-400" size={24} />
+             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-900/40">
+                <Megaphone className="text-white" size={24} />
              </div>
              <div>
-                <h2 className="text-white font-bold text-xl tracking-tight">Promosikan Kursus</h2>
-                <p className="text-slate-500 text-xs font-medium">{course.title}</p>
+                <h2 className="text-white font-black text-xl tracking-tight leading-none mb-1">Kreator Spotlight</h2>
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest leading-none">
+                  {selectedCourse ? `PROMOSI: ${selectedCourse.title.substring(0, 30)}...` : "IKLAN UMUM & BRANDING"}
+                </p>
              </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-500 transition-colors"><X size={24} /></button>
@@ -144,6 +222,92 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
         <div className="p-8 space-y-8">
           {step === 1 && (
             <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+              {/* Course Selection (if not pre-selected) */}
+              {!initialCourse && (
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 flex items-center gap-1.5">
+                    {initialMode === "course" ? "1. Pilih Kursus yang Ingin Dipromosikan" : "Tautkan ke Kursus (Opsional)"}
+                  </label>
+                  <select 
+                    value={selectedCourse?.id || "none"}
+                    onChange={(e) => {
+                       const c = myCourses.find(x => x.id === e.target.value);
+                       setSelectedCourse(c || null);
+                    }}
+                    className="input-field !py-3 bg-white/5 border-white/10 text-white text-xs"
+                  >
+                    {initialMode === "custom" && <option value="none">Semua Kursus / Profil Instruktur</option>}
+                    {myCourses.map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Custom Ad Content */}
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase text-purple-500 tracking-widest ml-1 flex items-center gap-1.5">
+                  <Sparkles size={12} /> Desain Kreatif Iklan
+                </label>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between ml-1 mb-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Judul Iklan</label>
+                      <span className="text-[10px] text-slate-500 font-bold">{customTitle.length}/60</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={customTitle}
+                      onChange={(e) => setCustomTitle(e.target.value.slice(0, 60))}
+                      className="input-field !py-3 bg-white/5 border-white/10 text-white text-sm"
+                      placeholder="Judul iklan yang menarik..."
+                      maxLength={60}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between ml-1 mb-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Deskripsi</label>
+                      <span className="text-[10px] text-slate-500 font-bold">{customDesc.length}/150</span>
+                    </div>
+                    <textarea
+                      value={customDesc}
+                      onChange={(e) => setCustomDesc(e.target.value.slice(0, 150))}
+                      className="input-field !py-3 bg-white/5 border-white/10 text-white text-xs min-h-[70px] resize-none"
+                      placeholder="Deskripsi singkat yang memikat..."
+                      maxLength={150}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 mb-1.5 block">Gambar Iklan</label>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        type="url"
+                        value={customImage}
+                        onChange={(e) => setCustomImage(e.target.value)}
+                        className="input-field flex-1 !py-3 bg-white/5 border-white/10 text-white text-xs"
+                        placeholder="URL gambar atau unggah..."
+                      />
+                      <label className="cursor-pointer shrink-0">
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} />
+                        <div className={`h-full px-4 rounded-xl border border-white/10 flex items-center justify-center transition-all ${uploadingImage ? 'opacity-50 cursor-not-allowed bg-white/5' : 'bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 text-purple-400'}`}>
+                          {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 mb-1.5 block">Tautan Tujuan (URL)</label>
+                    <input
+                      type="text"
+                      value={customLink}
+                      onChange={(e) => setCustomLink(e.target.value)}
+                      className="input-field !py-3 bg-white/5 border-white/10 text-white text-xs"
+                      placeholder="https://mylearning.id/..."
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Location Selection */}
                 <div className="space-y-3">
@@ -170,6 +334,8 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
                     <option value="sticky_bottom">Sticky Bottom Ad (1.5x)</option>
                     <option value="interstitial">Full Screen Interstitial (2.0x)</option>
                     <option value="video_card">Autoplay Video Card (1.5x)</option>
+                    <option value="privacy_sidebar">Privacy Sidebar (1.0x)</option>
+                    <option value="privacy_policy_inline">Privacy Policy Inline (1.1x)</option>
                   </select>
                   <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl mt-2">
                      <p className="text-[11px] text-purple-200 leading-relaxed font-medium">
@@ -179,20 +345,20 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
                 </div>
 
                 {/* Live Preview Display (Responsive) */}
-                <div className="md:row-span-2 space-y-3">
+                 <div className="md:row-span-2 space-y-3">
                    <label className="text-[10px] font-black uppercase text-purple-500 tracking-widest ml-1 flex items-center gap-1.5">
                       Pratinjau Langsung
                    </label>
-                   <div className="relative rounded-2xl border border-dashed border-white/10 p-4 bg-white/2 min-h-[120px] flex items-center justify-center">
-                      <div className="w-full h-full scale-[0.8] md:scale-100 origin-center transition-all duration-500">
+                   <div className="relative rounded-2xl border border-dashed border-white/10 overflow-x-hidden overflow-y-auto bg-white/2 flex items-start justify-center h-[350px] custom-scrollbar">
+                      <div className="w-full flex justify-center scale-[0.75] origin-top transition-all duration-500 p-2 sm:p-4">
                         <PromotionCard 
                           isPreview
                           variant={location.includes('sidebar') || location.includes('spotlight') ? 'spotlight' : (location.includes('banner') || location.includes('announcement') || location.includes('sticky')) ? 'banner' : 'card'}
                           promotion={{
                             id: 'preview',
-                            title: `Promo: ${course.title}`,
-                            description: course.description?.substring(0, 100) || "Lihat materi kursus terbaik kami...",
-                            imageUrl: course.thumbnail || "",
+                            title: customTitle,
+                            description: customDesc || "Lihat materi kursus terbaik kami...",
+                            imageUrl: customImage || "",
                             videoUrl: location === 'video_card' ? 'dummy.mp4' : undefined,
                             linkUrl: "#",
                             location: location,
@@ -216,39 +382,34 @@ export default function PromotionRequestModal({ course, onClose }: PromotionRequ
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 flex items-center gap-1.5">
                     <Calendar size={12} className="text-cyan-500" /> Masa Aktif
                   </label>
-                  <select 
+                  <input 
+                    type="number"
+                    min="1"
+                    max="365"
                     value={duration}
-                    onChange={(e) => setDuration(parseInt(e.target.value))}
+                    onChange={(e) => setDuration(Math.min(365, Math.max(1, parseInt(e.target.value) || 1)))}
                     className="input-field !py-3 bg-white/5 border-white/10 text-white"
-                  >
-                    {DURATION_OPTIONS.map(d => (
-                      <option key={d} value={d}>{d} Hari</option>
-                    ))}
-                  </select>
+                    placeholder="Masukkan jumlah hari..."
+                  />
                 </div>
               </div>
 
               {/* View Packages */}
               <div className="space-y-4">
                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 flex items-center gap-1.5">
-                    <Eye size={12} className="text-emerald-500" /> Pilih Target Penayangan (Impressions)
+                    <Eye size={12} className="text-emerald-500" /> Tentukan Target Penayangan (Impressions) Manual
                  </label>
-                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {VIEW_PACKAGES.map((pkg) => (
-                      <button
-                        key={pkg.value}
-                        onClick={() => setViews(pkg.value)}
-                        className={`p-4 rounded-2xl border transition-all text-center group ${
-                          views === pkg.value 
-                          ? "bg-purple-600/20 border-purple-500 text-white" 
-                          : "bg-white/[0.02] border-white/5 text-slate-400 hover:border-white/20"
-                        }`}
-                      >
-                         <div className={`text-lg font-black ${views === pkg.value ? "text-purple-400" : "text-white"}`}>{pkg.label.split(' ')[0]}</div>
-                         <div className="text-[10px] font-bold opacity-60">VIEWS</div>
-                      </button>
-                    ))}
-                 </div>
+                 <input 
+                    type="number"
+                    min="1000"
+                    max="1000000"
+                    step="500"
+                    value={views}
+                    onChange={(e) => setViews(Math.min(1000000, Math.max(10, parseInt(e.target.value) || 10)))}
+                    className="input-field !py-3 bg-white/5 border-white/10 text-white text-lg font-mono tracking-widest"
+                    placeholder="Contoh: 10000"
+                 />
+                 <p className="text-[10px] text-slate-500 ml-1">Minimal target: 10 impressions.</p>
               </div>
 
               {/* Summary Card */}

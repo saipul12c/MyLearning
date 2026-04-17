@@ -7,7 +7,12 @@ import Image from "next/image";
 import ErrorState from "@/app/components/ui/ErrorState";
 import { formatPrice } from "@/lib/data";
 
+import { useAuth } from "@/app/components/AuthContext";
+import { getInstructorProfile } from "@/lib/instructor";
+
 export default function AdminEnrollmentsPage() {
+  const { user, isAdmin, isInstructor } = useAuth();
+  const [instructorId, setInstructorId] = useState<string | null>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -19,19 +24,49 @@ export default function AdminEnrollmentsPage() {
   const [selectedProof, setSelectedProof] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState(REJECTION_REASONS[0]);
   const [isRejecting, setIsRejecting] = useState<string | null>(null);
+  const [isFiltering, setIsFiltering] = useState(false);
 
+  // 1. Get instructor profile if needed
+  useEffect(() => {
+    if (isInstructor && !isAdmin && user) {
+      const fetchInstructor = async () => {
+        const profile = await getInstructorProfile(user.id);
+        if (profile) setInstructorId(profile.id);
+      };
+      fetchInstructor();
+    }
+  }, [isInstructor, isAdmin, user]);
+
+  // 2. Fetch Data
   useEffect(() => {
     let isMounted = true;
     
+    // If instructor and we don't have instructorId yet, wait
+    if (isInstructor && !isAdmin && !instructorId) return;
+
     const fetchData = async () => {
       try {
-        setLoading(true);
-        const { data, totalCount: count } = await getAllEnrollmentsAdmin(page, pageSize, statusFilter);
+        if (enrollments.length === 0) {
+           setLoading(true);
+        } else {
+           setIsFiltering(true);
+        }
+        
+        const { data, totalCount: count, error: fetchErr } = await getAllEnrollmentsAdmin(
+          page, 
+          pageSize, 
+          statusFilter,
+          instructorId || undefined
+        );
         
         if (isMounted) {
-          setEnrollments(data);
-          setTotalCount(count);
-          setError(null);
+          if (fetchErr) {
+            setError(fetchErr);
+          } else {
+            setEnrollments(data);
+            setTotalCount(count);
+            setError(null);
+          }
         }
       } catch (err: any) {
         if (isMounted) {
@@ -39,14 +74,17 @@ export default function AdminEnrollmentsPage() {
           setError("Gagal memuat daftar pendaftaran.");
         }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setIsFiltering(false);
+        }
       }
     };
 
     fetchData();
     
     return () => { isMounted = false; };
-  }, [refresh, page, statusFilter]);
+  }, [refresh, page, statusFilter, instructorId, isAdmin, isInstructor]);
 
   const handleFilterChange = (newStatus: string) => {
     setStatusFilter(newStatus);
@@ -134,7 +172,15 @@ export default function AdminEnrollmentsPage() {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden relative">
+        {isFiltering && (
+           <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
+              <div className="bg-[#0f0f1a] p-4 rounded-xl border border-white/10 shadow-2xl flex items-center gap-3">
+                 <div className="w-5 h-5 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+                 <span className="text-white text-xs font-bold uppercase tracking-widest">Sinkronisasi...</span>
+              </div>
+           </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

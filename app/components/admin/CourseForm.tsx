@@ -24,7 +24,8 @@ import { type Course } from "@/lib/data";
 import Link from "next/link";
 import Skeleton from "../ui/Skeleton";
 import VideoInput from "../VideoInput";
-import { generateAILessonContent } from "@/lib/gemini";
+import { generateAILessonContent, generateAIQuizQuestions, generateAIAssessmentContent } from "@/lib/gemini";
+import Portal from "@/app/components/ui/Portal";
 
 interface Props {
   courseId?: string;
@@ -324,6 +325,53 @@ export default function CourseForm({ courseId }: Props) {
     }
   };
 
+  const handleGenerateAIQuestions = async (assessmentId: string, topic: string) => {
+    if (!topic) {
+        showNotification("Judul kuis harus ada untuk generate pertanyaan.", "error");
+        return;
+    }
+    setIsGeneratingAI(true);
+    try {
+        const questions = await generateAIQuizQuestions(formData.title, topic, 5);
+        for (const q of questions) {
+            await upsertQuizQuestion({ ...q, assessment_id: assessmentId });
+        }
+        showNotification(`${questions.length} Pertanyaan kuis digenerate oleh AI!`, "success");
+        const updated = await getCourseAssessments(formData.slug);
+        if (updated) setAssessments(updated);
+    } catch (err: any) {
+        showNotification("Gagal generate kuis AI: " + err.message, "error");
+    } finally {
+        setIsGeneratingAI(false);
+    }
+  };
+
+  const handleGenerateAIAssessment = async (type: 'assignment' | 'final_project') => {
+    if (!assessmentModal.data?.title) {
+        showNotification("Masukkan judul terlebih dahulu.", "error");
+        return;
+    }
+    setIsGeneratingAI(true);
+    try {
+        const content = await generateAIAssessmentContent(formData.title, assessmentModal.data.title, type);
+        setAssessmentModal(prev => ({
+            ...prev,
+            data: { 
+                ...prev.data, 
+                description: content.description || prev.data.description,
+                instructions: content.instructions || prev.data.instructions,
+                evaluation_criteria: content.evaluation_criteria || prev.data.evaluation_criteria,
+                title: content.title || prev.data.title
+            }
+        }));
+        showNotification("Konten asesmen digenerate oleh AI!", "success");
+    } catch (err: any) {
+        showNotification("Gagal generate AI: " + err.message, "error");
+    } finally {
+        setIsGeneratingAI(false);
+    }
+  };
+
   // Thumbnail Upload Handler
   const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -423,16 +471,18 @@ export default function CourseForm({ courseId }: Props) {
   return (
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-8 pb-20 animate-fade-in">
       {notification.show && (
-        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl border shadow-2xl glass-strong animate-slide-right ${
-          notification.type === "success" ? "border-emerald-500/30 text-emerald-400" : "border-red-500/30 text-red-400"
-        }`}>
-          {notification.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-          <p className="font-semibold">{notification.message}</p>
-        </div>
+        <Portal>
+          <div className={`fixed top-6 right-6 z-[10000] flex items-center gap-3 px-6 py-4 rounded-2xl border shadow-2xl glass-strong animate-slide-right ${
+            notification.type === "success" ? "border-emerald-500/30 text-emerald-400" : "border-red-500/30 text-red-400"
+          }`}>
+            {notification.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+            <p className="font-semibold">{notification.message}</p>
+          </div>
+        </Portal>
       )}
 
-      {/* Header & Tab Switcher */}
-      <div className="flex items-center justify-between sticky top-0 z-10 py-4 glass bg-background/80 -mx-4 px-4 rounded-2xl mb-4 backdrop-blur-xl transition-all duration-300">
+      {/* Header & Tab Switcher - Sticks flush to dashboard top bar */}
+      <div className="flex items-center justify-between sticky top-0 z-20 py-4 glass bg-[#09090f]/95 border-b border-white/5 px-2 mb-8 backdrop-blur-xl transition-all duration-300">
         <div className="flex items-center gap-3">
           <Link href="/dashboard/admin/courses" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors group">
             <ArrowLeft size={20} className="text-white transition-transform group-hover:-translate-x-1" />
@@ -642,7 +692,13 @@ export default function CourseForm({ courseId }: Props) {
                          </button>
                       </div>
                       <div className="space-y-3">
-                         {assessments.quizzes.length === 0 && <p className="text-slate-600 text-sm italic px-2">Belum ada kuis.</p>}
+                         {assessments.quizzes.length === 0 && (
+                            <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl text-center bg-white/[0.01]">
+                               <HelpCircle className="mx-auto text-slate-700 mb-2" size={32} />
+                               <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Belum Ada Kuis</p>
+                               <p className="text-slate-500 text-[10px] mt-1 max-w-[200px] mx-auto">Tambahkan kuis untuk menguji pemahaman siswa.</p>
+                            </div>
+                         )}
                          {assessments.quizzes.map((q: any) => (
                             <div key={q.id} className="group relative glass-card p-5 rounded-2xl border border-white/5 hover:border-purple-500/30 transition-all duration-300">
                                <div className="flex justify-between items-start">
@@ -660,13 +716,24 @@ export default function CourseForm({ courseId }: Props) {
                                   </div>
                                </div>
                                <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                                  <button 
-                                    type="button"
-                                    onClick={() => setQuestionModal({ isOpen: true, assessmentId: q.id, data: { correct_answer_index: 0, options: ['', '', '', ''], points: 1 }, isSaving: false })} 
-                                    className="text-[10px] font-black text-purple-400 hover:text-purple-300 tracking-widest uppercase transition-colors"
-                                  >
-                                     Kelola Pertanyaan
-                                  </button>
+                                  <div className="flex items-center gap-3">
+                                     <button 
+                                       type="button"
+                                       onClick={() => setQuestionModal({ isOpen: true, assessmentId: q.id, data: { correct_answer_index: 0, options: ['', '', '', ''], points: 1 }, isSaving: false })} 
+                                       className="text-[10px] font-black text-purple-400 hover:text-purple-300 tracking-widest uppercase transition-colors"
+                                     >
+                                        Kelola Soal
+                                     </button>
+                                     <div className="w-px h-3 bg-white/10"></div>
+                                     <button 
+                                       type="button"
+                                       disabled={isGeneratingAI}
+                                       onClick={() => handleGenerateAIQuestions(q.id, q.title)} 
+                                       className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 tracking-widest uppercase transition-colors flex items-center gap-1"
+                                     >
+                                        {isGeneratingAI ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} Generate AI
+                                      </button>
+                                   </div>
                                   {q.isRequired && <span className="text-[9px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-bold uppercase">Wajib</span>}
                                </div>
                             </div>
@@ -689,7 +756,13 @@ export default function CourseForm({ courseId }: Props) {
                          </button>
                       </div>
                       <div className="space-y-3">
-                         {assessments.assignments.length === 0 && <p className="text-slate-600 text-sm italic px-2">Belum ada tugas.</p>}
+                         {assessments.assignments.length === 0 && (
+                           <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl text-center bg-white/[0.01]">
+                              <ListOrdered className="mx-auto text-slate-700 mb-2" size={32} />
+                              <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Belum Ada Tugas</p>
+                              <p className="text-slate-500 text-[10px] mt-1 max-w-[200px] mx-auto">Berikan tantangan praktik untuk mengasah skill siswa.</p>
+                           </div>
+                         )}
                          {assessments.assignments.map((a: any) => (
                             <div key={a.id} className="group glass-card p-5 rounded-2xl border border-white/5 hover:border-cyan-500/30 transition-all duration-300">
                                <div className="flex justify-between items-start">
@@ -763,10 +836,11 @@ export default function CourseForm({ courseId }: Props) {
 
       {/* Lesson Modal (Overhauled) */}
       {lessonModal.isOpen && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+        <Portal>
+         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+            <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                {/* Modal Header */}
-               <div className="p-6 md:p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+               <div className="sticky top-0 z-10 p-6 md:p-8 border-b border-white/5 flex items-center justify-between bg-[#0F172A]/95 backdrop-blur-sm">
                   <div>
                      <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                         <BookOpen className="text-purple-400" /> Detail Materi Kursus
@@ -1001,37 +1075,58 @@ export default function CourseForm({ courseId }: Props) {
                   </label>
                </div>
                {/* Modal Footer */}
-               <div className="p-6 md:p-8 border-t border-white/5 bg-white/[0.02] flex justify-end gap-3">
-                  <button type="button" onClick={() => setLessonModal({...lessonModal, isOpen: false})} className="btn-secondary !rounded-2xl px-6">Batal</button>
-                  <button 
-                     type="button" 
-                     disabled={lessonModal.isSaving}
-                     onClick={() => handleSaveLesson(lessonModal.lesson)} 
-                     className="btn-primary !rounded-2xl px-8 flex items-center gap-2 group"
-                  >
-                     {lessonModal.isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                     Simpan Materi
-                  </button>
-               </div>
-            </div>
-         </div>
+                <div className="p-6 md:p-8 border-t border-white/5 bg-white/[0.02] flex justify-end gap-3">
+                   <button type="button" onClick={() => setLessonModal({...lessonModal, isOpen: false})} className="btn-secondary !rounded-2xl px-6">Batal</button>
+                   <button 
+                      type="button" 
+                      disabled={lessonModal.isSaving}
+                      onClick={() => handleSaveLesson(lessonModal.lesson)} 
+                      className="btn-primary !rounded-2xl px-8 flex items-center gap-2 group"
+                   >
+                      {lessonModal.isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      Simpan Materi
+                   </button>
+                </div>
+             </div>
+          </div>
+        </Portal>
       )}
 
       {/* Assessment Modal (Overhauled) */}
       {assessmentModal.isOpen && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <Portal>
+         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                {/* Modal Header */}
                <div className="p-6 md:p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                  <div>
-                     <h3 className="text-2xl font-bold text-white flex items-center gap-3 capitalize">
+                  <div className="flex-1">
+                     <h3 className="text-xl md:text-2xl font-bold text-white capitalize">
                         {assessmentModal.data?.id ? 'Edit' : 'Tambah'} {assessmentModal.type.replace('_', ' ')}
                      </h3>
-                     <p className="text-slate-500 text-sm mt-1">Konfigurasi parameter asesmen kursus Anda.</p>
+                     <p className="text-slate-500 text-xs mt-1">Konfigurasi parameter asesmen kursus Anda.</p>
                   </div>
-                  <button type="button" onClick={() => setAssessmentModal({...assessmentModal, isOpen: false})} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-400 transition-colors">
-                     <X size={20} />
-                  </button>
+                  
+                  <div className="flex items-center gap-3">
+                     <button
+                        type="button"
+                        disabled={isGeneratingAI}
+                        onClick={() => handleGenerateAIAssessment(assessmentModal.type as any)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                           isGeneratingAI 
+                           ? 'bg-purple-500/20 text-purple-400 animate-pulse' 
+                           : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white border border-indigo-500/20 shadow-lg'
+                        }`}
+                     >
+                        {isGeneratingAI ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        {isGeneratingAI ? "Generating..." : "AI Generate"}
+                     </button>
+                     
+                     <div className="w-px h-8 bg-white/5 mx-1" />
+                     
+                     <button type="button" onClick={() => setAssessmentModal({...assessmentModal, isOpen: false})} className="w-10 h-10 rounded-xl hover:bg-white/10 flex items-center justify-center text-slate-400 transition-colors">
+                        <X size={20} />
+                     </button>
+                  </div>
                </div>
 
                {/* Modal Tabs */}
@@ -1156,11 +1251,13 @@ export default function CourseForm({ courseId }: Props) {
                </div>
             </div>
          </div>
+        </Portal>
       )}
 
       {/* Question Modal (Overhauled) */}
       {questionModal.isOpen && (
-         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <Portal>
+         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="relative w-full max-w-2xl bg-[#0F172A] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                <div className="p-8 border-b border-white/5 flex items-center justify-between">
                   <h3 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -1241,6 +1338,7 @@ export default function CourseForm({ courseId }: Props) {
                </div>
             </div>
          </div>
+        </Portal>
       )}
     </form>
   );

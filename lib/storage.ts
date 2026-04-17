@@ -11,19 +11,28 @@ export async function uploadThumbnail(file: File): Promise<{ url: string | null;
 }
 
 export async function uploadAvatar(file: File): Promise<{ url: string | null; error: any }> {
-  return uploadToBucket(file, "avatars", "user-avatars");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: "Authentication required" };
+  return uploadToBucket(file, "avatars", `${user.id}/user-avatars`);
 }
 
 export async function uploadChatFile(file: File): Promise<{ url: string | null; error: any }> {
-  return uploadToBucket(file, "chat_attachments", "attachments");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: "Authentication required" };
+  return uploadToBucket(file, "chat_attachments", `${user.id}/attachments`);
 }
 
 export async function uploadPaymentProofToStorage(file: File): Promise<{ url: string | null; error: any }> {
-  return uploadToBucket(file, "payments", "proofs");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: "Authentication required" };
+  // Path must start with user ID for RLS: [user.id]/proofs/[filename]
+  return uploadToBucket(file, "payments", `${user.id}/proofs`);
 }
 
 export async function uploadSubmission(file: File): Promise<{ url: string | null; error: any }> {
-  return uploadToBucket(file, "submissions", "student-submissions");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: "Authentication required" };
+  return uploadToBucket(file, "submissions", `${user.id}/student-submissions`);
 }
 
 /**
@@ -31,6 +40,7 @@ export async function uploadSubmission(file: File): Promise<{ url: string | null
  */
 export async function uploadVideo(
   file: File, 
+  folder: string = "course-videos",
   onProgress?: (progress: number) => void
 ): Promise<{ url: string | null; error: any }> {
   try {
@@ -40,12 +50,9 @@ export async function uploadVideo(
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-    const filePath = `course-videos/${fileName}`;
+    const filePath = `${folder}/${fileName}`;
 
-    // Supabase JS client doesn't have a direct native XHR progress hook in the standard 'upload' call 
-    // unless using TUS or a custom implementation. 
-    // For now, we provide the scaffolding for progress.
-    const { error: uploadError, data } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from("videos")
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -62,6 +69,10 @@ export async function uploadVideo(
   } catch (err) {
     return { url: null, error: err };
   }
+}
+
+export async function uploadPromotionVideo(file: File): Promise<{ url: string | null; error: any }> {
+  return uploadVideo(file, "promos");
 }
 
 /**

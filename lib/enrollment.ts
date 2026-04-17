@@ -238,6 +238,26 @@ export async function enrollCourse(
 
     if (error) throw error;
 
+    // Trigger Notification for Student
+    await createNotification({
+        userId,
+        title: "Pendaftaran Berhasil! 📝",
+        message: isActuallyFree 
+            ? `Anda telah terdaftar di kursus "${courseTitle}". Silakan mulai belajar!`
+            : `Pendaftaran kursus "${courseTitle}" diterima. Silakan selesaikan pembayaran sebesar Rp ${finalPaymentAmount.toLocaleString()} untuk mulai belajar.`,
+        type: 'info',
+        linkUrl: isActuallyFree ? `/dashboard/my-courses` : `/dashboard/enrollments`
+    });
+
+    if (validatedVoucher) {
+       await createNotification({
+          userId,
+          title: "Voucher Berhasil! 🎫",
+          message: `Potongan harga sebesar Rp ${finalDiscountAmount.toLocaleString()} telah diterapkan menggunakan voucher "${validatedVoucher.code}".`,
+          type: 'success'
+       });
+    }
+
     // Increment voucher usage immediately if free
     if (isActuallyFree && validatedVoucher && data) {
       await incrementVoucherUsage(validatedVoucher.id, userId, data.id);
@@ -391,6 +411,20 @@ export async function verifyPayment(
         linkUrl: approve ? `/dashboard/my-courses` : `/dashboard/enrollments`
     });
 
+    // Notify Instructor if approved
+    if (approve) {
+      const { data: courseData } = await supabase.from("courses").select("instructor_id, title").eq("id", enr.course_id).single();
+      if (courseData?.instructor_id) {
+         await createNotification({
+            userId: courseData.instructor_id,
+            title: "Siswa Baru Terdaftar! 🎓",
+            message: `Siswa baru telah resmi terdaftar di kursus "${courseData.title}".`,
+            type: 'info',
+            linkUrl: `/dashboard/admin/enrollments`
+         });
+      }
+    }
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -499,7 +533,8 @@ export async function getActiveEnrollment(userId: string): Promise<Enrollment | 
 export async function getAllEnrollmentsAdmin(
   page: number = 1, 
   pageSize: number = 20, 
-  status: string = "all"
+  status: string = "all",
+  instructorId?: string
 ): Promise<{ data: Enrollment[]; totalCount: number; error?: string }> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -515,13 +550,22 @@ export async function getAllEnrollmentsAdmin(
     if (profile?.role !== "admin" && profile?.role !== "instructor") throw new Error("Forbidden");
 
     // 1. Build Query
-    let query = supabase
-      .from("enrollments")
-      .select(`
+    let query;
+    const select = `
         *,
         voucher:vouchers(code),
-        user:user_profiles (full_name, avatar_url)
-      `, { count: 'exact' });
+        user:user_profiles (full_name, avatar_url),
+        courses!inner(instructor_id)
+      `;
+
+    query = supabase
+      .from("enrollments")
+      .select(select, { count: 'exact' });
+
+    // 2. Apply Instructor Filter
+    if (instructorId) {
+      query = query.eq("courses.instructor_id", instructorId);
+    }
 
     // 2. Apply Filters
     if (status !== "all") {

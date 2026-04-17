@@ -231,3 +231,108 @@ DROP POLICY IF EXISTS "Only admins can view logs" ON promotion_impression_logs;
 CREATE POLICY "Only admins can view logs" ON promotion_impression_logs FOR SELECT USING (is_admin());
 DROP POLICY IF EXISTS "System can insert logs" ON promotion_impression_logs;
 CREATE POLICY "System can insert logs" ON promotion_impression_logs FOR INSERT WITH CHECK (true); -- Functions use this
+
+-- ======================================================
+-- 13. STORAGE POLICIES
+-- ======================================================
+
+-- 13.1 STORAGE: thumbnails (Course Thumbnails & Promos)
+-- Anyone can view
+DROP POLICY IF EXISTS "Public Access thumbnails" ON storage.objects;
+CREATE POLICY "Public Access thumbnails" ON storage.objects FOR SELECT USING (bucket_id = 'thumbnails');
+
+-- Admins & Instructors can manage
+DROP POLICY IF EXISTS "Admin/Instructor manage thumbnails" ON storage.objects;
+CREATE POLICY "Admin/Instructor manage thumbnails" ON storage.objects FOR ALL TO authenticated
+USING (
+  bucket_id = 'thumbnails' AND (is_admin() OR is_instructor())
+)
+WITH CHECK (
+  bucket_id = 'thumbnails' AND (is_admin() OR is_instructor())
+);
+
+
+-- 13.2 STORAGE: avatars (User Profiles)
+-- Anyone can view
+DROP POLICY IF EXISTS "Public Access avatars" ON storage.objects;
+CREATE POLICY "Public Access avatars" ON storage.objects FOR SELECT USING (bucket_id = 'avatars');
+
+-- Users can manage their own avatar, Admins can manage all
+DROP POLICY IF EXISTS "Users can manage own avatar" ON storage.objects;
+CREATE POLICY "Users can manage own avatar" ON storage.objects FOR ALL TO authenticated
+USING (
+  bucket_id = 'avatars' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin()
+  )
+)
+WITH CHECK (
+  bucket_id = 'avatars' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin()
+  )
+);
+
+
+-- 13.3 STORAGE: payments (Payment Proofs)
+-- Only owner and admins can view
+DROP POLICY IF EXISTS "Owner/Admin view payments" ON storage.objects;
+CREATE POLICY "Owner/Admin view payments" ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'payments' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin()
+  )
+);
+
+-- Users can upload their own proof
+DROP POLICY IF EXISTS "Users upload own payment proof" ON storage.objects;
+CREATE POLICY "Users upload own payment proof" ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'payments' AND (
+    auth.uid()::text = (storage.foldername(name))[1]
+  )
+);
+
+
+-- 13.4 STORAGE: chat_attachments (Help Center)
+DROP POLICY IF EXISTS "Users/Admin access chat files" ON storage.objects;
+CREATE POLICY "Users/Admin access chat files" ON storage.objects FOR ALL TO authenticated
+USING (
+  bucket_id = 'chat_attachments' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin()
+  )
+)
+WITH CHECK (
+  bucket_id = 'chat_attachments' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin()
+  )
+);
+
+
+-- 13.5 STORAGE: submissions (Assignments)
+DROP POLICY IF EXISTS "Students/Admin access submissions" ON storage.objects;
+CREATE POLICY "Students/Admin access submissions" ON storage.objects FOR ALL TO authenticated
+USING (
+  bucket_id = 'submissions' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin() OR is_instructor()
+  )
+)
+WITH CHECK (
+  bucket_id = 'submissions' AND (
+    (auth.uid()::text = (storage.foldername(name))[1]) OR is_admin() OR is_instructor()
+  )
+);
+
+
+-- 13.6 STORAGE: videos (Course Lessons)
+-- Admins/Instructors manage, Enrolled students can view (handled via app logic usually, but here is base)
+DROP POLICY IF EXISTS "Admin/Instructor manage videos" ON storage.objects;
+CREATE POLICY "Admin/Instructor manage videos" ON storage.objects FOR ALL TO authenticated
+USING (
+  bucket_id = 'videos' AND (is_admin() OR is_instructor())
+)
+WITH CHECK (
+  bucket_id = 'videos' AND (is_admin() OR is_instructor())
+);
+
+DROP POLICY IF EXISTS "Public can view videos" ON storage.objects;
+CREATE POLICY "Public can view videos" ON storage.objects FOR SELECT TO authenticated
+USING (bucket_id = 'videos'); -- Actual paywall is handled by App & Lesson policies

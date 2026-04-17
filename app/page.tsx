@@ -16,7 +16,7 @@ import {
 import { formatPrice, formatNumber } from "@/lib/utils";
 import { getCourses, getPopularCourses, getSystemStats } from "@/lib/courses";
 import { getLatestTestimonials, type Testimonial } from "@/lib/reviews";
-import { getActivePromotions } from "@/lib/promotions";
+import { getPromotionsBatch } from "@/lib/promotions";
 import PromotionCard from "./components/PromotionCard";
 import VerifiedBadge from "./components/VerifiedBadge";
 import NativeAdCard from "./components/NativeAdCard";
@@ -24,12 +24,15 @@ import NativeAdCard from "./components/NativeAdCard";
 export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
 export default async function HomePage() {
-  const [popularCourses, homepagePromos, stats, dbTestimonials] = await Promise.all([
+  const [popularCourses, stats, dbTestimonials, adBatch] = await Promise.all([
     getPopularCourses(8),
-    getActivePromotions("homepage_banner"),
     getSystemStats(),
-    getLatestTestimonials(15)
+    getLatestTestimonials(15),
+    getPromotionsBatch(["homepage_banner", "homepage_inline"])
   ]);
+  
+  const homepagePromos = adBatch["homepage_banner"] || [];
+  const inlinePromo = adBatch["homepage_inline"]?.[0] || null;
   
   // Robust Fallback + Shuffle
   const fallbackTestimonials = [
@@ -370,7 +373,7 @@ export default async function HomePage() {
       {/* ===== INLINE AD SECTION ===== */}
       <section className="py-6">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <NativeAdCard location="homepage_inline" variant="inline" />
+          <NativeAdCard location="homepage_inline" variant="inline" initialPromo={inlinePromo} />
         </div>
       </section>
 

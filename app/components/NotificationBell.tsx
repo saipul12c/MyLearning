@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, Trash2, CheckCircle2, AlertCircle, Info, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "./AuthContext";
+import { supabase } from "@/lib/supabase";
 import { getUserNotifications, markAsRead, markAllAsRead, deleteNotification, type Notification } from "@/lib/notifications";
 
 export default function NotificationBell() {
@@ -17,9 +18,43 @@ export default function NotificationBell() {
   useEffect(() => {
     if (isLoggedIn && user) {
       fetchNotifications();
-      // Polling for new notifications every 60 seconds
-      const interval = setInterval(fetchNotifications, 60000);
-      return () => clearInterval(interval);
+      
+      const channel = supabase
+        .channel(`notifications-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            const newNotif: Notification = {
+              id: payload.new.id,
+              userId: payload.new.user_id,
+              title: payload.new.title,
+              message: payload.new.message,
+              type: payload.new.type,
+              linkUrl: payload.new.link_url,
+              isRead: payload.new.is_read,
+              createdAt: payload.new.created_at
+            };
+            setNotifications(prev => [newNotif, ...prev]);
+            
+            // Notification sound (optional)
+            try {
+              const audio = new Audio('/notification.mp3');
+              audio.volume = 0.5;
+              audio.play().catch(() => {});
+            } catch (p) {}
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [isLoggedIn, user]);
 

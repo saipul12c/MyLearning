@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./components/AuthContext";
 import LayoutWrapper from "./components/LayoutWrapper";
 import ClientInitializer from "./components/ClientInitializer";
 
-const inter = Inter({
+// Disabling next/font/google due to build-time connection issues.
+// Font is now handled in globals.css via standard @import or system fallback.
+const inter = {
   variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
+};
 
 export const metadata: Metadata = {
   title: {

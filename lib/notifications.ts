@@ -100,6 +100,18 @@ export async function deleteNotification(notificationId: string): Promise<{ succ
   }
 }
 
+export async function deleteAllNotifications(userId: string): Promise<{ success: boolean }> {
+  try {
+    const { error } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("user_id", userId);
+    return { success: !error };
+  } catch {
+    return { success: false };
+  }
+}
+
 // Admin Helper: Notify all admins
 export async function notifyAdmins(title: string, message: string, linkUrl?: string) {
     // 1. Get all admin user IDs

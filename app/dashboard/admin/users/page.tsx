@@ -22,7 +22,8 @@ import { useAuth } from "@/app/components/AuthContext";
 import Skeleton from "@/app/components/ui/Skeleton";
 
 export default function AdminUsersPage() {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, isInstructor } = useAuth();
+  const [instructorId, setInstructorId] = useState<string | null>(null);
   const [users, setUsers] = useState<SafeUser[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,18 @@ export default function AdminUsersPage() {
   const pageSize = 20;
 
   const [refresh, setRefresh] = useState(0);
+  
+  // Get instructor profile if needed
+  useEffect(() => {
+    if (isInstructor && !isAdmin && user) {
+      const fetchInstructor = async () => {
+        const { getInstructorProfile } = await import("@/lib/instructor");
+        const profile = await getInstructorProfile(user.id);
+        if (profile) setInstructorId(profile.id);
+      };
+      fetchInstructor();
+    }
+  }, [isInstructor, isAdmin, user]);
 
   // Modal States
   const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
@@ -64,7 +77,8 @@ export default function AdminUsersPage() {
           pageSize,
           search: searchQuery,
           role: roleFilter,
-          status: statusFilter
+          status: statusFilter,
+          instructorId: instructorId || undefined
         });
         
         setUsers(data);
@@ -276,19 +290,29 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <select
-                        value={u.role}
-                        onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
-                        className={`bg-white/5 border border-white/10 rounded-xl text-xs px-3 py-1.5 outline-none transition-all focus:ring-2 focus:ring-purple-500/40 ${
-                          u.role === 'admin' ? 'text-purple-400 border-purple-500/30' : 
-                          u.role === 'instructor' ? 'text-cyan-400 border-cyan-500/30' : 'text-slate-400'
-                        }`}
-                        disabled={u.email === "admin@mylearning.id" || !isAdmin}
-                      >
-                        <option value="user">User</option>
-                        <option value="instructor">Instructor</option>
-                        <option value="admin">Admin</option>
-                      </select>
+                      {isAdmin ? (
+                        <select
+                          value={u.role}
+                          onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
+                          className={`bg-white/5 border border-white/10 rounded-xl text-xs px-3 py-1.5 outline-none transition-all focus:ring-2 focus:ring-purple-500/40 ${
+                            u.role === 'admin' ? 'text-purple-400 border-purple-500/30' : 
+                            u.role === 'instructor' ? 'text-cyan-400 border-cyan-500/30' : 'text-slate-400'
+                          }`}
+                          disabled={u.email === "admin@mylearning.id"}
+                        >
+                          <option value="user">User</option>
+                          <option value="instructor">Instructor</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      ) : (
+                        <div className={`px-4 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest ${
+                          u.role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 
+                          u.role === 'instructor' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 
+                          'bg-white/5 text-slate-500 border-white/10'
+                        }`}>
+                          {u.role}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                        <div className="flex items-center gap-2 text-white font-medium">

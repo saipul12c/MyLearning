@@ -60,6 +60,17 @@ export async function createChatSession(userData: { userId?: string, name: strin
     console.error("Error creating chat session:", error);
     return null;
   }
+
+  // Notify Admins
+  try {
+    const { notifyAdmins } = await import("./notifications");
+    await notifyAdmins(
+        "Sesi Live Chat Baru 💬",
+        `${userData.name} telah memulai sesi bantuan langsung.`,
+        `/dashboard/admin/live-cs`
+    );
+  } catch (ignore) {}
+
   return data;
 }
 

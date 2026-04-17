@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { ChevronDown, HelpCircle, MessageCircle, Search, Bot, Send, Sparkles, Loader2, X, History, Lightbulb, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { getFAQGeminiResponse } from "@/lib/gemini";
@@ -128,8 +128,19 @@ export default function FAQPage() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const aiResultRef = useRef<HTMLDivElement>(null);
 
-  // Dynamic Suggestions logic
-  const suggestions = useMemo(() => {
+  const [suggestions, setSuggestions] = useState<{ text: string, color: string }[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load history and random suggestions on mount
+  useEffect(() => {
+    // 1. Load History
+    const savedHistory = localStorage.getItem("faq_search_history");
+    if (savedHistory) {
+      setHistory(JSON.parse(savedHistory).slice(0, 5));
+    }
+
+    // 2. Generate Random Suggestions
     const categoryColors: Record<string, string> = {
       "Umum": "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
       "Pembayaran": "bg-orange-500/10 text-orange-400 border-orange-500/20",
@@ -137,22 +148,35 @@ export default function FAQPage() {
       "Sertifikat": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
     };
 
-    // Flatten questions and pick 3
-    const allQuestions = faqData.flatMap(cat => 
-      cat.items.map(item => ({
-        text: item.question,
-        color: categoryColors[cat.name] || "bg-white/5 text-slate-400 border-white/10"
-      }))
-    );
+    const getRandomItems = () => {
+      const selected: { text: string, color: string }[] = [];
+      const usedCategories = new Set<string>();
+      
+      // Try to get one from different categories for variety
+      const shuffledCategories = [...faqData].sort(() => Math.random() - 0.5);
+      
+      shuffledCategories.forEach(cat => {
+        if (selected.length < 3) {
+          const randomItem = cat.items[Math.floor(Math.random() * cat.items.length)];
+          selected.push({
+            text: randomItem.question,
+            color: categoryColors[cat.name] || "bg-white/5 text-slate-400 border-white/10"
+          });
+        }
+      });
+      
+      return selected;
+    };
 
-    // Pick 3 stable "random" or interesting ones
-    // For now, let's just pick one from each of the first 3 categories
-    return [
-      allQuestions[0], // Apa itu MyLearning
-      allQuestions[4], // Metode pembayaran
-      allQuestions[12] // Mendapat sertifikat
-    ].filter(Boolean);
+    setSuggestions(getRandomItems());
   }, []);
+
+  const addToHistory = (query: string) => {
+    if (!query.trim()) return;
+    const newHistory = [query, ...history.filter(h => h !== query)].slice(0, 5);
+    setHistory(newHistory);
+    localStorage.setItem("faq_search_history", JSON.stringify(newHistory));
+  };
 
   const toggleItem = (key: string) => {
     setOpenItems((prev) => {
@@ -199,6 +223,7 @@ export default function FAQPage() {
     }, 100);
 
     try {
+      addToHistory(query);
       const response = await getFAQGeminiResponse(query, faqData);
       setCurrentAIResult({ question: query, answer: response });
     } catch (error) {
@@ -252,29 +277,75 @@ export default function FAQPage() {
               </button>
             </div>
 
-            {/* Suggestions Chips */}
-            <div className="flex flex-wrap items-center justify-between gap-y-3 pt-3 px-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] flex items-center gap-1.5 mr-1">
-                  <Sparkles size={10} className="text-amber-500" /> Saran:
-                </span>
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setSearchQuery(s.text);
-                      setAiMessage(s.text);
-                      handleAskAI(undefined, s.text);
-                    }}
-                    className={`text-[10px] px-3 py-1.5 rounded-xl border transition-all hover:bg-white/5 active:scale-95 font-semibold flex items-center gap-2 ${s.color}`}
+            {/* Suggestions & History Chips */}
+            <div className="relative pt-3 px-1">
+              <div className="flex flex-wrap items-center justify-between gap-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em] flex items-center gap-1.5 mr-2 opacity-70">
+                    <Sparkles size={10} className="text-amber-500 animate-pulse" /> Saran:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setSearchQuery(s.text);
+                          setAiMessage(s.text);
+                          handleAskAI(undefined, s.text);
+                        }}
+                        className={`group px-3.5 py-1.5 rounded-full border transition-all hover:brightness-125 active:scale-95 text-[10px] font-bold flex items-center gap-2 backdrop-blur-md shadow-sm hover:shadow-md ${s.color}`}
+                      >
+                        <Lightbulb size={11} className="opacity-60 group-hover:opacity-100 transition-opacity" /> 
+                        <span className="truncate max-w-[150px] sm:max-w-none">{s.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowHistory(!showHistory)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                      showHistory ? "bg-white/10 text-white" : "text-slate-500 hover:text-slate-300"
+                    }`}
                   >
-                    <Lightbulb size={10} className="opacity-50" /> {s.text}
+                    <History size={12} className={showHistory ? "animate-spin-slow" : ""} /> 
+                    Riwayat
                   </button>
-                ))}
+
+                  {/* History Dropdown */}
+                  {showHistory && history.length > 0 && (
+                    <div className="absolute top-full right-0 mt-2 w-64 bg-[#0c0c14]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-2 z-50 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 mb-1">
+                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Aktivitas Terakhir</span>
+                        <button 
+                          onClick={() => { setHistory([]); localStorage.removeItem("faq_search_history"); }}
+                          className="text-[7px] text-red-400/60 hover:text-red-400 uppercase font-black"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        {history.map((h, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setSearchQuery(h);
+                              setAiMessage(h);
+                              handleAskAI(undefined, h);
+                              setShowHistory(false);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/5 transition-colors text-[11px] text-slate-400 hover:text-white truncate flex items-center gap-3 group"
+                          >
+                            <Search size={10} className="opacity-30 group-hover:opacity-100" />
+                            {h}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <button className="text-[9px] text-slate-500 hover:text-white flex items-center gap-1.5 px-2 py-1 transition-colors font-bold uppercase tracking-widest opacity-60 hover:opacity-100 italic">
-                <History size={10} /> Riwayat
-              </button>
             </div>
           </div>
         </div>

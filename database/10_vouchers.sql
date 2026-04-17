@@ -1,139 +1,201 @@
 -- ============================================
--- 10. VOUCHERS SYSTEM
+-- 10_vouchers.sql (FIXED & UPDATED)
+-- MyLearning - Voucher & Discount System v2.1
 -- ============================================
 
-CREATE TABLE IF NOT EXISTS vouchers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  code VARCHAR(50) NOT NULL UNIQUE,
-  discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('fixed', 'percentage')),
-  discount_value INTEGER NOT NULL,
-  instructor_id UUID REFERENCES instructors(id) ON DELETE CASCADE,
-  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
-  min_purchase INTEGER DEFAULT 0,
-  usage_limit INTEGER DEFAULT 0, -- 0 = unlimited
-  used_count INTEGER DEFAULT 0,
-  expiry_date TIMESTAMPTZ,
-  max_discount INTEGER DEFAULT 0, -- 0 = no cap
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- 1. Extend vouchers table with robust targeting & metadata
+ALTER TABLE IF EXISTS public.vouchers 
+ADD COLUMN IF NOT EXISTS category_slug TEXT,
+ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ DEFAULT NOW(),
+ADD COLUMN IF NOT EXISTS target_user_id UUID REFERENCES auth.users(id),
+ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
+
+-- Add index for performance on targeting
+CREATE INDEX IF NOT EXISTS idx_vouchers_targeting ON vouchers(category_slug, target_user_id, is_active);
+
+-- 2. New Table: Voucher Wallet (To track saved vouchers)
+CREATE TABLE IF NOT EXISTS public.voucher_wallet (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    voucher_id UUID NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,
+    is_used BOOLEAN DEFAULT false,
+    saved_at TIMESTAMPTZ DEFAULT NOW(),
+    used_at TIMESTAMPTZ,
+    UNIQUE(user_id, voucher_id)
 );
 
--- Index for fast code lookup
-CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code) WHERE is_active = true;
-CREATE INDEX IF NOT EXISTS idx_vouchers_instructor ON vouchers(instructor_id);
-CREATE INDEX IF NOT EXISTS idx_vouchers_course ON vouchers(course_id);
+-- DYNAMIC CLEANUP: Remove all overloaded versions of functions to prevent shadowing or parameter name errors
+DO $$ 
+DECLARE
+    _v_rec RECORD;
+BEGIN
+    FOR _v_rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'validate_voucher_optimized' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _v_rec.function_sig;
+    END LOOP;
+END $$;
 
-COMMENT ON TABLE vouchers IS 'Tabel untuk sistem voucher diskon/redeem code';
-COMMENT ON COLUMN vouchers.instructor_id IS 'Jika diisi, voucher hanya berlaku untuk kursus pengajar ini';
-COMMENT ON COLUMN vouchers.course_id IS 'Jika diisi, voucher hanya berlaku untuk kursus spesifik ini';
+DO $$ 
+DECLARE
+    _v_rec RECORD;
+BEGIN
+    FOR _v_rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'redeem_voucher_by_id' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _v_rec.function_sig;
+    END LOOP;
+END $$;
 
--- Update courses to include admin discount
-ALTER TABLE courses ADD COLUMN IF NOT EXISTS admin_discount_price INTEGER DEFAULT 0;
+-- 3. Optimized Validation RPC
+CREATE OR REPLACE FUNCTION validate_voucher_optimized(
+    p_code TEXT,
+    p_course_id UUID,
+    p_instructor_id UUID,
+    p_price NUMERIC,
+    p_user_id UUID DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+    _v_voucher RECORD;
+    _v_discount_amount NUMERIC := 0;
+    _v_usage_count INTEGER;
+    _v_course_category TEXT;
+BEGIN
+    -- 1. Fetch voucher with explicit column naming to avoid ambiguity
+    SELECT * INTO _v_voucher FROM vouchers WHERE vouchers.code = p_code AND vouchers.is_active = true;
+    
+    IF _v_voucher.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Kode voucher tidak valid atau sudah tidak aktif.');
+    END IF;
 
--- Update enrollments to link with vouchers
-ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS voucher_id UUID REFERENCES vouchers(id) ON DELETE SET NULL;
-ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS discount_amount INTEGER DEFAULT 0;
+    -- 2. Check Expiry
+    IF _v_voucher.expiry_date IS NOT NULL AND _v_voucher.expiry_date < NOW() THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher ini sudah kadaluarsa.');
+    END IF;
 
--- ============================================
--- 11. VOUCHER TRACKING & SECURITY
--- ============================================
+    IF _v_voucher.start_date IS NOT NULL AND _v_voucher.start_date > NOW() THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher ini belum dapat digunakan.');
+    END IF;
 
--- Record of who used which voucher to prevent double-dipping
-CREATE TABLE IF NOT EXISTS voucher_usage (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  voucher_id UUID NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
-  enrollment_id UUID REFERENCES enrollments(id) ON DELETE CASCADE,
-  used_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(voucher_id, user_id)
-);
+    -- 3. Check Usage Limit
+    IF _v_voucher.usage_limit > 0 AND _v_voucher.used_count >= _v_voucher.usage_limit THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher ini sudah mencapai batas penggunaan.');
+    END IF;
 
--- ATOMIC REDEEM FUNCTION (Strictly managed in DB)
--- This function handles the check and increment in one transaction
+    -- 4. Check Individual User Limit (if applicable)
+    IF p_user_id IS NOT NULL THEN
+        SELECT COUNT(*) INTO _v_usage_count FROM voucher_usage WHERE voucher_id = _v_voucher.id AND user_id = p_user_id;
+        IF _v_usage_count > 0 THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Anda sudah menggunakan voucher ini.');
+        END IF;
+    END IF;
+
+    -- 5. Validate Scope (Course, Instructor, Category, User)
+    
+    -- Course specific
+    IF _v_voucher.course_id IS NOT NULL AND _v_voucher.course_id != p_course_id THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher ini tidak berlaku untuk kursus ini.');
+    END IF;
+
+    -- Instructor specific
+    IF _v_voucher.instructor_id IS NOT NULL AND _v_voucher.instructor_id != p_instructor_id THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher ini tidak berlaku untuk instruktur ini.');
+    END IF;
+
+    -- Category specific
+    IF _v_voucher.category_slug IS NOT NULL THEN
+        SELECT c.slug INTO _v_course_category 
+        FROM categories c 
+        JOIN courses co ON co.category_id = c.id 
+        WHERE co.id = p_course_id;
+
+        IF _v_course_category IS NULL OR _v_course_category != _v_voucher.category_slug THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Voucher ini hanya berlaku untuk kategori ' || _v_voucher.category_slug || '.');
+        END IF;
+    END IF;
+
+    -- User specific (Targeted Vouchers)
+    IF _v_voucher.target_user_id IS NOT NULL AND (p_user_id IS NULL OR _v_voucher.target_user_id != p_user_id) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher ini hanya berlaku untuk pengguna tertentu.');
+    END IF;
+
+    -- 6. Check Minimum Purchase
+    IF p_price < _v_voucher.min_purchase THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Pembelian minimal untuk voucher ini adalah Rp' || _v_voucher.min_purchase);
+    END IF;
+
+    -- 7. Calculate Discount
+    IF _v_voucher.discount_type = 'percentage' THEN
+        _v_discount_amount := (p_price * _v_voucher.discount_value / 100);
+        IF _v_voucher.max_discount > 0 THEN
+            _v_discount_amount := LEAST(_v_discount_amount, _v_voucher.max_discount);
+        END IF;
+    ELSE
+        _v_discount_amount := _v_voucher.discount_value;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'discount_amount', _v_discount_amount,
+        'voucher_id', _v_voucher.id,
+        'final_price', GREATEST(0, p_price - _v_discount_amount)
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. Secure Redemption RPC with Atomic Updates
 CREATE OR REPLACE FUNCTION redeem_voucher_by_id(
     p_voucher_id UUID,
     p_user_id UUID,
     p_enroll_id UUID
 ) RETURNS JSONB AS $$
 DECLARE
-    v_voucher RECORD;
+    _v_voucher RECORD;
 BEGIN
-    -- 1. Lock voucher row for update to prevent race conditions
-    SELECT * INTO v_voucher 
+    -- Select with locking to prevent race conditions
+    SELECT * INTO _v_voucher 
     FROM vouchers 
-    WHERE id = p_voucher_id AND is_active = true
+    WHERE vouchers.id = p_voucher_id
     FOR UPDATE;
 
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Voucher tidak ditemukan atau sudah tidak aktif.');
+    IF _v_voucher.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher tidak ditemukan.');
     END IF;
 
-    -- 2. Check Expiry
-    IF v_voucher.expiry_date IS NOT NULL AND v_voucher.expiry_date < NOW() THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Voucher sudah kadaluarsa.');
+    -- Check if user has already used this voucher
+    IF EXISTS (SELECT 1 FROM voucher_usage WHERE voucher_usage.voucher_id = _v_voucher.id AND user_id = p_user_id) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Anda sudah menggunakan voucher ini.');
     END IF;
 
-    -- 3. Check Global Limit
-    IF v_voucher.usage_limit > 0 AND v_voucher.used_count >= v_voucher.usage_limit THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Kuota voucher sudah habis.');
+    -- Check usage limit
+    IF _v_voucher.usage_limit > 0 AND _v_voucher.used_count >= _v_voucher.usage_limit THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Voucher sudah habis.');
     END IF;
 
-    -- 4. Check Per-User Limit (One use per person)
-    IF EXISTS (SELECT 1 FROM voucher_usage WHERE voucher_id = v_voucher.id AND user_id = p_user_id) THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Anda sudah pernah menggunakan voucher ini.');
-    END IF;
+    -- Record usage
+    INSERT INTO voucher_usage (voucher_id, user_id, enrollment_id)
+    VALUES (_v_voucher.id, p_user_id, p_enroll_id);
 
-    -- 5. PERFORM REDEMPTION
+    -- Update voucher stats
     UPDATE vouchers 
     SET used_count = used_count + 1, updated_at = NOW()
-    WHERE id = v_voucher.id;
+    WHERE vouchers.id = _v_voucher.id;
 
-    INSERT INTO voucher_usage (voucher_id, user_id, enrollment_id)
-    VALUES (v_voucher.id, p_user_id, p_enroll_id);
+    -- Mark as used in wallet if present
+    UPDATE voucher_wallet 
+    SET is_used = true, used_at = NOW() 
+    WHERE user_id = p_user_id AND voucher_id = _v_voucher.id;
 
-    RETURN jsonb_build_object('success', true, 'voucher_id', v_voucher.id);
-END;
-$$ LANGUAGE plpgsql;
-
--- Optimized 1-Shot Validation RPC
-CREATE OR REPLACE FUNCTION validate_voucher_optimized(
-    p_code TEXT,
-    p_course_id UUID,
-    p_instructor_id UUID,
-    p_price INTEGER,
-    p_user_id UUID DEFAULT NULL
-) RETURNS JSONB AS $$
-DECLARE
-    v_voucher RECORD;
-    v_usage_exists BOOLEAN := FALSE;
-    v_discount_amount INTEGER := 0;
-BEGIN
-    SELECT * INTO v_voucher FROM vouchers WHERE code = p_code AND is_active = true LIMIT 1;
-    IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Kode voucher tidak valid.'); END IF;
-    IF v_voucher.expiry_date IS NOT NULL AND v_voucher.expiry_date < NOW() THEN RETURN jsonb_build_object('success', false, 'error', 'Voucher kadaluarsa.'); END IF;
-    IF v_voucher.usage_limit > 0 AND v_voucher.used_count >= v_voucher.usage_limit THEN RETURN jsonb_build_object('success', false, 'error', 'Kuota habis.'); END IF;
-    IF p_user_id IS NOT NULL THEN
-        SELECT EXISTS (SELECT 1 FROM voucher_usage WHERE voucher_id = v_voucher.id AND user_id = p_user_id) INTO v_usage_exists;
-        IF v_usage_exists THEN RETURN jsonb_build_object('success', false, 'error', 'Sudah pernah digunakan.'); END IF;
-    END IF;
-    IF v_voucher.min_purchase > 0 AND p_price < v_voucher.min_purchase THEN RETURN jsonb_build_object('success', false, 'error', 'Min. pembelian tidak terpenuhi.'); END IF;
-    IF v_voucher.course_id IS NOT NULL AND v_voucher.course_id != p_course_id THEN RETURN jsonb_build_object('success', false, 'error', 'Tidak berlaku untuk kursus ini.'); END IF;
-    IF v_voucher.instructor_id IS NOT NULL AND v_voucher.instructor_id != p_instructor_id THEN RETURN jsonb_build_object('success', false, 'error', 'Tidak berlaku untuk instruktur ini.'); END IF;
-    IF v_voucher.discount_type = 'percentage' THEN 
-        v_discount_amount := floor((p_price * v_voucher.discount_value) / 100); 
-        -- Apply max discount cap if defined
-        IF v_voucher.max_discount > 0 AND v_discount_amount > v_voucher.max_discount THEN
-            v_discount_amount := v_voucher.max_discount;
-        END IF;
-    ELSE 
-        v_discount_amount := v_voucher.discount_value; 
-    END IF;
-
-    IF v_discount_amount > p_price THEN v_discount_amount := p_price; END IF;
-    RETURN jsonb_build_object('success', true, 'discount_amount', v_discount_amount, 'voucher', jsonb_build_object('id', v_voucher.id, 'code', v_voucher.code, 'discount_type', v_voucher.discount_type, 'discount_value', v_voucher.discount_value, 'max_discount', v_voucher.max_discount, 'instructor_id', v_voucher.instructor_id, 'course_id', v_voucher.course_id, 'min_purchase', v_voucher.min_purchase, 'usage_limit', v_voucher.usage_limit, 'used_count', v_voucher.used_count, 'expiry_date', v_voucher.expiry_date, 'is_active', v_voucher.is_active, 'created_at', v_voucher.created_at));
+    RETURN jsonb_build_object('success', true);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Grants
 GRANT EXECUTE ON FUNCTION validate_voucher_optimized TO anon, authenticated, service_role;
-
+GRANT EXECUTE ON FUNCTION redeem_voucher_by_id TO authenticated, service_role;

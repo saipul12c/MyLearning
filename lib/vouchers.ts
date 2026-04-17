@@ -7,13 +7,18 @@ export interface Voucher {
   discountValue: number;
   instructorId?: string;
   courseId?: string;
+  categorySlug?: string;
+  targetUserId?: string;
   minPurchase: number;
   usageLimit: number;
   usedCount: number;
+  startDate: string;
   expiryDate?: string;
   maxDiscount: number;
   isActive: boolean;
+  isFeatured: boolean;
   createdAt: string;
+  instructorName?: string;
 }
 
 export async function validateVoucher(
@@ -115,6 +120,69 @@ export async function createVoucher(voucherData: any): Promise<{ success: boolea
   return { success: true, data: mapDbToVoucher(data) };
 }
 
+/**
+ * Gets active vouchers that a specific user can use
+ */
+export async function getAvailableVouchersForUser(userId: string): Promise<Voucher[]> {
+  try {
+    // We fetch all active vouchers where user hasn't used them yet
+    // This query focuses on global, category, or specific user vouchers
+    const { data, error } = await supabase
+      .from("vouchers")
+      .select("*, instructors(name)")
+      .eq("is_active", true)
+      .or(`target_user_id.is.null,target_user_id.eq.${userId}`)
+      .lte("start_date", new Date().toISOString())
+      .or(`expiry_date.gt.${new Date().toISOString()},expiry_date.is.null`)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    // Filter out already used vouchers in JS to avoid complex joins in simple query
+    // In production with many users, this should be done in an RPC
+    const { data: usage } = await supabase
+      .from("voucher_usage")
+      .select("voucher_id")
+      .eq("user_id", userId);
+    
+    const usedIds = new Set(usage?.map(u => u.voucher_id) || []);
+    
+    return data
+      .filter(v => !usedIds.has(v.id))
+      .filter(v => v.usage_limit === 0 || v.used_count < v.usage_limit)
+      .map(v => ({
+        ...mapDbToVoucher(v),
+        instructorName: v.instructors?.name
+      }));
+  } catch (err) {
+    console.error("Error fetching user vouchers:", err);
+    return [];
+  }
+}
+
+/**
+ * Get vouchers specifically for a course page
+ */
+export async function getVouchersForCourse(courseId: string, instructorId: string, categorySlug: string): Promise<Voucher[]> {
+  const { data, error } = await supabase
+    .from("vouchers")
+    .select("*, instructors(name)")
+    .eq("is_active", true)
+    .lte("start_date", new Date().toISOString())
+    .or(`expiry_date.gt.${new Date().toISOString()},expiry_date.is.null`)
+    .or(`course_id.eq.${courseId},instructor_id.eq.${instructorId},category_slug.eq.${categorySlug},and(course_id.is.null,instructor_id.is.null,category_slug.is.null)`)
+    .is("target_user_id", null) // Only show public vouchers on course page
+    .order("discount_value", { ascending: false });
+
+  if (error) return [];
+  return data
+    .filter(v => v.usage_limit === 0 || v.used_count < v.usage_limit)
+    .map(v => ({
+      ...mapDbToVoucher(v),
+      instructorName: v.instructors?.name
+    }));
+}
+
 function mapDbToVoucher(v: any): Voucher {
   return {
     id: v.id,
@@ -123,12 +191,16 @@ function mapDbToVoucher(v: any): Voucher {
     discountValue: v.discount_value,
     instructorId: v.instructor_id,
     courseId: v.course_id,
+    categorySlug: v.category_slug,
+    targetUserId: v.target_user_id,
     minPurchase: v.min_purchase,
     usageLimit: v.usage_limit,
     usedCount: v.used_count,
+    startDate: v.start_date,
     expiryDate: v.expiry_date,
     maxDiscount: v.max_discount || 0,
     isActive: v.is_active,
+    isFeatured: v.is_featured || false,
     createdAt: v.created_at
   };
 }

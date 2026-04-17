@@ -15,7 +15,10 @@ export type PromotionLocation =
   | "footer_native"
   | "sticky_bottom"
   | "interstitial"
-  | "video_card";
+  | "video_card"
+  | "privacy_sidebar"
+  | "privacy_policy_inline"
+  | "all";
 
 export interface Promotion {
   id: string;
@@ -88,6 +91,9 @@ export const LOCATION_MULTIPLIERS: Record<PromotionLocation, number> = {
   sticky_bottom: 1.5,
   interstitial: 2.0,
   video_card: 1.5,
+  privacy_sidebar: 1.0,
+  privacy_policy_inline: 1.1,
+  all: 3.5, // Global placement multiplier
 };
 
 // Pricing Calculator Logic with Volume Discount (Semakin banyak beli, semakin murah rate-nya)
@@ -120,6 +126,7 @@ export function mapDbToPromotion(db: any): Promotion {
     linkUrl: db.link_url,
     location: db.location,
     badgeText: db.badge_text,
+    brandName: db.brand_name,
     isActive: db.is_active,
     isExternal: db.is_external,
     priority: db.priority,
@@ -178,6 +185,27 @@ export async function getActivePromotions(location: PromotionLocation, categoryI
   }
 }
 
+/**
+ * Optimized batch fetch for multiple ad locations to reduce network waterfalls.
+ */
+export async function getPromotionsBatch(locations: PromotionLocation[]): Promise<Record<string, Promotion[]>> {
+  try {
+    const results: Record<string, Promotion[]> = {};
+    
+    // Execute all fetches in parallel
+    const fetches = locations.map(async (loc) => {
+        const promos = await getActivePromotions(loc);
+        results[loc] = promos;
+    });
+
+    await Promise.all(fetches);
+    return results;
+  } catch (err) {
+    console.error("Error fetching promotions batch:", err);
+    return {};
+  }
+}
+
 export async function trackImpressionsBatch(promoIds: string[]) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -192,12 +220,20 @@ export async function trackImpressionsBatch(promoIds: string[]) {
 }
 
 async function getRandomFallbackPromotions(): Promise<Promotion[]> {
-   // Fallback logic can also use the RPC but with a generic location or limit
-   const { data } = await supabase.rpc("get_active_promotions_optimized", {
-      p_location: "homepage_banner" // Fallback to homepage ads
-   });
+   // Enhanced fallback logic: try diverse locations to ensure something shows up
+   const fallbackLocations: PromotionLocation[] = ["homepage_banner", "homepage_inline", "global_announcement"];
    
-   return (data || []).slice(0, 3).map(mapDbToPromotion);
+   for (const loc of fallbackLocations) {
+       const { data } = await supabase.rpc("get_active_promotions_optimized", {
+          p_location: loc
+       });
+       
+       if (data && data.length > 0) {
+           return data.slice(0, 3).map(mapDbToPromotion);
+       }
+   }
+   
+   return [];
 }
 
 export async function trackImpression(promoId: string) {
@@ -231,16 +267,16 @@ export async function trackDismiss(promoId: string) {
     const dismissKey = `ad_dismissed_${promoId}`;
     sessionStorage.setItem(dismissKey, 'true');
     
-    // Optionally track to backend for analytics (non-critical)
+    // Track to backend for analytics (non-critical)
     try {
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('ad_events').insert({
         promotion_id: promoId,
         event_type: 'dismiss',
-        user_id: user?.id,
+        user_id: user?.id || null,
       });
     } catch {
-      // Backend tracking is optional
+      // Backend tracking is optional — table may not exist yet
     }
   } catch (err) {
     // Silently fail — dismissal tracking is non-critical
@@ -297,28 +333,23 @@ export async function getAllPromotionRequests(): Promise<PromotionRequest[]> {
 }
 
 export async function getMyPromotionRequests(userId: string): Promise<PromotionRequest[]> {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("promotion_requests")
-      .select(`
-        *,
-        promotions:id (
-          current_impressions,
-          current_clicks
-        )
-      `)
+      .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
       
+    if (error) {
+      console.error("Error fetching promotion requests:", error);
+    }
+      
     return (data || []).map(db => {
       const base = mapDbToRequest(db);
-      if (db.promotions) {
-          return {
-              ...base,
-              currentImpressions: db.promotions.current_impressions || 0,
-              currentClicks: db.promotions.current_clicks || 0
-          };
-      }
-      return base;
+      return {
+          ...base,
+          currentImpressions: db.current_impressions || 0,
+          currentClicks: db.current_clicks || 0
+      };
     });
 }
 
@@ -380,6 +411,7 @@ export async function upsertPromotion(promo: Partial<Promotion>): Promise<{ succ
       link_url: promo.linkUrl,
       location: promo.location,
       badge_text: promo.badgeText,
+      brand_name: promo.brandName,
       is_active: promo.isActive,
       is_external: promo.isExternal,
       priority: promo.priority,
@@ -420,7 +452,7 @@ export async function deletePromotion(id: string): Promise<{ success: boolean; e
 
 export async function getAdPerformanceSummary(userId?: string) {
   try {
-    let query = supabase.from("promotions").select("id, status, target_impressions, current_impressions, current_clicks, location, is_active");
+    let query = supabase.from("promotions").select("id, target_impressions, current_impressions, current_clicks, location, is_active");
     if (userId) {
       query = query.eq("user_id", userId);
     }
@@ -446,6 +478,111 @@ export async function getAdPerformanceSummary(userId?: string) {
     }
 
     return { success: true, data: summary };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// === ADMIN AD ANALYTICS FUNCTIONS ===
+
+export async function getAdRevenueSummary() {
+  try {
+    const { data, error } = await supabase.rpc("get_ad_revenue_summary");
+    if (error) throw error;
+    return data?.[0] || { total_revenue: 0, total_active_campaigns: 0, total_completed_campaigns: 0, total_pending_requests: 0, total_impressions: 0, total_clicks: 0, average_ctr: 0 };
+  } catch (err) {
+    console.error("Error fetching ad revenue summary:", err);
+    return { total_revenue: 0, total_active_campaigns: 0, total_completed_campaigns: 0, total_pending_requests: 0, total_impressions: 0, total_clicks: 0, average_ctr: 0 };
+  }
+}
+
+export async function getMonthlyAdRevenue(year?: number) {
+  try {
+    const { data, error } = await supabase.rpc("get_monthly_ad_revenue", { p_year: year || new Date().getFullYear() });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching monthly ad revenue:", err);
+    return [];
+  }
+}
+
+export async function getTopPerformingAds(limit = 10) {
+  try {
+    const { data, error } = await supabase.rpc("get_top_performing_ads", { p_limit: limit });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching top ads:", err);
+    return [];
+  }
+}
+
+export async function getAdRevenueByLocation() {
+  try {
+    const { data, error } = await supabase.rpc("get_ad_revenue_by_location");
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching ad revenue by location:", err);
+    return [];
+  }
+}
+
+export async function getArchivedPromotions(limit = 50) {
+  try {
+    const { data, error } = await supabase.rpc("get_archived_promotions", { p_limit: limit });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching archived promotions:", err);
+    return [];
+  }
+}
+
+export async function getImpressionLogs(promoId?: string, limit = 100) {
+  try {
+    const { data, error } = await supabase.rpc("get_impression_logs", { 
+      p_promo_id: promoId || null, 
+      p_limit: limit 
+    });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching impression logs:", err);
+    return [];
+  }
+}
+
+export async function getSuspiciousAdActivity(threshold = 50) {
+  try {
+    const { data, error } = await supabase.rpc("get_suspicious_ad_activity", { p_threshold: threshold });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching suspicious activity:", err);
+    return [];
+  }
+}
+
+export async function runAdMaintenance(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.rpc("ad_system_maintenance");
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function togglePromotionActive(promoId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from("promotions")
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq("id", promoId);
+    if (error) throw error;
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

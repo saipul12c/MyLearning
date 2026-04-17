@@ -428,11 +428,24 @@ BEGIN
     END IF;
 END $$;
 
+-- DYNAMIC CLEANUP: Must drop before recreate because we changed parameter names or signatures
+DO $$ 
+DECLARE
+    _v_rec RECORD;
+BEGIN
+    FOR _v_rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname IN ('increment_ad_impressions', 'increment_ad_impressions_batch')
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _v_rec.function_sig;
+    END LOOP;
+END $$;
+
 -- 7. FUNCTION: Increment Ad Impressions
--- Atomically increments current_impressions and handles completion status
--- Includes robust anti-fraud cooldown (5 minutes per user/IP)
 CREATE OR REPLACE FUNCTION increment_ad_impressions(
-    promo_id UUID, 
+    p_promo_id UUID, 
     p_user_id UUID DEFAULT NULL,
     p_ip_address TEXT DEFAULT NULL
 ) RETURNS VOID AS $$
@@ -447,7 +460,7 @@ BEGIN
     IF p_user_id IS NOT NULL OR v_final_ip IS NOT NULL THEN
         SELECT created_at INTO v_last_log 
         FROM promotion_impression_logs 
-        WHERE promo_id = increment_ad_impressions.promo_id 
+        WHERE promotion_impression_logs.promo_id = p_promo_id 
           AND (
               (p_user_id IS NOT NULL AND user_id = p_user_id) OR 
               (v_final_ip IS NOT NULL AND ip_address = v_final_ip)
@@ -466,11 +479,11 @@ BEGIN
                 ELSE is_active 
             END,
             updated_at = NOW()
-        WHERE id = promo_id;
+        WHERE id = p_promo_id;
 
         -- Log the impression
         INSERT INTO promotion_impression_logs (promo_id, user_id, ip_address)
-        VALUES (increment_ad_impressions.promo_id, p_user_id, v_final_ip);
+        VALUES (p_promo_id, p_user_id, v_final_ip);
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -538,9 +551,22 @@ $$;
 GRANT SELECT ON vw_popular_courses_master TO anon, authenticated, service_role;
 COMMENT ON VIEW vw_popular_courses_master IS 'View utama untuk kursus terpopuler - MyLearning Masterpiece';
 
+-- DYNAMIC CLEANUP: Remove all overloaded versions
+DO $$ 
+DECLARE
+    _v_rec RECORD;
+BEGIN
+    FOR _v_rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'get_active_promotions_optimized' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _v_rec.function_sig;
+    END LOOP;
+END $$;
+
 -- Optimized Promotion Discovery RPC with Category Targeting & Randomization
-DROP FUNCTION IF EXISTS get_active_promotions_optimized(text);
-DROP FUNCTION IF EXISTS get_active_promotions_optimized(text, uuid);
 CREATE OR REPLACE FUNCTION get_active_promotions_optimized(
     p_location TEXT,
     p_category_id UUID DEFAULT NULL
@@ -561,7 +587,7 @@ BEGIN
         p.current_clicks, p.start_date, p.end_date, p.created_at, p.updated_at
     FROM promotions p
     LEFT JOIN courses c ON p.course_id = c.id
-    WHERE p.location = p_location
+    WHERE (p.location = p_location OR p.location = 'all')
       AND p.is_active = true
       AND (p.course_id IS NULL OR c.is_published = true)
       AND (p.end_date IS NULL OR p.end_date > NOW())

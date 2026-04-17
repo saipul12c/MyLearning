@@ -161,8 +161,17 @@ export async function getCourses(options: {
   pageSize?: number; 
   category?: string; 
   search?: string;
+  status?: 'all' | 'published' | 'draft';
+  instructorId?: string;
 } = {}): Promise<Course[]> {
-  const { page = 1, pageSize = 100, category = "all", search = "" } = options;
+  const { 
+    page = 1, 
+    pageSize = 100, 
+    category = "all", 
+    search = "", 
+    status = 'published',
+    instructorId
+  } = options;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -175,24 +184,28 @@ export async function getCourses(options: {
       is_published, is_featured, created_at, updated_at, tags,
       categories(id, name, slug),
       instructors(name, slug, avatar_url, website_url, linkedin_url),
-      vouchers:vouchers(id, code, discount_type, discount_value, is_active)
-    `)
-    .eq("is_published", true);
+      vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
+    `);
+
+  if (status === 'published') {
+    query = query.eq("is_published", true);
+  } else if (status === 'draft') {
+    query = query.eq("is_published", false);
+  }
 
   if (category && category !== "all") {
-    // We use .eq on the joined table's slug
-    // Note: To filter by a joined table, use the !inner hint or filter the primary table if the column exists there.
-    // Since category_id is in courses, we can filter by it if we had the ID, 
-    // but the UI gives us the slug. So we use the 'categories' join with !inner.
     query = query.filter("categories.slug", "eq", category);
   }
 
   if (search) {
-    // Use the existing title_description_vector for optimized search
     query = query.textSearch('title_description_vector', search, {
       config: 'indonesian',
       type: 'websearch'
     });
+  }
+
+  if (instructorId) {
+    query = query.eq("instructor_id", instructorId);
   }
 
   const { data, error } = await query
@@ -201,6 +214,30 @@ export async function getCourses(options: {
 
   if (error) {
     console.error("Error fetching courses from Supabase:", error);
+    return [];
+  }
+
+  return data.map(mapDbToCourse);
+}
+
+/**
+ * Special function for Admin to fetch all courses including drafts
+ */
+export async function getAllCoursesAdmin(): Promise<Course[]> {
+  const { data, error } = await supabase
+    .from("courses")
+    .select(`
+      id, title, slug, short_description, thumbnail_url, 
+      price, discount_price, admin_discount_price, level, language, duration_hours, 
+      total_lessons, rating, total_reviews, total_students,
+      is_published, is_featured, created_at, updated_at,
+      categories(name, slug),
+      instructors(name, slug)
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching admin courses:", error);
     return [];
   }
 
@@ -309,7 +346,7 @@ export async function getPopularCourses(limit: number = 8): Promise<Course[]> {
         is_published, is_featured, created_at, updated_at, tags,
         categories(id, name, slug),
         instructors(name, slug, avatar_url, website_url, linkedin_url),
-        vouchers:vouchers(id, code, discount_type, discount_value, is_active)
+        vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
       `)
       .in("id", courseIds);
 
@@ -371,7 +408,7 @@ export const getCourseBySlug = cache(async (slug: string): Promise<Course | null
       categories(id, name, slug),
       instructors(name, slug, bio, avatar_url, expertise, rating, qris_url, website_url, linkedin_url),
       lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url),
-      vouchers:vouchers(id, code, discount_type, discount_value, is_active)
+      vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
     `)
     .eq("slug", slug)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
@@ -446,11 +483,28 @@ export async function upsertCourse(courseData: Partial<Course>) {
       tags: Array.isArray(courseData.tags) ? courseData.tags : [],
     };
 
+    const isNowPublished = Boolean(courseData.isPublished);
+
     const { data, error } = await supabase
       .from("courses")
       .upsert(courseData.id ? { id: courseData.id, ...dbData } : dbData)
-      .select("id, title, slug")
+      .select("id, title, slug, instructor_id, is_published")
       .single();
+
+    if (!error && isNowPublished) {
+       // Notify Instructor
+       const { data: inst } = await supabase.from("instructors").select("user_id").eq("id", data.instructor_id).single();
+       if (inst?.user_id) {
+          const { createNotification } = await import("./notifications");
+          await createNotification({
+             userId: inst.user_id,
+             title: "Kursus Dipublikasikan! 🚀",
+             message: `Selamat! Kursus Anda "${data.title}" kini telah aktif dan dapat dibeli oleh siswa.`,
+             type: 'success',
+             linkUrl: `/courses/${data.slug}`
+          });
+       }
+    }
 
     return { success: !error, data, error };
   } catch (err: any) {
@@ -528,7 +582,12 @@ function mapDbToCourse(db: any): Course {
     lessons: [],
     availableVouchers: db.vouchers 
       ? db.vouchers
-        .filter((v: any) => v.is_active)
+        .filter((v: any) => 
+          v.is_active && 
+          (!v.start_date || new Date(v.start_date) <= new Date()) && 
+          (!v.expiry_date || new Date(v.expiry_date) > new Date()) &&
+          !v.target_user_id // Only show public vouchers
+        )
         .map((v: any) => ({
           id: v.id,
           code: v.code,

@@ -5,9 +5,11 @@ import {
   getAllPromotionsAdmin, 
   upsertPromotion, 
   deletePromotion, 
+  togglePromotionActive,
+  runAdMaintenance,
   Promotion 
 } from "@/lib/promotions";
-import { uploadPromotionImage } from "@/lib/storage";
+import { uploadPromotionImage, uploadPromotionVideo } from "@/lib/storage";
 import { 
   Plus, 
   Search, 
@@ -23,8 +25,34 @@ import {
   Loader2,
   X,
   AlertCircle,
-  Camera
+  Camera,
+  ChevronDown,
+  Check,
+  Play,
+  Pause,
+  Wrench
 } from "lucide-react";
+
+const PROMO_LOCATIONS = [
+  { value: "all", label: "✨ SELURUH PENJURU (Global)", multiplier: "MAX" },
+  { value: "global_announcement", label: "Global Top Bar", multiplier: "1.6x" },
+  { value: "homepage_banner", label: "Homepage Banner", multiplier: "1.3x" },
+  { value: "homepage_inline", label: "Homepage Inline", multiplier: "1.0x" },
+  { value: "dashboard_card", label: "Dashboard Card", multiplier: "1.1x" },
+  { value: "course_sidebar", label: "Course Sidebar Spotlight", multiplier: "1.0x" },
+  { value: "course_listing", label: "Course Listing Standard", multiplier: "1.2x" },
+  { value: "course_listing_spotlight", label: "Course Listing Spotlight", multiplier: "1.4x" },
+  { value: "lesson_sidebar", label: "Lesson Sidebar", multiplier: "0.9x" },
+  { value: "quiz_success", label: "Quiz Success Notification", multiplier: "1.5x" },
+  { value: "verify_page", label: "Certificate Verify Page", multiplier: "0.9x" },
+  { value: "search_recovery", label: "Empty Search Recovery", multiplier: "0.8x" },
+  { value: "footer_native", label: "Footer Native Ad", multiplier: "0.8x" },
+  { value: "sticky_bottom", label: "Sticky Bottom Ad", multiplier: "1.5x" },
+  { value: "interstitial", label: "Full Screen Interstitial", multiplier: "2.0x" },
+  { value: "video_card", label: "Autoplay Video Card", multiplier: "1.5x" },
+  { value: "privacy_sidebar", label: "Privacy Sidebar", multiplier: "1.0x" },
+  { value: "privacy_policy_inline", label: "Privacy Policy Inline", multiplier: "1.1x" },
+];
 import Image from "next/image";
 
 export default function PromotionManagement() {
@@ -35,6 +63,8 @@ export default function PromotionManagement() {
   const [editingPromo, setEditingPromo] = useState<Partial<Promotion> | null>(null);
   const [processing, setProcessing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
+  const [maintenanceRunning, setMaintenanceRunning] = useState(false);
 
   useEffect(() => {
     fetchPromotions();
@@ -69,15 +99,20 @@ export default function PromotionManagement() {
     setIsModalOpen(false);
     setEditingPromo(null);
     setUploading(false);
+    setIsLocationDropdownOpen(false);
   };
 
   const handleFileUpload = async (file: File) => {
     if (!file || !editingPromo) return;
     
     setUploading(true);
-    const { url, error } = await uploadPromotionImage(file);
+    const isVideo = file.type.startsWith('video/');
+    const { url, error } = isVideo 
+      ? await uploadPromotionVideo(file) 
+      : await uploadPromotionImage(file);
+      
     if (error) {
-      alert("Gagal mengunggah gambar: " + (error.message || error));
+      alert("Gagal mengunggah file: " + (error.message || error));
     } else if (url) {
       setEditingPromo({ ...editingPromo, imageUrl: url });
     }
@@ -110,6 +145,29 @@ export default function PromotionManagement() {
     }
   };
 
+  const handleToggleActive = async (promo: Promotion) => {
+    const newActive = !promo.isActive;
+    const res = await togglePromotionActive(promo.id, newActive);
+    if (res.success) {
+      setPromotions(promotions.map(p => p.id === promo.id ? { ...p, isActive: newActive } : p));
+    } else {
+      alert("Gagal mengubah status: " + res.error);
+    }
+  };
+
+  const handleMaintenance = async () => {
+    if (!confirm("Jalankan maintenance? Ini akan:\n- Nonaktifkan iklan expired\n- Arsipkan iklan lama (>3 bulan)\n- Tolak draft/pending >7 hari")) return;
+    setMaintenanceRunning(true);
+    const res = await runAdMaintenance();
+    if (res.success) {
+      alert("✅ Maintenance selesai! Memuat ulang data...");
+      await fetchPromotions();
+    } else {
+      alert("Gagal: " + res.error);
+    }
+    setMaintenanceRunning(false);
+  };
+
   const filtered = promotions.filter(p => 
     p.title.toLowerCase().includes(filter.toLowerCase()) ||
     p.location.toLowerCase().includes(filter.toLowerCase())
@@ -129,12 +187,22 @@ export default function PromotionManagement() {
           />
         </div>
         
-        <button 
-          onClick={() => handleOpenModal()} 
-          className="btn-primary !py-3 px-6 flex items-center gap-2 font-black uppercase tracking-widest text-xs"
-        >
-          <Plus size={18} /> Add Promotion
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleMaintenance} 
+            disabled={maintenanceRunning}
+            className="btn-secondary !py-3 px-5 flex items-center gap-2 font-black uppercase tracking-widest text-xs text-amber-400 border-amber-500/20 hover:bg-amber-500/10 disabled:opacity-50"
+            title="Jalankan maintenance sistem iklan"
+          >
+            {maintenanceRunning ? <Loader2 size={16} className="animate-spin" /> : <Wrench size={16} />} Maintenance
+          </button>
+          <button 
+            onClick={() => handleOpenModal()} 
+            className="btn-primary !py-3 px-6 flex items-center gap-2 font-black uppercase tracking-widest text-xs"
+          >
+            <Plus size={18} /> Add Promotion
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -176,7 +244,11 @@ export default function PromotionManagement() {
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <div className="relative w-full sm:w-32 aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/5">
                   {promo.imageUrl ? (
-                    <Image src={promo.imageUrl} alt={promo.title} fill className="object-cover" />
+                    promo.imageUrl.match(/\.(mp4|webm|ogg)$/i) || promo.imageUrl.includes('videos') ? (
+                      <video src={promo.imageUrl} className="w-full h-full object-cover" muted />
+                    ) : (
+                      <Image src={promo.imageUrl} alt={promo.title} fill className="object-cover" />
+                    )
                   ) : (
                     <div className="flex items-center justify-center h-full"><ImageIcon className="text-slate-700" size={24} /></div>
                   )}
@@ -184,8 +256,12 @@ export default function PromotionManagement() {
                 
                 <div className="flex-1 space-y-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
-                    <span className="text-[10px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase tracking-widest">
-                      {promo.location.replace("_", " ")}
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${
+                      promo.location === 'all' 
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]' 
+                        : 'bg-purple-500/10 text-purple-400'
+                    }`}>
+                      {promo.location === 'all' ? '✨ GLOBAL ALL' : promo.location.replace("_", " ")}
                     </span>
                     {promo.isActive ? (
                       <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
@@ -202,6 +278,13 @@ export default function PromotionManagement() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleToggleActive(promo)}
+                    className={`p-3 rounded-xl transition-all ${promo.isActive ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 hover:text-amber-400' : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 hover:text-emerald-400'}`}
+                    title={promo.isActive ? "Pause Iklan" : "Resume Iklan"}
+                  >
+                    {promo.isActive ? <Pause size={18} /> : <Play size={18} />}
+                  </button>
                   <button 
                     onClick={() => handleOpenModal(promo)}
                     className="p-3 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-all"
@@ -270,32 +353,50 @@ export default function PromotionManagement() {
                     <p className="text-[10px] text-slate-500 ml-1 italic max-w-sm">Gunakan judul yang singkat dan memikat (Call-to-Action) untuk menarik minat klik.</p>
                   </div>
 
-                  {/* Location & Priority Row */}
+                   {/* Location & Priority Row */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2.5">
-                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Lokasi</label>
-                      <select 
-                        value={editingPromo.location}
-                        onChange={(e) => setEditingPromo({...editingPromo, location: e.target.value as any})}
-                        className="input-field !py-3 !bg-white/5 focus:!bg-white/10"
-                        required
-                      >
-                        <option value="global_announcement">Global Top Bar (1.6x)</option>
-                        <option value="homepage_banner">Homepage Banner (1.3x)</option>
-                        <option value="homepage_inline">Homepage Inline (1.0x)</option>
-                        <option value="dashboard_card">Dashboard Card (1.1x)</option>
-                        <option value="course_sidebar">Course Sidebar Spotlight (1.0x)</option>
-                        <option value="course_listing">Course Listing Standard (1.2x)</option>
-                        <option value="course_listing_spotlight">Course Listing Spotlight (1.4x)</option>
-                        <option value="lesson_sidebar">Lesson Sidebar (0.9x)</option>
-                        <option value="quiz_success">Quiz Success Notification (1.5x)</option>
-                        <option value="verify_page">Certificate Verify Page (0.9x)</option>
-                        <option value="search_recovery">Empty Search Recovery (0.8x)</option>
-                        <option value="footer_native">Footer Native Ad (0.8x)</option>
-                        <option value="sticky_bottom">Sticky Bottom Ad (1.5x)</option>
-                        <option value="interstitial">Full Screen Interstitial (2.0x)</option>
-                        <option value="video_card">Autoplay Video Card (1.5x)</option>
-                      </select>
+                    <div className="space-y-2.5 relative">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Lokasi Iklan</label>
+                      
+                      {/* Custom Dropdown */}
+                      <div className="relative">
+                        <button 
+                          type="button"
+                          onClick={() => setIsLocationDropdownOpen(!isLocationDropdownOpen)}
+                          className="w-full input-field !py-3 !bg-white/5 focus:!bg-white/10 flex items-center justify-between group"
+                        >
+                          <span className="text-xs font-bold text-white truncate">
+                            {PROMO_LOCATIONS.find(l => l.value === editingPromo.location)?.label || "Pilih Lokasi..."}
+                          </span>
+                          <ChevronDown size={14} className={`text-slate-500 group-hover:text-purple-400 transition-transform ${isLocationDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isLocationDropdownOpen && (
+                          <div className="absolute top-full left-0 w-full mt-2 bg-[#12121a] border border-white/10 rounded-2xl shadow-2xl z-[160] overflow-hidden animate-scale-in">
+                            <div className="max-h-60 overflow-y-auto custom-scrollbar py-2">
+                              {PROMO_LOCATIONS.map((loc) => (
+                                <button
+                                  key={loc.value}
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingPromo({...editingPromo, location: loc.value as any});
+                                    setIsLocationDropdownOpen(false);
+                                  }}
+                                  className={`w-full px-4 py-2.5 flex items-center justify-between text-left transition-colors group ${
+                                    editingPromo.location === loc.value ? 'bg-purple-500/10 text-purple-400' : 'hover:bg-white/5 text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-bold">{loc.label}</span>
+                                    <span className="text-[9px] opacity-50 uppercase tracking-widest">Multiplier: {loc.multiplier}</span>
+                                  </div>
+                                  {editingPromo.location === loc.value && <Check size={12} />}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-2.5">
                       <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Prioritas Tampil</label>
@@ -359,7 +460,7 @@ export default function PromotionManagement() {
                           <input 
                             type="file" 
                             className="hidden" 
-                            accept="image/*" 
+                            accept="image/*,video/*" 
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) handleFileUpload(file);
@@ -373,11 +474,15 @@ export default function PromotionManagement() {
                     </div>
                     {editingPromo.imageUrl && (
                       <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-white/5 mt-2 shadow-2xl bg-black/40">
-                         <Image src={editingPromo.imageUrl} alt="Preview" fill className="object-cover" />
+                         {editingPromo.imageUrl.match(/\.(mp4|webm|ogg)$/i) || editingPromo.imageUrl.includes('videos') ? (
+                           <video src={editingPromo.imageUrl} className="w-full h-full object-cover" controls muted />
+                         ) : (
+                           <Image src={editingPromo.imageUrl} alt="Preview" fill className="object-cover" />
+                         )}
                          <button 
                            type="button" 
                            onClick={() => setEditingPromo({...editingPromo, imageUrl: ""})}
-                           className="absolute top-2 right-2 w-7 h-7 bg-red-500/80 hover:bg-red-500 text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
+                           className="absolute top-2 right-2 w-7 h-7 bg-red-500/80 hover:bg-red-500 text-white rounded-full flex items-center justify-center transition-colors shadow-lg z-10"
                          >
                             <X size={14} />
                          </button>
@@ -401,8 +506,8 @@ export default function PromotionManagement() {
                     <p className="text-[10px] text-slate-500 ml-1 italic">Tampil pada banner tipe 'card' atau 'spotlight'. Boleh memakai karakter emoji.</p>
                   </div>
 
-                  {/* Link & Badge Row */}
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Link, Badge & Brand Row */}
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2.5">
                       <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Link Tujuan</label>
                       <div className="relative">
@@ -425,6 +530,16 @@ export default function PromotionManagement() {
                         onChange={(e) => setEditingPromo({...editingPromo, badgeText: e.target.value})}
                         className="input-field !bg-white/5 focus:!bg-white/10 text-xs"
                         placeholder="PARTNER, PROMO, dll"
+                      />
+                    </div>
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Nama Brand</label>
+                      <input 
+                        type="text"
+                        value={editingPromo.brandName || ""}
+                        onChange={(e) => setEditingPromo({...editingPromo, brandName: e.target.value})}
+                        className="input-field !bg-white/5 focus:!bg-white/10 text-xs"
+                        placeholder="Nama Advertiser"
                       />
                     </div>
                   </div>

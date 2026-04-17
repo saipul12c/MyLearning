@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/AuthContext";
+import { getInstructorProfile } from "@/lib/instructor";
 import { type Course, type Category } from "@/lib/data";
 import { formatPrice, formatNumber } from "@/lib/utils";
 import { getCourses, getCategories } from "@/lib/courses";
@@ -12,7 +13,11 @@ import { Star, Users, Clock, BookOpen, Search, X, AlertCircle, CheckCircle, Mega
 import PromotionRequestModal from "@/app/components/PromotionRequestModal";
 
 export default function DashboardCoursesPage() {
-  const { user } = useAuth();
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [selectedCourseForPromo, setSelectedCourseForPromo] = useState<Course | null>(null);
+  const [instructorProfileId, setInstructorProfileId] = useState<string | null>(null);
+  const { user, isAdmin, isInstructor } = useAuth();
+  
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -21,8 +26,6 @@ export default function DashboardCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
-  const [selectedCourseForPromo, setSelectedCourseForPromo] = useState<Course | null>(null);
   
   // Debounced search query
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,7 +43,14 @@ export default function DashboardCoursesPage() {
       setCategories([{ id: "all", name: "Semua", slug: "all", icon: "📚", courseCount: 0 }, ...categoriesData]);
     };
     fetchCategories();
-  }, []);
+
+    // Fetch instructor profile to check ownership
+    if (isInstructor && user) {
+      getInstructorProfile(user.id).then(prof => {
+        if (prof) setInstructorProfileId(prof.id);
+      });
+    }
+  }, [isInstructor, user]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -176,15 +186,17 @@ export default function DashboardCoursesPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => {
-                            setSelectedCourseForPromo(course);
-                            setIsPromoModalOpen(true);
-                        }}
-                        className="text-xs px-3 py-1.5 rounded-lg font-bold bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1"
-                    >
-                        <Megaphone size={12} /> Promosi
-                    </button>
+                    {(isAdmin || (isInstructor && course.instructorId === instructorProfileId)) && (
+                      <button
+                          onClick={() => {
+                              setSelectedCourseForPromo(course);
+                              setIsPromoModalOpen(true);
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-lg font-bold bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1"
+                      >
+                          <Megaphone size={12} /> Promosi
+                      </button>
+                    )}
                     <button
                         onClick={() => handleEnroll(course)}
                         disabled={!!activeEnrollment}

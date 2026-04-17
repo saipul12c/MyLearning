@@ -23,7 +23,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (fullName: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-  updateProfile: (updates: Partial<Pick<SafeUser, "fullName" | "phone" | "bio" | "avatarUrl">>) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (updates: Partial<Pick<SafeUser, "fullName" | "phone" | "bio" | "avatarUrl" | "linkedin" | "website" | "specialization" | "experience">>) => Promise<{ success: boolean; error?: string }>;
   changePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   refreshUser: () => Promise<void>;
 }

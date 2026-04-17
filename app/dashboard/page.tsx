@@ -318,7 +318,7 @@ function AdminDashboard({ userId }: { userId: string }) {
           <h1 className="text-2xl font-bold text-white tracking-tight">Admin <span className="gradient-text">Dashboard</span></h1>
           <p className="text-slate-400 text-sm mt-1">Overview & Real-time Platform Statistics</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/admin/ad-requests" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-purple-500/30">
             <Megaphone size={14} className="group-hover:scale-110 transition-transform text-purple-400" />
             Antrian Iklan
@@ -326,6 +326,10 @@ function AdminDashboard({ userId }: { userId: string }) {
           <Link href="/dashboard/admin/promotions" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
             <Megaphone size={14} className="group-hover:scale-110 transition-transform" />
             Kelola Aktif
+          </Link>
+          <Link href="/dashboard/admin/ad-analytics" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-emerald-500/30">
+            <TrendingUp size={14} className="group-hover:scale-110 transition-transform text-emerald-400" />
+            Analitik Iklan
           </Link>
           <Link href="/dashboard/admin/courses" className="btn-primary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group">
             <BookOpen size={14} className="group-hover:scale-110 transition-transform" />

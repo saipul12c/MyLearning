@@ -5,45 +5,98 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/AuthContext";
 import {
-  BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut,
+  BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut, Bell,
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
   Phone, Ticket, Megaphone, History,
 } from "lucide-react";
 import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
 
-const userMenuItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/courses", label: "Jelajahi Kursus", icon: Library },
-  { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
-  { href: "/dashboard/profile", label: "Profil", icon: User },
+const userMenuGroups = [
+  {
+    title: "Menu Utama",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard/courses", label: "Jelajahi Kursus", icon: Library },
+      { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
+      { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
+      { href: "/dashboard/profile", label: "Profil", icon: User },
+    ]
+  }
 ];
 
-const adminMenuItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/admin/analytics", label: "Analitik & Penjualan", icon: Shield },
-  { href: "/dashboard/admin/users", label: "Kelola Pengguna", icon: Users },
-  { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
-  { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
-  { href: "/dashboard/admin/promotions", label: "Manajemen Iklan", icon: Megaphone },
-  { href: "/dashboard/admin/ad-requests", label: "Permintaan Iklan", icon: Ticket },
-  { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
-  { href: "/dashboard/admin/revisions", label: "Revisi Sertifikat", icon: History },
-  { href: "/dashboard/admin/messages", label: "Pesan Kontak", icon: MessageSquare },
-  { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },
-  { href: "/dashboard/admin/settings", label: "Pengaturan", icon: Settings },
+const adminMenuGroups = [
+  {
+    title: "Ringkasan",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
+      { href: "/dashboard/admin/analytics", label: "Analitik & Penjualan", icon: Shield },
+    ]
+  },
+  {
+    title: "Manajemen Inti",
+    items: [
+      { href: "/dashboard/admin/users", label: "Kelola Pengguna", icon: Users },
+      { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+      { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
+    ]
+  },
+  {
+    title: "Promosi & Voucher",
+    items: [
+      { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
+      { href: "/dashboard/admin/promotions", label: "Manajemen Iklan", icon: Megaphone },
+      { href: "/dashboard/admin/ad-requests", label: "Permintaan Iklan", icon: Ticket },
+    ]
+  },
+  {
+    title: "Layanan & Bantuan",
+    items: [
+      { href: "/dashboard/admin/revisions", label: "Revisi Sertifikat", icon: History },
+      { href: "/dashboard/admin/messages", label: "Pesan Kontak", icon: MessageSquare },
+      { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },
+    ]
+  },
+  {
+    title: "Sistem",
+    items: [
+      { href: "/dashboard/admin/announcements", label: "Siaran Pengumuman", icon: Megaphone },
+      { href: "/dashboard/admin/settings", label: "Pengaturan", icon: Settings },
+    ]
+  }
 ];
 
-const instructorMenuItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/admin/analytics", label: "Analitik Saya", icon: Shield },
-  { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
-  { href: "/dashboard/ads", label: "Iklan Saya", icon: Megaphone },
-  { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
-  { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
-  { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },
-  { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },
-  { href: "/dashboard/profile", label: "Profil", icon: User },
+const instructorMenuGroups = [
+  {
+    title: "Ringkasan",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard/admin/analytics", label: "Analitik Saya", icon: Shield },
+    ]
+  },
+  {
+    title: "Manajemen Konten",
+    items: [
+      { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+      { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
+      { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },
+    ]
+  },
+  {
+    title: "Pemasaran",
+    items: [
+      { href: "/dashboard/ads", label: "Iklan Saya", icon: Megaphone },
+      { href: "/dashboard/admin/vouchers", label: "Kelola Voucher", icon: Ticket },
+    ]
+  },
+  {
+    title: "Bantuan & Akun",
+    items: [
+      { href: "/dashboard/admin/live-cs", label: "Live CS Support", icon: Phone },
+      { href: "/dashboard/profile", label: "Profil", icon: User },
+    ]
+  }
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -71,7 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const menuItems = isAdmin ? adminMenuItems : (isInstructor ? instructorMenuItems : userMenuItems);
+  const menuGroups = isAdmin ? adminMenuGroups : (isInstructor ? instructorMenuGroups : userMenuGroups);
   const initials = user?.fullName?.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() || "U";
 
   return (
@@ -83,17 +136,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 flex flex-col border-r border-white/5 bg-[#0c0c14] transition-transform duration-300 ${
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 flex flex-col border-r border-white/5 bg-[#0c0c14] transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between px-5 py-5 border-b border-white/5">
+        <div className="flex items-center justify-between px-6 py-6 border-b border-white/5">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)]">
               <BookOpen size={16} className="text-white" />
             </div>
-            <span className="text-lg font-bold">
+            <span className="text-lg font-bold tracking-tight">
               <span className="gradient-text">My</span>
               <span className="text-white">Learning</span>
             </span>
@@ -104,9 +157,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* User Info */}
-        <div className="px-5 py-4 border-b border-white/5">
+        <div className="px-6 py-5 border-b border-white/5 bg-white/[0.01]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden border border-white/10">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden border border-white/10 shadow-lg">
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user?.fullName} className="w-full h-full object-cover" />
               ) : (
@@ -114,41 +167,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-sm text-white font-medium truncate">{user?.fullName}</p>
-              <div className="flex items-center gap-1.5">
+              <p className="text-sm text-white font-bold truncate">{user?.fullName}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
                 {isAdmin && <Shield size={10} className="text-amber-400" />}
                 {isInstructor && <GraduationCap size={10} className="text-purple-400" />}
-                <p className="text-xs text-slate-500">{isAdmin ? "Administrator" : (isInstructor ? "Instructor" : "Learner")}</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{isAdmin ? "Administrator" : (isInstructor ? "Instructor" : "Learner")}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {isAdmin && (
-            <p className="px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Admin Panel</p>
-          )}
-          {isInstructor && (
-            <p className="px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Instructor Panel</p>
-          )}
-          {menuItems.map((item) => {
-            const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-purple-500/15 to-cyan-500/10 text-white border border-purple-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                <item.icon size={18} className={isActive ? "text-purple-400" : ""} />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 py-6 px-4 space-y-8 overflow-y-auto custom-scrollbar">
+          {menuGroups.map((group, groupIdx) => (
+            <div key={groupIdx} className="space-y-2">
+              <h3 className="px-3 mb-3 text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                {group.title}
+              </h3>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                        isActive
+                          ? "bg-gradient-to-r from-purple-500/15 to-cyan-500/10 text-white border border-purple-500/20 shadow-[0_0_20px_rgba(168,85,247,0.08)]"
+                          : "text-slate-400 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      <item.icon size={18} className={`transition-colors ${isActive ? "text-purple-400" : "text-slate-500 group-hover:text-slate-300"}`} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Back to site + Logout */}
@@ -171,7 +227,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-4 px-6 py-4 border-b border-white/5 bg-[#09090f]/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-10 flex items-center gap-4 px-6 py-4 border-b border-white/5 bg-[#09090f]/80 backdrop-blur-xl">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-400 hover:text-white">
             <Menu size={22} />
           </button>

@@ -180,6 +180,10 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     lastSeenAt: profile.last_seen_at || profile.created_at || createdAt,
     isBanned: profile.is_banned || false,
     banReason: profile.ban_reason || "",
+    linkedin: profile.linkedin_url || "",
+    website: profile.website_url || "",
+    specialization: profile.specialization || "",
+    experience: profile.experience || "",
   };
 }
 
@@ -208,12 +212,16 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     isOnline: profile.is_online || false,
     lastSeenAt: profile.last_seen_at || profile.created_at,
     isBanned: profile.is_banned || false,
+    linkedin: profile.linkedin_url || "",
+    website: profile.website_url || "",
+    specialization: profile.specialization || "",
+    experience: profile.experience || "",
   };
 }
 
 export async function updateProfile(
   userId: string,
-  updates: Partial<Pick<User, "fullName" | "phone" | "bio" | "avatarUrl">>
+  updates: Partial<Pick<User, "fullName" | "phone" | "bio" | "avatarUrl" | "linkedin" | "website" | "specialization" | "experience">>
 ): Promise<{ success: boolean; user?: SafeUser; error?: string }> {
   try {
     const updateData: Record<string, any> = {};
@@ -221,6 +229,10 @@ export async function updateProfile(
     if (updates.phone !== undefined) updateData.phone = updates.phone;
     if (updates.bio !== undefined) updateData.bio = updates.bio;
     if (updates.avatarUrl !== undefined) updateData.avatar_url = updates.avatarUrl;
+    if (updates.linkedin !== undefined) updateData.linkedin_url = updates.linkedin;
+    if (updates.website !== undefined) updateData.website_url = updates.website;
+    if (updates.specialization !== undefined) updateData.specialization = updates.specialization;
+    if (updates.experience !== undefined) updateData.experience = updates.experience;
 
     const { data, error } = await supabase
       .from("user_profiles")
@@ -246,6 +258,10 @@ export async function updateProfile(
         avatarUrl: data.avatar_url,
         isOnline: data.is_online || false,
         lastSeenAt: data.last_seen_at || data.created_at,
+        linkedin: data.linkedin_url || "",
+        website: data.website_url || "",
+        specialization: data.specialization || "",
+        experience: data.experience || "",
       }
     };
   } catch (error: any) {
@@ -328,6 +344,7 @@ export async function getUsersPaginatedAdmin(options: {
   search?: string;
   role?: string;
   status?: string;
+  instructorId?: string;
 }): Promise<{ data: SafeUser[]; totalCount: number }> {
   try {
     const { page, pageSize, search, role, status } = options;
@@ -343,9 +360,18 @@ export async function getUsersPaginatedAdmin(options: {
     if (profile?.role !== "admin" && profile?.role !== "instructor") throw new Error("Forbidden");
 
     // 1. Build Query
-    let query = supabase
-      .from("user_profiles")
-      .select("*, enrollmentCount:enrollments(count)", { count: 'exact' });
+    // We use a different select if filtered by instructor to ensure we only get their students
+    let query;
+    if (options.instructorId) {
+       query = supabase
+        .from("user_profiles")
+        .select("*, enrollmentCount:enrollments(count), enrollments!inner(courses!inner(instructor_id))", { count: 'exact' })
+        .eq("enrollments.courses.instructor_id", options.instructorId);
+    } else {
+       query = supabase
+        .from("user_profiles")
+        .select("*, enrollmentCount:enrollments(count)", { count: 'exact' });
+    }
 
     // 2. Apply Filters
     if (role && role !== "all") {
@@ -470,6 +496,20 @@ export async function toggleUserBan(userId: string, isBanned: boolean, reason?: 
         ban_reason: isBanned ? reason : null
       })
       .eq("user_id", userId);
+
+    if (!error) {
+      // Send notification to the target user
+      const { createNotification } = await import("./notifications");
+      await createNotification({
+        userId,
+        title: isBanned ? "Akun Ditangguhkan ⚠️" : "Akses Akun Dipulihkan ✅",
+        message: isBanned 
+          ? `Akun Anda telah ditangguhkan oleh tim keamanan. Alasan: ${reason || "Pelanggaran kebijakan komunitas"}.` 
+          : "Akun Anda telah dinyatakan aktif kembali. Anda kini dapat menggunakan seluruh fitur MyLearning.",
+        type: isBanned ? 'error' : 'success',
+        linkUrl: isBanned ? undefined : '/dashboard'
+      });
+    }
 
     if (error) throw error;
     return { success: true };

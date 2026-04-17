@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut, User, Shield } from "lucide-react";
+import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut, User, Shield, Ticket } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import Logo from "./Logo";
 import NotificationBell from "./NotificationBell";
@@ -137,6 +137,9 @@ export default function Navbar() {
                     <Link href="/dashboard/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">
                       <User size={16} /> Profil
                     </Link>
+                    <Link href="/dashboard/vouchers" className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">
+                      <Ticket size={16} className="text-purple-400" /> Dompet Voucher
+                    </Link>
                   </div>
                   <div className="border-t border-white/5 py-1">
                     <button
@@ -205,10 +208,10 @@ export default function Navbar() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-white font-bold text-sm truncate">{user?.fullName}</p>
-                    <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold flex items-center gap-1">
+                    <div className="text-slate-500 text-[10px] uppercase tracking-widest font-bold flex items-center gap-1">
                       {isAdmin ? "Administrator" : isInstructor ? "Instruktur" : "Siswa"}
                       {(isAdmin || isInstructor) && <VerifiedBadge size={11} />}
-                    </p>
+                    </div>
                   </div>
                 </div>
                 <Link href="/dashboard" className="btn-primary w-full text-sm !py-2.5 flex items-center justify-center gap-2">
