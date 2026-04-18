@@ -232,6 +232,62 @@ CREATE POLICY "Only admins can view logs" ON promotion_impression_logs FOR SELEC
 DROP POLICY IF EXISTS "System can insert logs" ON promotion_impression_logs;
 CREATE POLICY "System can insert logs" ON promotion_impression_logs FOR INSERT WITH CHECK (true); -- Functions use this
 
+-- 14. VOUCHERS Policies
+ALTER TABLE vouchers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view active coupons" ON vouchers;
+CREATE POLICY "Public can view active coupons" ON vouchers 
+FOR SELECT USING (
+    is_active = true AND 
+    (target_user_id IS NULL OR target_user_id = auth.uid()) AND
+    (start_date <= NOW()) AND
+    (expiry_date IS NULL OR expiry_date > NOW())
+);
+
+DROP POLICY IF EXISTS "Instructors can manage own vouchers" ON vouchers;
+CREATE POLICY "Instructors can manage own vouchers" ON vouchers 
+FOR ALL USING (
+    is_admin() OR 
+    (is_instructor() AND EXISTS (
+        SELECT 1 FROM instructors 
+        WHERE instructors.user_id = auth.uid() AND instructors.id = vouchers.instructor_id
+    ))
+);
+
+DROP POLICY IF EXISTS "Admins can manage all vouchers" ON vouchers;
+CREATE POLICY "Admins can manage all vouchers" ON vouchers 
+FOR ALL USING (is_admin());
+
+-- 15. VOUCHER WALLET Policies
+ALTER TABLE voucher_wallet ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage own wallet" ON voucher_wallet;
+CREATE POLICY "Users can manage own wallet" ON voucher_wallet 
+FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can view all wallets" ON voucher_wallet;
+CREATE POLICY "Admins can view all wallets" ON voucher_wallet 
+FOR SELECT USING (is_admin());
+
+-- 16. PLATFORM EVENTS Policies
+ALTER TABLE platform_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view published events" ON platform_events;
+CREATE POLICY "Anyone can view published events" ON platform_events FOR SELECT USING (is_published = true OR is_admin() OR (is_instructor() AND auth.uid() = created_by));
+DROP POLICY IF EXISTS "Admins can manage all events" ON platform_events;
+CREATE POLICY "Admins can manage all events" ON platform_events FOR ALL USING (is_admin());
+DROP POLICY IF EXISTS "Instructors can manage own events" ON platform_events;
+CREATE POLICY "Instructors can manage own events" ON platform_events FOR ALL USING (is_instructor() AND auth.uid() = created_by) WITH CHECK (is_instructor() AND auth.uid() = created_by);
+
+ALTER TABLE event_registrations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own registrations" ON event_registrations;
+CREATE POLICY "Users can view own registrations" ON event_registrations FOR SELECT USING (auth.uid() = user_id OR is_admin());
+DROP POLICY IF EXISTS "Users can register themselves" ON event_registrations;
+CREATE POLICY "Users can register themselves" ON event_registrations FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can manage own registration" ON event_registrations;
+CREATE POLICY "Users can manage own registration" ON event_registrations FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins can manage all registrations" ON event_registrations;
+CREATE POLICY "Admins can manage all registrations" ON event_registrations FOR ALL USING (is_admin());
+
 -- ======================================================
 -- 13. STORAGE POLICIES
 -- ======================================================

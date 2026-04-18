@@ -110,52 +110,51 @@ export async function toggleVoucherStatus(id: string, isActive: boolean): Promis
 }
 
 export async function createVoucher(voucherData: any): Promise<{ success: boolean; data?: Voucher; error?: string }> {
-  const { data, error } = await supabase
-    .from("vouchers")
-    .insert(voucherData)
-    .select()
-    .single();
+  try {
+    // 1. If course_id is provided, verify ownership for instructors
+    if (voucherData.course_id && voucherData.instructor_id) {
+       const { data: course, error: cErr } = await supabase
+        .from("courses")
+        .select("instructor_id")
+        .eq("id", voucherData.course_id)
+        .single();
+        
+       if (cErr || !course) return { success: false, error: "Kursus tidak ditemukan." };
+       if (course.instructor_id !== voucherData.instructor_id) {
+          return { success: false, error: "Anda tidak memiliki izin untuk membuat voucher untuk kursus ini." };
+       }
+    }
 
-  if (error) return { success: false, error: error.message };
-  return { success: true, data: mapDbToVoucher(data) };
+    const { data, error } = await supabase
+      .from("vouchers")
+      .insert(voucherData)
+      .select()
+      .single();
+  
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: mapDbToVoucher(data) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 /**
- * Gets active vouchers that a specific user can use
+ * Gets active vouchers that a specific user can use (Optimized via RPC)
  */
 export async function getAvailableVouchersForUser(userId: string): Promise<Voucher[]> {
   try {
-    // We fetch all active vouchers where user hasn't used them yet
-    // This query focuses on global, category, or specific user vouchers
-    const { data, error } = await supabase
-      .from("vouchers")
-      .select("*, instructors(name)")
-      .eq("is_active", true)
-      .or(`target_user_id.is.null,target_user_id.eq.${userId}`)
-      .lte("start_date", new Date().toISOString())
-      .or(`expiry_date.gt.${new Date().toISOString()},expiry_date.is.null`)
-      .order("created_at", { ascending: false });
+    const { data, error } = await supabase.rpc("get_vouchers_for_user_v2", {
+      p_user_id: userId
+    });
 
     if (error) throw error;
-
-    // Filter out already used vouchers in JS to avoid complex joins in simple query
-    // In production with many users, this should be done in an RPC
-    const { data: usage } = await supabase
-      .from("voucher_usage")
-      .select("voucher_id")
-      .eq("user_id", userId);
     
-    const usedIds = new Set(usage?.map(u => u.voucher_id) || []);
-    
-    return data
-      .filter(v => !usedIds.has(v.id))
-      .filter(v => v.usage_limit === 0 || v.used_count < v.usage_limit)
-      .map(v => ({
+    return (data || []).map((v: any) => ({
         ...mapDbToVoucher(v),
-        instructorName: v.instructors?.name
-      }));
+        instructorName: v.instructor_name // instructor_name is joined in RPC
+    }));
   } catch (err) {
-    console.error("Error fetching user vouchers:", err);
+    console.error("Error fetching available vouchers:", err);
     return [];
   }
 }

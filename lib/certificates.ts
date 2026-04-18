@@ -216,3 +216,46 @@ export async function getCertificateRevisionHistory() {
   }
   return data;
 }
+
+/**
+ * Get certificate details by enrollment ID.
+ */
+export async function getCertificateByEnrollmentId(enrollmentId: string): Promise<CertificateDetails | null> {
+  try {
+    const { data, error } = await supabase
+      .from("certificates")
+      .select(`
+        *,
+        enrollments (
+          certificate_valid_until,
+          course_slug
+        )
+      `)
+      .eq("enrollment_id", enrollmentId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const validUntil = data.enrollments?.certificate_valid_until;
+    const isValid = !validUntil || new Date(validUntil) > new Date();
+
+    return {
+      id: data.id,
+      certificateNumber: data.certificate_number,
+      issuedAt: data.issued_at,
+      courseTitle: data.course_title,
+      userName: data.user_name,
+      instructorName: data.instructor_name,
+      courseSlug: data.enrollments?.course_slug || "",
+      instructorSignatureId: data.instructor_signature_id,
+      adminSignatureId: data.admin_signature_id,
+      isValid,
+      revisionStatus: data.revision_status,
+      requestedName: data.requested_name,
+      revisionCount: data.revision_count
+    };
+  } catch (err) {
+    console.error("Error in getCertificateByEnrollmentId:", err);
+    return null;
+  }
+}

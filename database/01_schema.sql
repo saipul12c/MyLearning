@@ -422,7 +422,48 @@ CREATE TABLE IF NOT EXISTS promotion_requests (
 );
 
 -- ============================================
--- 11. VIEWS
+-- 12. PLATFORM EVENTS
+-- ============================================
+CREATE TABLE IF NOT EXISTS platform_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title VARCHAR(500) NOT NULL,
+  slug VARCHAR(500) NOT NULL UNIQUE,
+  short_description VARCHAR(500),
+  description TEXT,
+  thumbnail_url TEXT,
+  banner_url TEXT,
+  event_date TIMESTAMPTZ NOT NULL,
+  location VARCHAR(200) DEFAULT 'Online',
+  registration_link TEXT, -- Optional external link
+  price INTEGER DEFAULT 0,
+  is_published BOOLEAN DEFAULT FALSE,
+  is_featured BOOLEAN DEFAULT FALSE,
+  created_by UUID REFERENCES user_profiles(user_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS event_registrations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id UUID NOT NULL REFERENCES platform_events(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+  status VARCHAR(20) DEFAULT 'registered' CHECK (status IN ('registered', 'attended', 'cancelled')),
+  payment_status VARCHAR(20) DEFAULT 'free' CHECK (payment_status IN ('free', 'pending', 'waiting_verification', 'paid', 'rejected')),
+  payment_amount INTEGER DEFAULT 0,
+  payment_proof_url TEXT,
+  submission_url TEXT,
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(event_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_events_slug ON platform_events(slug);
+CREATE INDEX IF NOT EXISTS idx_platform_events_date ON platform_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_event ON event_registrations(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_user ON event_registrations(user_id);
+
+-- ============================================
+-- 13. VIEWS
 -- ============================================
 CREATE OR REPLACE VIEW sales_analytics AS
 SELECT 
@@ -436,7 +477,7 @@ GROUP BY sale_date
 ORDER BY sale_date DESC;
 
 -- ============================================
--- 12. PERFORMANCE INDEXES
+-- 14. PERFORMANCE INDEXES
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
 CREATE INDEX IF NOT EXISTS idx_instructors_user_id ON instructors(user_id);

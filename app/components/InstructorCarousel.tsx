@@ -60,23 +60,23 @@ export default function InstructorCarousel({ instructors }: InstructorCarouselPr
   if (!instructors || instructors.length === 0) return null;
 
   return (
-    <div 
+    <div
       className="relative group px-2"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
       <div className="overflow-hidden py-4">
-        <div 
+        <div
           className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1) gap-6"
-          style={{ 
+          style={{
             transform: `translateX(-${currentIndex * (100 / visibleItems)}%)`,
           }}
         >
           {instructors.map((instructor) => (
-            <div 
+            <div
               key={instructor.id}
               className="card p-6 text-center group/card flex flex-col h-auto"
-              style={{ 
+              style={{
                 width: `calc((100% / ${visibleItems}) - ${(6 * (visibleItems - 1)) / visibleItems}px)`,
                 flexShrink: 0
               }}
@@ -92,8 +92,8 @@ export default function InstructorCarousel({ instructors }: InstructorCarouselPr
                     .join("")
                 )}
               </div>
-              
-              <Link 
+
+              <Link
                 href={`/profile/${instructor.slug}`}
                 className="inline-block group/link"
               >
@@ -105,11 +105,11 @@ export default function InstructorCarousel({ instructors }: InstructorCarouselPr
               <p className="text-purple-400 text-sm font-medium mb-3">
                 {instructor.expertise}
               </p>
-              
+
               <p className="text-slate-400 text-sm leading-relaxed mb-6 line-clamp-2 h-10 italic">
                 &quot;{instructor.bio}&quot;
               </p>
-              
+
               <div className="mt-auto flex justify-center gap-3 text-xs text-slate-400 pt-5 border-t border-white/5">
                 <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
                   <Star
@@ -133,14 +133,14 @@ export default function InstructorCarousel({ instructors }: InstructorCarouselPr
       {/* Navigation Controls - Only show if enough items */}
       {totalItems > visibleItems && (
         <>
-          <button 
+          <button
             onClick={prevSlide}
             aria-label="Previous instructor"
             className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 w-12 h-12 rounded-full glass-strong flex items-center justify-center text-white hover:bg-purple-500/20 hover:border-purple-500/30 transition-all duration-300 z-20 shadow-2xl"
           >
             <ChevronLeft size={24} />
           </button>
-          <button 
+          <button
             onClick={nextSlide}
             aria-label="Next instructor"
             className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 w-12 h-12 rounded-full glass-strong flex items-center justify-center text-white hover:bg-purple-500/20 hover:border-purple-500/30 transition-all duration-300 z-20 shadow-2xl"
@@ -155,11 +155,10 @@ export default function InstructorCarousel({ instructors }: InstructorCarouselPr
                 key={i}
                 onClick={() => setCurrentIndex(Math.min(i, maxIndex))}
                 aria-label={`Go to slide ${i + 1}`}
-                className={`h-1.5 rounded-full transition-all duration-500 ${
-                  currentIndex === i 
-                    ? "w-8 bg-gradient-to-r from-purple-500 to-cyan-400 shadow-[0_0_15px_rgba(124,58,237,0.5)]" 
-                    : "w-2 bg-white/10 hover:bg-white/20"
-                }`}
+                className={`h-1.5 rounded-full transition-all duration-500 ${currentIndex === i
+                  ? "w-8 bg-gradient-to-r from-purple-500 to-cyan-400 shadow-[0_0_15px_rgba(124,58,237,0.5)]"
+                  : "w-2 bg-white/10 hover:bg-white/20"
+                  }`}
               />
             ))}
           </div>

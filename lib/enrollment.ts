@@ -66,6 +66,8 @@ export interface Enrollment {
   instructorId?: string;
   totalItems: number; // lessons + quizzes + assignments + 1 (final project)
   expiryDays: number;
+  thumbnailUrl?: string;
+  level?: string;
   certificateValidUntil?: string;
   certificateId?: string;
   certificateUrl?: string;
@@ -438,6 +440,11 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
       .select(`
         *,
         courses (
+          id,
+          title,
+          slug,
+          thumbnail_url,
+          level,
           instructor_id
         ),
         certificates (
@@ -509,7 +516,8 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
           certificate_revision_status: (enr as any).certificates?.revision_status,
           certificate_revision_count: (enr as any).certificates?.revision_count,
           certificate_revision_notes: (enr as any).certificates?.admin_notes,
-          certificate_issued_at: (enr as any).certificates?.issued_at
+          certificate_issued_at: (enr as any).certificates?.issued_at,
+          course_data: (enr as any).courses
         }, 
         lessons, 
         quizzes, 
@@ -957,8 +965,10 @@ function mapDbToEnrollment(
     userId: db.user_id,
     courseId: db.course_id,
     instructorId: db.instructor_id,
-    courseSlug: db.course_slug,
-    courseTitle: db.course_title || db.course_slug,
+    courseSlug: db.course_data?.slug || db.course_slug,
+    courseTitle: db.course_data?.title || db.course_title || db.course_slug,
+    thumbnailUrl: db.course_data?.thumbnail_url,
+    level: db.course_data?.level,
     enrolledAt: db.enrolled_at,
     status: mapDbStatusToEnrollmentStatus(db.payment_status),
     completedAt: db.completed_at,

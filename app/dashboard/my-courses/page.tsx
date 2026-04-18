@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/app/components/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getUserEnrollments, completeLesson, uncompleteLesson, getRemainingDays, getEnrollmentDeadline, submitQuiz, submitAssignment, completeFinalProject, isCertificateExpired, resetEnrollmentForRetake, type Enrollment } from "@/lib/enrollment";
@@ -8,7 +9,8 @@ import { getCertificateByNumber } from "@/lib/certificates";
 import { getCourseBySlug } from "@/lib/courses";
 import { getCourseAssessments } from "@/lib/assessments";
 import { getLevelLabel } from "@/lib/enrollment";
-import { Clock, CheckCircle, XCircle, BookOpen, Download, Award, FileText, Brain, Target, AlertTriangle, CreditCard, RefreshCcw, Loader2, ChevronRight } from "lucide-react";
+import { addReview } from "@/lib/reviews";
+import { Clock, CheckCircle, XCircle, BookOpen, Download, Award, FileText, Brain, Target, AlertTriangle, CreditCard, RefreshCcw, Loader2, ChevronRight, Star, Send } from "lucide-react";
 import CertificateGenerator from "@/app/components/CertificateGenerator";
 import PaymentModal from "@/app/components/PaymentModal";
 import { getInstructors } from "@/lib/courses";
@@ -16,7 +18,6 @@ import QuizModal from "@/app/components/QuizModal";
 import AssignmentModal from "@/app/components/AssignmentModal";
 import LessonPlayer from "@/app/components/LessonPlayer";
 import FinalProjectForm from "@/app/components/FinalProjectForm";
-import RevisionModal from "@/app/components/RevisionModal";
 import Skeleton from "@/app/components/ui/Skeleton";
 import ErrorState from "@/app/components/ui/ErrorState";
 import ActiveCourseCard from "./ActiveCourseCard";
@@ -29,6 +30,7 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"lessons" | "quizzes" | "assignments" | "project">("lessons");
   const [certData, setCertData] = useState<{
     userName: string;
@@ -49,7 +51,12 @@ export default function MyCoursesPage() {
   const [activeCourseData, setActiveCourseData] = useState<any>(null);
   const [activeAssessments, setActiveAssessments] = useState<any>(null);
   const [activeInstructor, setActiveInstructor] = useState<any>(null);
-  const [showRevisionModal, setShowRevisionModal] = useState<Enrollment | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [submittedReviews, setSubmittedReviews] = useState<string[]>([]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const forceRefresh = useCallback(() => setRefresh((r) => r + 1), []);
 
@@ -157,25 +164,64 @@ export default function MyCoursesPage() {
   };
 
   const handleDownloadCert = async (enrollment: Enrollment) => {
-    if (!enrollment.certificateId) return;
+    if (downloadingId) return;
+    
+    if (!enrollment.certificateId) {
+      setMessage({ type: "error", text: "Data sertifikat belum tersedia. Silakan hubungi admin jika masalah berlanjut." });
+      return;
+    }
 
-    const [course, certDetails] = await Promise.all([
-      getCourseBySlug(enrollment.courseSlug),
-      getCertificateByNumber(enrollment.certificateId)
-    ]);
+    setDownloadingId(enrollment.id);
+    try {
+      const [course, certDetails] = await Promise.all([
+        getCourseBySlug(enrollment.courseSlug),
+        getCertificateByNumber(enrollment.certificateId)
+      ]);
 
-    const certExpired = isCertificateExpired(enrollment);
-    setCertData({
-      userName: user.fullName,
-      courseTitle: enrollment.courseTitle,
-      startDate: new Date(enrollment.enrolledAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
-      endDate: new Date(enrollment.completedAt!).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
-      instructor: certDetails?.instructorName || course?.instructor || "MyLearning Team",
-      certificateId: enrollment.certificateId,
-      instructorSignatureId: certDetails?.instructorSignatureId,
-      adminSignatureId: certDetails?.adminSignatureId,
-      isExpired: certExpired,
-    });
+      const certExpired = isCertificateExpired(enrollment);
+      setCertData({
+        userName: user?.fullName || "Siswa",
+        courseTitle: enrollment.courseTitle,
+        startDate: enrollment.enrolledAt ? new Date(enrollment.enrolledAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "-",
+        endDate: enrollment.completedAt ? new Date(enrollment.completedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
+        instructor: certDetails?.instructorName || course?.instructor || "MyLearning Team",
+        certificateId: enrollment.certificateId,
+        instructorSignatureId: certDetails?.instructorSignatureId,
+        adminSignatureId: certDetails?.adminSignatureId,
+        isExpired: certExpired,
+      });
+    } catch (err) {
+      console.error("Error preparing certificate:", err);
+      setMessage({ type: "error", text: "Gagal menyiapkan data sertifikat. Silakan coba lagi nanti." });
+    }
+  };
+
+  const handleReviewSubmit = async (enrollment: Enrollment) => {
+    if (!user || !comment.trim()) return;
+
+    setSubmittingReview(true);
+    try {
+      const result = await addReview({
+        courseSlug: enrollment.courseSlug,
+        userId: user.id,
+        userName: user.fullName,
+        rating,
+        comment,
+      });
+
+      if (result.success) {
+        setSubmittedReviews((prev) => [...prev, enrollment.id]);
+        setReviewingId(null);
+        setComment("");
+        setRating(5);
+      } else {
+        alert("Gagal mengirim ulasan: " + result.error);
+      }
+    } catch (err) {
+      console.error("Review error:", err);
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const tabs = [
@@ -303,20 +349,37 @@ export default function MyCoursesPage() {
             {completed.map((enr) => {
               const certExpired = isCertificateExpired(enr);
               return (
-                <div key={enr.id} className="card p-6 border-emerald-500/10 bg-emerald-500/[0.02] hover:border-emerald-500/30 transition-all flex flex-col justify-between group">
-                  <div className="flex items-start justify-between gap-4 mb-6">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${certExpired ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400 group-hover:scale-110 group-hover:bg-emerald-500/20"}`}>
-                      {certExpired ? <AlertTriangle size={24} /> : <CheckCircle size={24} />}
+                <div key={enr.id} className="card p-6 border-emerald-500/10 bg-emerald-500/[0.02] hover:border-emerald-500/30 transition-all flex flex-col justify-between group relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-3xl rounded-full" />
+                  
+                  <div className="flex items-start justify-between gap-4 mb-6 relative z-10">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden transition-all border border-white/5 ${certExpired ? "bg-amber-500/10" : "bg-emerald-500/10 group-hover:scale-105"}`}>
+                        {enr.thumbnailUrl ? (
+                          <img src={enr.thumbnailUrl} alt={enr.courseTitle} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className={certExpired ? "text-amber-400" : "text-emerald-400"}>
+                            {certExpired ? <AlertTriangle size={32} /> : <CheckCircle size={32} />}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-white font-bold text-lg mb-1 leading-tight group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{enr.courseTitle}</h3>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${certExpired ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                            {certExpired ? "EXPIRED" : "COMPLETED"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                     <div className="text-right">
-                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Completed</p>
-                       <p className="text-sm font-black text-white">{enr.completedAt ? new Date(enr.completedAt).toLocaleDateString("id-ID", { month: "short", year: "numeric" }) : "N/A"}</p>
+                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Selesai Pada</p>
+                       <p className="text-xs font-black text-white">{enr.completedAt ? new Date(enr.completedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : (enr.status === 'completed' ? "Baru Saja" : "N/A")}</p>
                     </div>
                   </div>
                   
-                    <div>
-                      <h3 className="text-white font-bold text-lg mb-2 leading-tight">{enr.courseTitle}</h3>
-                      <div className="flex flex-wrap items-center gap-2 mb-6">
+                  <div className="relative z-10">
+                    <div className="flex flex-wrap items-center gap-2 mb-6">
                         {certExpired ? (
                           <span className="text-[10px] font-black uppercase tracking-tighter text-amber-500 flex items-center gap-1.5 bg-amber-500/10 px-2 py-1 rounded-lg"><AlertTriangle size={12} /> Sertifikat Kadaluarsa</span>
                         ) : (
@@ -338,9 +401,23 @@ export default function MyCoursesPage() {
                       </div>
                       
                       <div className="flex flex-col gap-2">
-                        <button onClick={() => handleDownloadCert(enr)}
-                          className={`w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] transition-all ${certExpired ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"}`}>
-                          <Download size={14} className={certExpired ? "" : "animate-bounce"} /> {certExpired ? "DOWNLOAD (EXPIRED)" : "DOWNLOAD SERTIFIKAT"}
+                        <button 
+                          onClick={() => handleDownloadCert(enr)}
+                          disabled={downloadingId === enr.id}
+                          className={`w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] transition-all ${
+                            downloadingId === enr.id 
+                              ? "bg-white/10 text-slate-400 cursor-not-allowed" 
+                              : certExpired 
+                                ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20" 
+                                : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
+                          }`}
+                        >
+                          {downloadingId === enr.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Download size={14} className={certExpired ? "" : "animate-bounce"} />
+                          )}
+                          {downloadingId === enr.id ? "MEMPROSES SERTIFIKAT..." : certExpired ? "DOWNLOAD (EXPIRED)" : "DOWNLOAD SERTIFIKAT"}
                         </button>
 
                         {/* Revision Button Logic */}
@@ -352,40 +429,93 @@ export default function MyCoursesPage() {
                            
                            if (canRequestRevision) {
                              return (
-                               <button 
-                                 onClick={() => setShowRevisionModal(enr)}
+                               <Link
+                                  href={`/dashboard/my-courses/revision/${enr.id}`}
                                  className="w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/10 transition-all"
                                >
                                  <FileText size={14} /> Ajukan Perbaikan Nama (Max 1x)
-                               </button>
+                                </Link>
                              );
                            }
                            return null;
                         })()}
                         
                         {certExpired && (
-                        <button 
-                          onClick={async () => {
-                            if (confirm("Sertifikat Anda sudah kadaluarsa. Anda wajib mengulang kursus dari 0% untuk mendapatkan sertifikat baru. Lanjutkan?")) {
-                              const res = await resetEnrollmentForRetake(enr.id);
-                              if (res.success) {
-                                window.location.reload();
-                              } else {
-                                alert("Gagal mereset kursus: " + res.error);
+                          <button 
+                            onClick={async () => {
+                              if (confirm("Sertifikat Anda sudah kadaluarsa. Anda wajib mengulang kursus dari 0% untuk mendapatkan sertifikat baru. Lanjutkan?")) {
+                                const res = await resetEnrollmentForRetake(enr.id);
+                                if (res.success) {
+                                  window.location.reload();
+                                } else {
+                                  alert("Gagal mereset kursus: " + res.error);
+                                }
                               }
-                            }
-                          }}
-                          className="w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] bg-white/5 text-slate-400 hover:bg-white/10 border border-white/10 transition-all"
-                        >
-                          <RefreshCcw size={14} /> ULANG KURSUS (DARI 0%)
-                        </button>
+                            }}
+                            className="w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] bg-white/5 text-slate-400 hover:bg-white/10 border border-white/10 transition-all"
+                          >
+                            <RefreshCcw size={14} /> ULANG KURSUS (DARI 0%)
+                          </button>
+                        )}
+
+                        {!submittedReviews.includes(enr.id) && (
+                          <button 
+                            onClick={() => setReviewingId(reviewingId === enr.id ? null : enr.id)}
+                            className={`w-full flex items-center justify-center gap-2 !py-3 rounded-2xl text-[10px] font-black uppercase tracking-[.2em] transition-all ${reviewingId === enr.id ? "bg-white text-black" : "bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white border border-purple-500/20"}`}
+                          >
+                            <Star size={14} fill={reviewingId === enr.id ? "currentColor" : "none"} /> {reviewingId === enr.id ? "BATAL MENILAI" : "BERI ULASAN"}
+                          </button>
+                        )}
+
+                        {submittedReviews.includes(enr.id) && (
+                          <div className="w-full py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-[.2em] flex items-center justify-center gap-2">
+                            <CheckCircle size={14} /> ULASAN TERKIRIM
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Inline Review Form */}
+                      {reviewingId === enr.id && (
+                        <div className="mt-6 pt-6 border-t border-white/5 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                           <div>
+                              <label className="block text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Rating Anda</label>
+                              <div className="flex gap-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => setRating(star)}
+                                    className={`p-1.5 transition-all ${rating >= star ? "text-amber-400" : "text-slate-700 hover:text-slate-500"}`}
+                                  >
+                                    <Star size={20} fill={rating >= star ? "currentColor" : "none"} />
+                                  </button>
+                                ))}
+                              </div>
+                           </div>
+                           <div>
+                              <label className="block text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Komentar & Masukan</label>
+                              <textarea 
+                                value={comment}
+                                onChange={(e) => setComment(e.target.value)}
+                                placeholder="Bagaimana pengalaman Anda belajar di kursus ini?"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-white focus:outline-none focus:border-purple-500/50 transition-all min-h-[80px]"
+                              />
+                           </div>
+                           <button 
+                              onClick={() => handleReviewSubmit(enr)}
+                              disabled={submittingReview || !comment.trim()}
+                              className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-[0.2em] py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-purple-500/20"
+                           >
+                              {submittingReview ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                              Kirim Ulasan
+                           </button>
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
         </div>
       )}
 
@@ -413,6 +543,21 @@ export default function MyCoursesPage() {
       )}
 
       {/* Modals */}
+      {/* Toast Notification */}
+      {message && (
+        <div className={`fixed bottom-8 right-8 z-[2000] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border animate-slide-up ${
+          message.type === "success" 
+            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+            : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+        }`}>
+          {message.type === "success" ? <CheckCircle size={20} /> : <XCircle size={20} />}
+          <p className="text-sm font-bold tracking-tight">{message.text}</p>
+          <button onClick={() => setMessage(null)} className="ml-2 hover:opacity-70 transition-opacity">
+            <XCircle size={16} />
+          </button>
+        </div>
+      )}
+
       {certData && (
         <CertificateGenerator 
           userName={certData.userName} 
@@ -422,15 +567,14 @@ export default function MyCoursesPage() {
           instructor={certData.instructor} 
           isExpired={certData.isExpired} 
           certificateId={certData.certificateId}
-          onClose={() => setCertData(null)} 
-        />
-      )}
-      {showRevisionModal && (
-        <RevisionModal 
-          certificateId={showRevisionModal.certificateId || ""}
-          currentName={user.fullName}
-          onClose={() => setShowRevisionModal(null)}
-          onSuccess={() => forceRefresh()}
+          instructorSignatureId={certData.instructorSignatureId}
+          adminSignatureId={certData.adminSignatureId}
+          adminName={certData.adminName}
+          isAutoDownload={true}
+          onClose={() => {
+            setCertData(null);
+            setDownloadingId(null);
+          }} 
         />
       )}
       {activeQuiz && active && (

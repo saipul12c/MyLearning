@@ -199,3 +199,34 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Grants
 GRANT EXECUTE ON FUNCTION validate_voucher_optimized TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION redeem_voucher_by_id TO authenticated, service_role;
+ 
+ -- 5. Optimized Fetch for User Wallet
+ CREATE OR REPLACE FUNCTION get_vouchers_for_user_v2(p_user_id UUID)
+ RETURNS JSONB AS $$
+ DECLARE
+     _v_vouchers JSONB;
+ BEGIN
+     SELECT jsonb_agg(v) INTO _v_vouchers
+     FROM (
+         SELECT 
+             v.*,
+             i.name as instructor_name
+         FROM vouchers v
+         LEFT JOIN instructors i ON v.instructor_id = i.id
+         WHERE v.is_active = true
+           AND (v.target_user_id IS NULL OR v.target_user_id = p_user_id)
+           AND v.start_date <= NOW()
+           AND (v.expiry_date IS NULL OR v.expiry_date > NOW())
+           AND (v.usage_limit = 0 OR v.used_count < v.usage_limit)
+           AND NOT EXISTS (
+               SELECT 1 FROM voucher_usage vu 
+               WHERE vu.voucher_id = v.id AND vu.user_id = p_user_id
+           )
+         ORDER BY v.created_at DESC
+     ) v;
+ 
+     RETURN COALESCE(_v_vouchers, '[]'::jsonb);
+ END;
+ $$ LANGUAGE plpgsql SECURITY DEFINER;
+ 
+ GRANT EXECUTE ON FUNCTION get_vouchers_for_user_v2 TO authenticated, service_role;

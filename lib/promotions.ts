@@ -355,6 +355,23 @@ export async function getMyPromotionRequests(userId: string): Promise<PromotionR
 
 export async function upsertPromotionRequest(req: Partial<PromotionRequest>): Promise<{ success: boolean; error?: string }> {
     try {
+      // 1. Security Check: If it's a course promotion, verify ownership
+      if (req.courseId && req.userId) {
+         const { data: course, error: cErr } = await supabase
+          .from("courses")
+          .select("instructor_id, instructors!inner(user_id)")
+          .eq("id", req.courseId)
+          .single();
+          
+         if (cErr || !course) return { success: false, error: "Kursus tidak ditemukan." };
+         
+         // Fix: Check if instructor profile belongs to the current user
+         const instructorUserId = (course.instructors as any)?.user_id;
+         if (instructorUserId !== req.userId) {
+            return { success: false, error: "Anda hanya dapat mempromosikan kursus milik Anda sendiri." };
+         }
+      }
+
       const calculatedPrice = calculateAdPrice(req.targetImpressions || 0, req.durationDays || 0, req.location as PromotionLocation);
       
       const dbData = {
@@ -374,9 +391,11 @@ export async function upsertPromotionRequest(req: Partial<PromotionRequest>): Pr
       };
 
       if (req.id) {
-          await supabase.from("promotion_requests").update(dbData).eq("id", req.id);
+          const { error } = await supabase.from("promotion_requests").update(dbData).eq("id", req.id);
+          if (error) throw error;
       } else {
-          await supabase.from("promotion_requests").insert(dbData);
+          const { error } = await supabase.from("promotion_requests").insert(dbData);
+          if (error) throw error;
       }
       return { success: true };
     } catch (err: any) {

@@ -37,14 +37,31 @@ CREATE OR REPLACE FUNCTION sync_course_review_stats()
 RETURNS TRIGGER AS $$
 DECLARE
     v_course_id UUID;
+    v_instructor_id UUID;
 BEGIN
     v_course_id := COALESCE(NEW.course_id, OLD.course_id);
     
+    -- 1. Update Course Stats
     UPDATE courses 
     SET 
         rating = COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE course_id = v_course_id AND is_approved = true), 0.0),
         total_reviews = (SELECT COUNT(*) FROM reviews WHERE course_id = v_course_id AND is_approved = true)
     WHERE id = v_course_id;
+
+    -- 2. Update Instructor Stats (Aggregated from all their courses)
+    SELECT instructor_id INTO v_instructor_id FROM courses WHERE id = v_course_id;
+    
+    IF v_instructor_id IS NOT NULL THEN
+        UPDATE instructors
+        SET rating = COALESCE((
+            SELECT ROUND(AVG(r.rating)::numeric, 1)
+            FROM reviews r
+            JOIN courses c ON r.course_id = c.id
+            WHERE c.instructor_id = v_instructor_id
+            AND r.is_approved = true
+        ), 0.0)
+        WHERE id = v_instructor_id;
+    END IF;
     
     RETURN NULL;
 END;
@@ -195,52 +212,59 @@ BEGIN
     -- 1. Progres mencapai/melebihi 100%
     -- 2. Status pembayaran adalah 'paid' (Sudah lunas)
     
-    IF (NEW.progress_percentage >= 100 AND NEW.payment_status = 'paid') THEN
-        
-        -- A. Generate Certificate Number (ML-YYYY-SHORTID-HEX)
-        v_year := TO_CHAR(NOW(), 'YYYY');
-        v_short_id := UPPER(LEFT(NEW.id::text, 8));
-        v_random_hex := UPPER(SUBSTRING(MD5(RANDOM()::text) FROM 1 FOR 4));
-        v_new_cert_number := 'ML-' || v_year || '-' || v_short_id || '-' || v_random_hex;
+    IF (NEW.progress_percentage >= 100 AND (NEW.payment_status = 'paid' OR NEW.payment_status = 'completed')) THEN
+        -- Only generate if certificate_id is missing (Avoid duplicates on every update)
+        IF (NEW.certificate_id IS NULL) THEN
+            -- A. Generate Certificate Number (ML-YYYY-SHORTID-HEX)
+            v_year := TO_CHAR(NOW(), 'YYYY');
+            v_short_id := UPPER(LEFT(NEW.id::text, 8));
+            v_random_hex := UPPER(SUBSTRING(MD5(RANDOM()::text) FROM 1 FOR 4));
+            v_new_cert_number := 'ML-' || v_year || '-' || v_short_id || '-' || v_random_hex;
 
-        -- B. Ambil Data Nama Siswa
-        SELECT full_name INTO v_full_name FROM public.user_profiles WHERE user_id = NEW.user_id;
+            -- B. Ambil Data Nama Siswa
+            SELECT full_name INTO v_full_name FROM public.user_profiles WHERE user_id = NEW.user_id;
 
-        -- C. Ambil Data Instruktur & Tanda Tangannya
-        SELECT i.name, i.signature_id INTO v_instructor_name, v_instructor_signature_id
-        FROM public.courses c
-        JOIN public.instructors i ON c.instructor_id = i.id
-        WHERE c.id = NEW.course_id;
+            -- C. Ambil Data Instruktur & Tanda Tangannya
+            SELECT i.name, i.signature_id INTO v_instructor_name, v_instructor_signature_id
+            FROM public.courses c
+            JOIN public.instructors i ON c.instructor_id = i.id
+            WHERE c.id = NEW.course_id;
 
-        -- D. Ambil Tanda Tangan Admin Platform (Terbaru)
-        SELECT signature_id INTO v_admin_signature_id
-        FROM public.user_profiles
-        WHERE role = 'admin' AND signature_id IS NOT NULL
-        ORDER BY signature_last_updated DESC
-        LIMIT 1;
+            -- D. Ambil Tanda Tangan Admin Platform (Terbaru)
+            SELECT signature_id INTO v_admin_signature_id
+            FROM public.user_profiles
+            WHERE role = 'admin' AND signature_id IS NOT NULL
+            ORDER BY signature_last_updated DESC
+            LIMIT 1;
 
-        -- E. Hitung Masa Berlaku (2 Tahun)
-        v_valid_until := NOW() + INTERVAL '2 years';
+            -- E. FALLBACK: Jika TTD Instruktur kosong, gunakan TTD Admin/Direktur
+            IF v_instructor_signature_id IS NULL THEN
+                v_instructor_signature_id := v_admin_signature_id;
+            END IF;
 
-        -- F. Insert atau Update ke Tabel Certificates
-        INSERT INTO public.certificates (
-            enrollment_id, user_id, course_id, certificate_number, 
-            course_title, user_name, instructor_name, 
-            instructor_signature_id, admin_signature_id, issued_at
-        ) VALUES (
-            NEW.id, NEW.user_id, NEW.course_id, v_new_cert_number,
-            NEW.course_title, COALESCE(v_full_name, 'Siswa MyLearning'), COALESCE(v_instructor_name, 'Instruktur MyLearning'),
-            v_instructor_signature_id, v_admin_signature_id, NOW()
-        )
-        ON CONFLICT (enrollment_id) DO UPDATE SET
-            certificate_number = EXCLUDED.certificate_number,
-            issued_at = EXCLUDED.issued_at;
+            -- F. Hitung Masa Berlaku (2 Tahun)
+            v_valid_until := NOW() + INTERVAL '2 years';
 
-        -- G. Update Kolom di Tabel Enrollments
-        NEW.certificate_id := v_new_cert_number;
-        NEW.certificate_valid_until := v_valid_until;
-        NEW.payment_status := 'completed';
-        NEW.completed_at := NOW();
+            -- G. Insert atau Update ke Tabel Certificates
+            INSERT INTO public.certificates (
+                enrollment_id, user_id, course_id, certificate_number, 
+                course_title, user_name, instructor_name, 
+                instructor_signature_id, admin_signature_id, issued_at
+            ) VALUES (
+                NEW.id, NEW.user_id, NEW.course_id, v_new_cert_number,
+                NEW.course_title, COALESCE(v_full_name, 'Siswa MyLearning'), COALESCE(v_instructor_name, 'Instruktur MyLearning'),
+                v_instructor_signature_id, v_admin_signature_id, NOW()
+            )
+            ON CONFLICT (enrollment_id) DO UPDATE SET
+                certificate_number = EXCLUDED.certificate_number,
+                issued_at = EXCLUDED.issued_at;
+
+            -- G. Update Kolom di Tabel Enrollments
+            NEW.certificate_id := v_new_cert_number;
+            NEW.certificate_valid_until := v_valid_until;
+            NEW.payment_status := 'completed';
+            NEW.completed_at := NOW();
+        END IF;
 
     END IF;
     
@@ -307,10 +331,10 @@ CREATE TRIGGER trigger_update_progress_enrollment AFTER UPDATE OF final_project_
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
--- Certificate Generation
+-- Certificate Generation (Fires on INSERT and UPDATE)
 DROP TRIGGER IF EXISTS trg_auto_generate_certificate ON public.enrollments;
 CREATE TRIGGER trg_auto_generate_certificate
-BEFORE UPDATE OF progress_percentage, payment_status ON public.enrollments
+BEFORE INSERT OR UPDATE OF progress_percentage, payment_status ON public.enrollments
 FOR EACH ROW EXECUTE FUNCTION handle_certificate_generation();
 
 -- ======================================================
@@ -350,7 +374,14 @@ BEGIN
                 WHERE c.instructor_id = r_instructor.id
                 AND e.payment_status IN ('paid', 'completed')
             ),
-            total_courses = (SELECT COUNT(*) FROM courses WHERE instructor_id = r_instructor.id)
+            total_courses = (SELECT COUNT(*) FROM courses WHERE instructor_id = r_instructor.id),
+            rating = COALESCE((
+                SELECT ROUND(AVG(r.rating)::numeric, 1)
+                FROM reviews r
+                JOIN courses c ON r.course_id = c.id
+                WHERE c.instructor_id = r_instructor.id
+                AND r.is_approved = true
+            ), 0.0)
         WHERE id = r_instructor.id;
     END LOOP;
 
@@ -375,6 +406,21 @@ BEGIN
     WHERE created_at < NOW() - INTERVAL '30 days';
     
     RAISE NOTICE 'Pembersihan selesai: Pesan lama (>30 hari) telah dihapus.';
+END;
+$$;
+
+-- Procedure to repair missing certificates for completed courses
+CREATE OR REPLACE PROCEDURE repair_missing_certificates()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- This update will trigger 'trg_auto_generate_certificate' for every row
+    -- because it's an UPDATE OF progress_percentage.
+    UPDATE public.enrollments 
+    SET progress_percentage = 100 
+    WHERE payment_status = 'completed' AND certificate_id IS NULL;
+    
+    RAISE NOTICE 'Perbaikan sertifikat selesai.';
 END;
 $$;
 

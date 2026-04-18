@@ -125,14 +125,32 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-                    <div className="text-center md:text-left">
-                        <p className="text-white font-bold text-sm">{cert.instructorName}</p>
-                        <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest">Instruktur</p>
+                  <div className="grid grid-cols-2 gap-8 pt-6 border-t border-white/5">
+                    <div className="flex flex-col items-center md:items-start gap-3">
+                        <div className="h-14 w-14 flex items-center justify-center p-2 bg-white rounded-xl shadow-inner border border-white/10 group hover:scale-105 transition-transform">
+                          <QRCodeSVG 
+                            value={`https://mylearning.id/verify-signature/${cert.instructorSignatureId}`} 
+                            size={48} 
+                            level="H" 
+                          />
+                        </div>
+                        <div className="text-center md:text-left">
+                            <p className="text-white font-bold text-sm">{cert.instructorName}</p>
+                            <p className="text-slate-500 text-[9px] uppercase font-black tracking-[0.15em] mt-0.5">Instruktur Kursus</p>
+                        </div>
                     </div>
-                    <div className="text-center md:text-left">
-                        <p className="text-white font-bold text-sm">{PLATFORM_DIRECTOR}</p>
-                        <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest">Direktur MyLearning</p>
+                    <div className="flex flex-col items-center md:items-start gap-3">
+                        <div className="h-14 w-14 flex items-center justify-center p-2 bg-white rounded-xl shadow-inner border border-white/10 group hover:scale-105 transition-transform">
+                          <QRCodeSVG 
+                            value={`https://mylearning.id/verify-signature/${cert.adminSignatureId}`} 
+                            size={48} 
+                            level="H" 
+                          />
+                        </div>
+                        <div className="text-center md:text-left">
+                            <p className="text-white font-bold text-sm">{PLATFORM_DIRECTOR}</p>
+                            <p className="text-slate-500 text-[9px] uppercase font-black tracking-[0.15em] mt-0.5">Direktur MyLearning</p>
+                        </div>
                     </div>
                   </div>
                 </div>

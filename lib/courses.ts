@@ -133,27 +133,39 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function getInstructors(): Promise<Instructor[]> {
-  const { data, error } = await supabase
-    .from("instructors")
-    .select("*")
-    .order("name", { ascending: true });
-  
-  if (error) {
-    console.error("Error fetching instructors from Supabase:", error);
+  try {
+    const { data, error } = await supabase
+      .from("instructors")
+      .select("*")
+      .order("name", { ascending: true });
+    
+    if (error) {
+      console.error("Error fetching instructors from Supabase:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      return [];
+    }
+
+    if (!data) return [];
+
+    return data.map(i => ({
+      id: i.id,
+      name: i.name,
+      slug: i.slug,
+      avatar: i.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100",
+      expertise: i.expertise || "",
+      bio: i.bio || "",
+      rating: Number(i.rating) || 0,
+      totalStudents: Number(i.total_students) || 0,
+      qrisUrl: i.qris_url || ""
+    }));
+  } catch (err) {
+    console.error("Unexpected error in getInstructors:", err);
     return [];
   }
-
-  return data.map(i => ({
-    id: i.id, // Return UUID
-    name: i.name,
-    slug: i.slug, // Keep slug for other uses
-    avatar: i.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=100", // Default Avatar
-    expertise: i.expertise,
-    bio: i.bio,
-    rating: Number(i.rating),
-    totalStudents: i.total_students,
-    qrisUrl: i.qris_url
-  }));
 }
 
 export async function getCourses(options: { 
@@ -164,6 +176,18 @@ export async function getCourses(options: {
   status?: 'all' | 'published' | 'draft';
   instructorId?: string;
 } = {}): Promise<Course[]> {
+  const { data } = await getCoursesWithCount(options);
+  return data;
+}
+
+export async function getCoursesWithCount(options: { 
+  page?: number; 
+  pageSize?: number; 
+  category?: string; 
+  search?: string;
+  status?: 'all' | 'published' | 'draft';
+  instructorId?: string;
+} = {}): Promise<{ data: Course[]; count: number }> {
   const { 
     page = 1, 
     pageSize = 100, 
@@ -185,7 +209,7 @@ export async function getCourses(options: {
       categories(id, name, slug),
       instructors(name, slug, avatar_url, website_url, linkedin_url),
       vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
-    `);
+    `, { count: 'exact' });
 
   if (status === 'published') {
     query = query.eq("is_published", true);
@@ -208,16 +232,19 @@ export async function getCourses(options: {
     query = query.eq("instructor_id", instructorId);
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query
     .order("created_at", { ascending: false })
     .range(from, to);
 
   if (error) {
     console.error("Error fetching courses from Supabase:", error);
-    return [];
+    return { data: [], count: 0 };
   }
 
-  return data.map(mapDbToCourse);
+  return {
+    data: (data || []).map(mapDbToCourse),
+    count: count || 0
+  };
 }
 
 /**
@@ -623,18 +650,18 @@ export async function getSystemStats() {
     const ratingPercentage = Math.round((averageRatingRaw / 5) * 100);
 
     return {
-      totalStudents: studentCount || 52400, // Fallback to realistic number if 0
-      totalCourses: courseCount || 215,     // Fallback
-      totalInstructors: instructorCount || 42, // Fallback
-      ratingPercentage: ratingPercentage || 95
+      totalStudents: studentCount || 52400,
+      totalCourses: courseCount || 200,
+      totalInstructors: instructorCount || 40,
+      ratingPercentage: ratingPercentage || 96
     };
   } catch (err) {
     console.error("Error fetching system stats:", err);
     return {
-      totalStudents: 50000,
+      totalStudents: 52400,
       totalCourses: 200,
-      totalInstructors: 50,
-      ratingPercentage: 95
+      totalInstructors: 40,
+      ratingPercentage: 96
     };
   }
 }

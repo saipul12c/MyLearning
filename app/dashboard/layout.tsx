@@ -7,7 +7,7 @@ import { useAuth } from "@/app/components/AuthContext";
 import {
   BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut, Bell,
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
-  Phone, Ticket, Megaphone, History,
+  Phone, Ticket, Megaphone, History, Calendar
 } from "lucide-react";
 import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
@@ -19,6 +19,8 @@ const userMenuGroups = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/dashboard/courses", label: "Jelajahi Kursus", icon: Library },
       { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
+      { href: "/dashboard/events", label: "Event Saya", icon: Calendar },
+      { href: "/dashboard/vouchers", label: "Dompet Voucher", icon: Ticket },
       { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
       { href: "/dashboard/profile", label: "Profil", icon: User },
     ]
@@ -39,6 +41,7 @@ const adminMenuGroups = [
     items: [
       { href: "/dashboard/admin/users", label: "Kelola Pengguna", icon: Users },
       { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+      { href: "/dashboard/admin/events", label: "Kelola Event", icon: Calendar },
       { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
     ]
   },
@@ -79,6 +82,7 @@ const instructorMenuGroups = [
     title: "Manajemen Konten",
     items: [
       { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
+      { href: "/dashboard/instructor/events", label: "Event Saya", icon: Calendar },
       { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
       { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },
     ]
