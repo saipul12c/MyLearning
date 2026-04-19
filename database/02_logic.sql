@@ -743,3 +743,256 @@ DROP TRIGGER IF EXISTS trg_sync_role_on_update ON public.user_profiles;
 CREATE TRIGGER trg_sync_role_on_update
 AFTER INSERT OR UPDATE OF role ON public.user_profiles
 FOR EACH ROW EXECUTE FUNCTION public.sync_role_to_auth();
+
+-- ============================================
+-- EVENT SYSTEM: Triggers & RPC Functions
+-- ============================================
+
+-- E1. TRIGGER: updated_at for platform_events
+DROP TRIGGER IF EXISTS set_updated_at_platform_events ON platform_events;
+CREATE TRIGGER set_updated_at_platform_events BEFORE UPDATE ON platform_events FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- E2. TRIGGER FUNCTION: Validate Event Capacity & Status on Registration
+CREATE OR REPLACE FUNCTION check_event_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_current_count INTEGER;
+  v_max_capacity INTEGER;
+  v_is_published BOOLEAN;
+  v_event_date TIMESTAMPTZ;
+  v_reg_deadline TIMESTAMPTZ;
+  v_deadline TIMESTAMPTZ;
+BEGIN
+  -- Fetch event info
+  SELECT max_slots, is_published, event_date, registration_deadline
+  INTO v_max_capacity, v_is_published, v_event_date, v_reg_deadline
+  FROM platform_events
+  WHERE id = NEW.event_id;
+
+  -- Check published
+  IF NOT v_is_published THEN
+    RAISE EXCEPTION 'Event belum dipublikasikan.';
+  END IF;
+
+  -- Check deadline (use registration_deadline if set, otherwise event_date)
+  v_deadline := COALESCE(v_reg_deadline, v_event_date);
+  IF NOW() > v_deadline THEN
+    RAISE EXCEPTION 'Pendaftaran untuk event ini sudah ditutup.';
+  END IF;
+
+  -- Count active registrations (exclude cancelled)
+  SELECT COUNT(*) INTO v_current_count
+  FROM event_registrations
+  WHERE event_id = NEW.event_id AND status NOT IN ('cancelled');
+
+  -- If full, set to waitlisted instead of rejecting
+  IF v_current_count >= v_max_capacity THEN
+    NEW.status := 'waitlisted';
+    -- Calculate waitlist position
+    NEW.waitlist_position := (
+      SELECT COALESCE(MAX(waitlist_position), 0) + 1
+      FROM event_registrations
+      WHERE event_id = NEW.event_id AND status = 'waitlisted'
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_event_capacity ON event_registrations;
+CREATE TRIGGER trg_check_event_capacity
+BEFORE INSERT ON event_registrations
+FOR EACH ROW EXECUTE FUNCTION check_event_capacity();
+
+-- E3. TRIGGER FUNCTION: Sync registration_count on platform_events
+CREATE OR REPLACE FUNCTION sync_event_registration_count()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_event_id UUID;
+BEGIN
+  v_event_id := COALESCE(NEW.event_id, OLD.event_id);
+
+  UPDATE platform_events
+  SET registration_count = (
+    SELECT COUNT(*) FROM event_registrations
+    WHERE event_id = v_event_id AND status NOT IN ('cancelled', 'waitlisted')
+  )
+  WHERE id = v_event_id;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_event_reg_count ON event_registrations;
+CREATE TRIGGER trg_sync_event_reg_count
+AFTER INSERT OR UPDATE OR DELETE ON event_registrations
+FOR EACH ROW EXECUTE FUNCTION sync_event_registration_count();
+
+-- E4. RPC: Safe Event Registration (validates everything server-side)
+CREATE OR REPLACE FUNCTION register_for_event_safe(
+  p_event_id UUID,
+  p_user_id UUID
+)
+RETURNS JSON AS $$
+DECLARE
+  v_event RECORD;
+  v_deadline TIMESTAMPTZ;
+  v_existing RECORD;
+  v_price INTEGER;
+  v_payment_status TEXT;
+  v_result RECORD;
+BEGIN
+  -- 1. Fetch event
+  SELECT * INTO v_event FROM platform_events WHERE id = p_event_id;
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Event tidak ditemukan.');
+  END IF;
+
+  -- 2. Check published
+  IF NOT v_event.is_published THEN
+    RETURN json_build_object('success', false, 'error', 'Event belum dipublikasikan.');
+  END IF;
+
+  -- 3. Check deadline
+  v_deadline := COALESCE(v_event.registration_deadline, v_event.event_date);
+  IF NOW() > v_deadline THEN
+    RETURN json_build_object('success', false, 'error', 'Pendaftaran untuk event ini sudah ditutup.');
+  END IF;
+
+  -- 4. Check duplicate
+  SELECT * INTO v_existing FROM event_registrations
+  WHERE event_id = p_event_id AND user_id = p_user_id;
+  IF FOUND THEN
+    IF v_existing.status = 'cancelled' THEN
+      -- Re-register: update cancelled to registered
+      v_price := v_event.price;
+      v_payment_status := CASE WHEN v_price > 0 THEN 'pending' ELSE 'free' END;
+      UPDATE event_registrations
+      SET status = 'registered', payment_status = v_payment_status, payment_amount = v_price
+      WHERE id = v_existing.id;
+      RETURN json_build_object('success', true, 'message', 'Berhasil mendaftar kembali.', 'id', v_existing.id, 'status', 'registered');
+    ELSE
+      RETURN json_build_object('success', false, 'error', 'Anda sudah terdaftar untuk event ini.');
+    END IF;
+  END IF;
+
+  -- 5. Insert (capacity check handled by trigger trg_check_event_capacity)
+  v_price := v_event.price;
+  v_payment_status := CASE WHEN v_price > 0 THEN 'pending' ELSE 'free' END;
+
+  INSERT INTO event_registrations (event_id, user_id, status, payment_status, payment_amount)
+  VALUES (p_event_id, p_user_id, 'registered', v_payment_status, v_price)
+  RETURNING * INTO v_result;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', CASE
+      WHEN v_result.status = 'waitlisted' THEN 'Event penuh. Anda masuk dalam waiting list di posisi #' || v_result.waitlist_position || '.'
+      WHEN v_price > 0 THEN 'Berhasil mendaftar. Silakan lengkapi pembayaran di Dasbor Anda.'
+      ELSE 'Selamat! Kamu berhasil mendaftar untuk event ini.'
+    END,
+    'id', v_result.id,
+    'status', v_result.status,
+    'waitlist_position', v_result.waitlist_position
+  );
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION register_for_event_safe TO authenticated;
+
+-- E5. RPC: Cancel Event Registration
+CREATE OR REPLACE FUNCTION cancel_event_registration(
+  p_registration_id UUID,
+  p_user_id UUID
+)
+RETURNS JSON AS $$
+DECLARE
+  v_reg RECORD;
+  v_promoted RECORD;
+BEGIN
+  -- 1. Fetch registration
+  SELECT er.*, pe.event_date INTO v_reg
+  FROM event_registrations er
+  JOIN platform_events pe ON pe.id = er.event_id
+  WHERE er.id = p_registration_id AND er.user_id = p_user_id;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Registrasi tidak ditemukan.');
+  END IF;
+
+  -- 2. Cannot cancel if already attended
+  IF v_reg.status = 'attended' THEN
+    RETURN json_build_object('success', false, 'error', 'Tidak bisa membatalkan — Anda sudah tercatat hadir.');
+  END IF;
+
+  IF v_reg.status = 'cancelled' THEN
+    RETURN json_build_object('success', false, 'error', 'Registrasi sudah dibatalkan sebelumnya.');
+  END IF;
+
+  -- 3. Cancel
+  UPDATE event_registrations SET status = 'cancelled', waitlist_position = NULL
+  WHERE id = p_registration_id;
+
+  -- 4. Promote first waitlisted user (if any)
+  SELECT id INTO v_promoted
+  FROM event_registrations
+  WHERE event_id = v_reg.event_id AND status = 'waitlisted'
+  ORDER BY waitlist_position ASC
+  LIMIT 1;
+
+  IF FOUND THEN
+    UPDATE event_registrations
+    SET status = 'registered', waitlist_position = NULL
+    WHERE id = v_promoted.id;
+  END IF;
+
+  RETURN json_build_object('success', true, 'message', 'Registrasi berhasil dibatalkan.');
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION cancel_event_registration TO authenticated;
+
+-- E6. RPC: Safe Proof Upload (restricts which fields user can update)
+CREATE OR REPLACE FUNCTION update_event_registration_proof(
+  p_registration_id UUID,
+  p_user_id UUID,
+  p_field TEXT, -- 'payment_proof' or 'submission'
+  p_file_path TEXT
+)
+RETURNS JSON AS $$
+BEGIN
+  -- Validate ownership
+  IF NOT EXISTS (
+    SELECT 1 FROM event_registrations WHERE id = p_registration_id AND user_id = p_user_id
+  ) THEN
+    RETURN json_build_object('success', false, 'error', 'Registrasi tidak ditemukan.');
+  END IF;
+
+  IF p_field = 'payment_proof' THEN
+    UPDATE event_registrations
+    SET payment_proof_url = p_file_path, payment_status = 'waiting_verification'
+    WHERE id = p_registration_id AND user_id = p_user_id;
+  ELSIF p_field = 'submission' THEN
+    UPDATE event_registrations
+    SET submission_url = p_file_path
+    WHERE id = p_registration_id AND user_id = p_user_id;
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Field tidak valid.');
+  END IF;
+
+  RETURN json_build_object('success', true, 'message', 'File berhasil diunggah.');
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION update_event_registration_proof TO authenticated;
+

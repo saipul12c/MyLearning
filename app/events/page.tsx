@@ -9,6 +9,7 @@ import Link from "next/link";
 import { getEvents, PlatformEvent } from "@/lib/events";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import NativeAdCard from "../components/NativeAdCard";
 
 export default function EventsGalleryPage() {
   const [events, setEvents] = useState<PlatformEvent[]>([]);
@@ -16,6 +17,8 @@ export default function EventsGalleryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedLevel, setSelectedLevel] = useState("all");
 
   useEffect(() => {
     fetchEvents();
@@ -30,12 +33,17 @@ export default function EventsGalleryPage() {
 
   const filteredEvents = events.filter(e => {
     const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === "all" || e.category === selectedCategory;
+    const matchesLevel = selectedLevel === "all" || e.level === selectedLevel;
+    
     const eventDate = new Date(e.eventDate);
     const now = new Date();
     
-    if (activeTab === "upcoming") return matchesSearch && eventDate >= now;
-    if (activeTab === "past") return matchesSearch && eventDate < now;
-    return matchesSearch;
+    const matchesTab = activeTab === "all" 
+      ? true 
+      : activeTab === "upcoming" ? eventDate >= now : eventDate < now;
+
+    return matchesSearch && matchesCategory && matchesLevel && matchesTab;
   });
 
   return (
@@ -80,6 +88,15 @@ export default function EventsGalleryPage() {
         </div>
       </section>
 
+      {/* Hero Ad Placement */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 mb-20 relative z-20">
+        <NativeAdCard 
+          location="event_listing" 
+          variant="inline"
+          className="shadow-2xl shadow-purple-500/10"
+        />
+      </div>
+
       {/* Content Section */}
       <section className="pb-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -103,8 +120,39 @@ export default function EventsGalleryPage() {
               ))}
             </div>
 
-            <div className="flex items-center gap-4">
-               <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl">
+            <div className="flex flex-wrap items-center gap-4">
+               {/* Category Filter */}
+               <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-xl">
+                  <Filter size={14} className="text-slate-500" />
+                  <select 
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="bg-transparent border-none text-xs font-bold uppercase tracking-widest focus:ring-0 cursor-pointer text-slate-300 hover:text-white"
+                  >
+                    <option value="all" className="bg-[#0c0c14]">Semua Kategori</option>
+                    <option value="Webinar" className="bg-[#0c0c14]">Webinar</option>
+                    <option value="Workshop" className="bg-[#0c0c14]">Workshop</option>
+                    <option value="Competition" className="bg-[#0c0c14]">Competition</option>
+                    <option value="Talkshow" className="bg-[#0c0c14]">Talkshow</option>
+                  </select>
+               </div>
+
+               {/* Level Filter */}
+               <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-xl">
+                  <LayoutGrid size={14} className="text-slate-500" />
+                  <select 
+                    value={selectedLevel}
+                    onChange={(e) => setSelectedLevel(e.target.value)}
+                    className="bg-transparent border-none text-xs font-bold uppercase tracking-widest focus:ring-0 cursor-pointer text-slate-300 hover:text-white"
+                  >
+                    <option value="all" className="bg-[#0c0c14]">Semua Level</option>
+                    <option value="Starter" className="bg-[#0c0c14]">Starter</option>
+                    <option value="Accelerator" className="bg-[#0c0c14]">Accelerator</option>
+                    <option value="Mastery" className="bg-[#0c0c14]">Mastery</option>
+                  </select>
+               </div>
+
+               <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10 ml-2">
                   <button 
                     onClick={() => setViewMode('grid')}
                     className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-purple-400' : 'text-slate-500 hover:text-slate-300'}`}
@@ -140,6 +188,16 @@ export default function EventsGalleryPage() {
                 <p className="text-slate-500 max-w-sm mx-auto">Coba cari dengan kata kunci lain atau cek kembali nanti ya!</p>
             </div>
           )}
+
+          {/* Bottom Ad Placement */}
+          {!loading && filteredEvents.length > 0 && (
+            <div className="mt-20">
+              <NativeAdCard 
+                location="all" 
+                variant="featured" 
+              />
+            </div>
+          )}
         </div>
       </section>
     </div>
@@ -168,11 +226,14 @@ function EventCard({ event, mode, index }: { event: PlatformEvent, mode: 'grid' 
         </div>
         
         <div className="flex-1 p-8 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex flex-wrap items-center gap-3 mb-3">
               <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isPast ? 'bg-slate-500/10 text-slate-500' : 'bg-emerald-500/10 text-emerald-400'}`}>
                 {isPast ? 'Selesai' : 'Coming Soon'}
               </span>
-              <span className="text-xs text-slate-500 flex items-center gap-1.5 uppercase font-bold tracking-widest">
+              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase tracking-widest border border-purple-500/20">
+                {event.category || 'Event'}
+              </span>
+              <span className="text-xs text-slate-500 flex items-center gap-1.5 uppercase font-bold tracking-widest ml-1">
                 <MapPin size={12} className="text-purple-400" /> {event.location}
               </span>
             </div>
@@ -208,8 +269,13 @@ function EventCard({ event, mode, index }: { event: PlatformEvent, mode: 'grid' 
                EVENT
              </div>
           )}
-          <div className={`absolute top-4 left-4 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border ${isPast ? 'bg-black/50 border-white/5 text-slate-500' : 'bg-emerald-500/20 border-emerald-500/20 text-emerald-400'}`}>
-            {isPast ? 'Selesai' : 'Pendaftaran Dibuka'}
+          <div className="absolute top-4 left-4 flex gap-2">
+            <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md border ${isPast ? 'bg-black/50 border-white/5 text-slate-500' : 'bg-emerald-500/20 border-emerald-500/20 text-emerald-400'}`}>
+              {isPast ? 'Selesai' : 'Pendaftaran Dibuka'}
+            </div>
+            <div className="px-3 py-1.5 rounded-full bg-purple-500/80 text-white text-[10px] font-black uppercase tracking-widest backdrop-blur-md shadow-lg shadow-purple-500/20">
+              {event.category || 'Event'}
+            </div>
           </div>
           {event.isFeatured && (
              <div className="absolute top-4 right-4 p-2 rounded-full bg-amber-500/20 border border-amber-500/20 text-amber-500">

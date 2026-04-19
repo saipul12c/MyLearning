@@ -29,7 +29,7 @@ import { useAuth } from "./AuthContext";
 import PromotionCard from "./PromotionCard";
 import { Promotion } from "@/lib/promotions";
 
-interface PromotionRequestModalProps {
+interface PromotionRequestFormProps {
   course?: Course;
   mode?: "custom" | "course";
   onClose: () => void;
@@ -45,7 +45,7 @@ const VIEW_PACKAGES = [
 
 const DURATION_OPTIONS = [1, 3, 7, 30, 60, 90];
 
-export default function PromotionRequestModal({ course: initialCourse, mode, onClose }: PromotionRequestModalProps) {
+export default function PromotionRequestForm({ course: initialCourse, mode, onClose }: PromotionRequestFormProps) {
   const { user, isInstructor, isAdmin } = useAuth();
   const [step, setStep] = useState(1);
   const [location, setLocation] = useState<PromotionLocation>("homepage_banner");
@@ -133,7 +133,10 @@ export default function PromotionRequestModal({ course: initialCourse, mode, onC
     interstitial: "Iklan besar yang mengambil alih layar sesaat, layaknya tayangan TV premium berbatas waktu.",
     video_card: "Iklan video otomatis yang terputar senyap seakan menceritakan detail promonya langsung.",
     privacy_sidebar: "Penempatan eksklusif di bilah sisi halaman Kebijakan Privasi yang memberikan kesan formal dan terpercaya.",
-    privacy_policy_inline: "Disisipkan secara elegan di antara poin-poin hukum kebijakan privasi, menjangkau audiens yang teliti."
+    privacy_policy_inline: "Disisipkan secara elegan di antara poin-poin hukum kebijakan privasi, menjangkau audiens yang teliti.",
+    event_listing: "Iklan premium yang muncul secara natural di antara daftar event di galeri event Platform.",
+    event_sidebar: "Penempatan strategis di bilah sisi halaman detail event, tepat di samping formulir pendaftaran.",
+    event_detail_inline: "Iklan yang menyatu di dalam konten deskripsi pada halaman detail event untuk engagement tinggi."
   };
 
   const totalPrice = useMemo(() => {
@@ -198,10 +201,8 @@ export default function PromotionRequestModal({ course: initialCourse, mode, onC
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-6 animate-fade-in">
-      <div className="absolute inset-0" onClick={onClose} />
-      
-      <div className="relative flex flex-col bg-[#0c0c14] border border-white/10 w-full max-w-2xl max-h-[90vh] rounded-[3rem] overflow-y-auto hide-scrollbar shadow-3xl">
+    <div className="w-full max-w-4xl mx-auto animate-fade-in pb-12 mt-4">
+      <div className="relative flex flex-col bg-white/[0.02] border border-white/10 w-full rounded-[3rem] shadow-3xl">
         {/* Header */}
         <div className="sticky top-0 z-20 p-6 sm:p-8 border-b border-white/5 bg-[#0c0c14]/95 backdrop-blur-md flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -222,21 +223,21 @@ export default function PromotionRequestModal({ course: initialCourse, mode, onC
         <div className="p-8 space-y-8">
           {step === 1 && (
             <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-              {/* Course Selection (if not pre-selected) */}
-              {!initialCourse && (
+              {/* Course Selection (if not pre-selected and mode is course) */}
+              {!initialCourse && initialMode === "course" && (
                 <div className="space-y-3">
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 flex items-center gap-1.5">
-                    {initialMode === "course" ? "1. Pilih Kursus yang Ingin Dipromosikan" : "Tautkan ke Kursus (Opsional)"}
+                    1. Pilih Kursus yang Ingin Dipromosikan
                   </label>
                   <select 
-                    value={selectedCourse?.id || "none"}
+                    value={selectedCourse?.id || ""}
                     onChange={(e) => {
                        const c = myCourses.find(x => x.id === e.target.value);
                        setSelectedCourse(c || null);
                     }}
                     className="input-field !py-3 bg-white/5 border-white/10 text-white text-xs"
                   >
-                    {initialMode === "custom" && <option value="none">Semua Kursus / Profil Instruktur</option>}
+                    <option value="" disabled>-- Pilih Kursus Anda --</option>
                     {myCourses.map(c => (
                       <option key={c.id} value={c.id}>{c.title}</option>
                     ))}
@@ -336,6 +337,9 @@ export default function PromotionRequestModal({ course: initialCourse, mode, onC
                     <option value="video_card">Autoplay Video Card (1.5x)</option>
                     <option value="privacy_sidebar">Privacy Sidebar (1.0x)</option>
                     <option value="privacy_policy_inline">Privacy Policy Inline (1.1x)</option>
+                    <option value="event_listing">Event Gallery Listing (1.2x)</option>
+                    <option value="event_sidebar">Event Detail Sidebar (1.1x)</option>
+                    <option value="event_detail_inline">Event Detail Inline (1.2x)</option>
                   </select>
                   <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl mt-2">
                      <p className="text-[11px] text-purple-200 leading-relaxed font-medium">

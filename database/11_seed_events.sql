@@ -1,17 +1,31 @@
 -- SEED DATA FOR PLATFORM EVENTS
 -- RUN THIS IN YOUR SUPABASE SQL EDITOR
 
+-- Safe migration: Ensure platform_events has the necessary columns before inserting
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Webinar';
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS level VARCHAR(20) DEFAULT 'Starter';
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS max_slots INTEGER DEFAULT 100;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS speaker_info JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+
 INSERT INTO platform_events (
   title, 
   slug, 
   short_description, 
   description, 
   thumbnail_url, 
-  event_date, 
+  event_date,
+  event_end_date,
+  registration_deadline,
   location, 
   price, 
   is_published, 
-  is_featured
+  is_featured,
+  category,
+  level,
+  max_slots,
+  speaker_info,
+  tags
 ) VALUES 
 (
   'Mastering Next.js 16 & Supabase', 
@@ -20,10 +34,17 @@ INSERT INTO platform_events (
   'Di webinar ini, kita akan membahas: \n1. Server Components vs Client Components\n2. Realtime Database dengan Supabase\n3. Edge Functions & Storage\n4. Praktik Terbaik Security dengan RLS.', 
   'https://images.unsplash.com/photo-1633356122544-f134324a6cee?q=80&w=2070&auto=format&fit=crop', 
   NOW() + INTERVAL '7 days', 
+  NOW() + INTERVAL '7 days' + INTERVAL '2 hours',
+  NOW() + INTERVAL '6 days',
   'Zoom Meeting', 
   0, 
   true, 
-  true
+  true,
+  'Webinar',
+  'Starter',
+  200,
+  '[{"name": "Budi Santoso", "role": "Fullstack Lead", "company": "Vercel", "bio": "Expert in Next.js internal architecture."}]',
+  '{"nextjs","supabase","fullstack","webinar"}'
 ),
 (
   'UI/UX Design Masterclass', 
@@ -32,10 +53,17 @@ INSERT INTO platform_events (
   'Workshop ini fokus pada:\n- Design Thinking Process\n- Auto Layout & Components in Figma\n- Prototyping & Animation\n- User Testing & Feedback Loop.', 
   'https://images.unsplash.com/photo-1561070791-2a6288339c19?q=80&w=2070&auto=format&fit=crop', 
   NOW() + INTERVAL '14 days', 
+  NOW() + INTERVAL '14 days' + INTERVAL '4 hours',
+  NOW() + INTERVAL '12 days',
   'Google Meet', 
   0, 
   true, 
-  true
+  true,
+  'Workshop',
+  'Accelerator',
+  50,
+  '[{"name": "Siska Putri", "role": "Senior UI/UX Designer", "company": "Figma", "bio": "Design systems specialist."}]',
+  '{"uiux","design","figma","workshop"}'
 ),
 (
   'Strategi Menembus Perusahaan Tech Global', 
@@ -44,10 +72,17 @@ INSERT INTO platform_events (
   'Dapatkan tips mengenai:\n- Cara membuat CV ATS-friendly\n- Menjawab pertanyaan behavioral interview\n- Menyiapkan portfolio yang menjual\n- Networking strategy.', 
   'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=2084&auto=format&fit=crop', 
   NOW() + INTERVAL '21 days', 
+  NOW() + INTERVAL '21 days' + INTERVAL '2 hours',
+  NOW() + INTERVAL '20 days',
   'YouTube Live', 
   0, 
   true, 
-  false
+  false,
+  'Talkshow',
+  'Starter',
+  500,
+  '[{"name": "Andi Wijaya", "role": "Career Mentor", "company": "Google", "bio": "Helped 1000+ engineers into global tech."}]',
+  '{"karir","interview","portfolio","talkshow"}'
 ),
 (
   '24 Hours Coding Challenge: Build a SaaS', 
@@ -56,10 +91,17 @@ INSERT INTO platform_events (
   'Peraturan:\n- Gunakan stack bebas (Rekomendasi: Next.js)\n- Wajib menggunakan Database\n- Penilaian berdasarkan: Design, Fitur, dan Clean Code.', 
   'https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop', 
   NOW() + INTERVAL '30 days', 
+  NOW() + INTERVAL '31 days',
+  NOW() + INTERVAL '28 days',
   'Discord Platform', 
   0, 
+  true, 
   true,
-  true
+  'Competition',
+  'Mastery',
+  100,
+  '[]',
+  '{"coding","hackathon","saas","competition"}'
 ),
 (
   'Bug Hunter Program: MyLearning', 
@@ -68,10 +110,17 @@ INSERT INTO platform_events (
   'Event kompetisi Bug Bounty terbuka untuk siapapun. \nSyarat & Ketentuan:\n1. Laporkan bug/celah keamanan yang valid (XSS, SQLi, Logic Bypass, dll).\n2. Wajib menyertakan bukti berupa screenshot/video langkah reproduksi.\n3. Jika valid, admin akan menghubungi via platform ini dengan voucher 3 course gratis.\n4. Bukti/Submission harap diunggah melalui formulir di dasbor peserta.', 
   'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=2070&auto=format&fit=crop', 
   NOW() + INTERVAL '90 days', 
+  NOW() + INTERVAL '90 days',
+  NOW() + INTERVAL '85 days',
   'Online / Submission', 
   0, 
   true, 
-  true
+  true,
+  'Competition',
+  'Mastery',
+  50,
+  '[]',
+  '{"security","bugbounty","hacking","competition"}'
 ),
 (
   'Siber Sekuriti Masterclass 2026', 
@@ -80,10 +129,17 @@ INSERT INTO platform_events (
   'Dapatkan insight dari ahli keamanan jaringan terkemuka. Materi mencakup:\n- OSINT & Reconnaissance\n- Web Application Firewall\n- Menghadapi ancaman AI-driven botnets\nSertifikat kehadiran tersedia bagi partisipan aktif.', 
   'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop', 
   NOW() + INTERVAL '45 days', 
+  NOW() + INTERVAL '45 days' + INTERVAL '3 hours',
+  NOW() + INTERVAL '43 days',
   'Zoom Webinar', 
   50000, 
   true, 
-  false
+  false,
+  'Webinar',
+  'Accelerator',
+  150,
+  '[{"name": "Hendra Kurniawan", "role": "Cyber Security Consultant", "company": "Cisco", "bio": "Certified ethical hacker."}]',
+  '{"cybersecurity","networking","webinar"}'
 ),
 (
   'Web Penetration Testing Workshop', 
@@ -92,8 +148,15 @@ INSERT INTO platform_events (
   'Peserta wajib membawa laptop sendiri. Alat yang akan digunakan:\n- Burp Suite\n- Nmap\n- Metasploit\nAcara ini bersifat berbayar. Harap unggah bukti pembayaran setelah mendaftar di profil event Anda.', 
   'https://images.unsplash.com/photo-1510511459019-5efa37024817?q=80&w=2070&auto=format&fit=crop', 
   NOW() + INTERVAL '60 days', 
+  NOW() + INTERVAL '60 days' + INTERVAL '6 hours',
+  NOW() + INTERVAL '55 days',
   'Gedung Cyber, Jakarta', 
   150000, 
   true, 
-  true
-);
+  true,
+  'Workshop',
+  'Mastery',
+  30,
+  '[{"name": "Eko Satrio", "role": "Bug Bounty Hunter", "company": "HackerOne", "bio": "Top 1% bug hunter globally."}]',
+  '{"pentesting","hacking","workshop","security"}'
+) ON CONFLICT (slug) DO NOTHING;

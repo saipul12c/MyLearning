@@ -5,13 +5,19 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   Calendar, MapPin, Clock, Share2, ArrowLeft, ArrowRight, CheckCircle, 
   AlertCircle, Loader2, Sparkles, Shield, UserCheck, Users,
-  Globe, Info, DollarSign, ExternalLink
+  Globe, Info, DollarSign, ExternalLink, XCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/AuthContext";
 import { getEventBySlug, registerForEvent, checkIfRegistered, PlatformEvent } from "@/lib/events";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import NativeAdCard from "../../components/NativeAdCard";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import CountdownTimer from "../../components/events/CountdownTimer";
+import AddToCalendar from "../../components/events/AddToCalendar";
+import SpeakerSection from "../../components/events/SpeakerSection";
 
 // Social Icons as simple SVG components for compatibility
 const SocialIcons = {
@@ -49,9 +55,10 @@ export default function EventDetailPage() {
   
   const [event, setEvent] = useState<PlatformEvent | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [copying, setCopying] = useState(false);
 
   useEffect(() => {
@@ -66,8 +73,9 @@ export default function EventDetailPage() {
     if (data) {
       setEvent(data);
       if (isLoggedIn && user) {
-        const registered = await checkIfRegistered(data.id, user.id);
-        setIsRegistered(registered);
+        const result = await checkIfRegistered(data.id, user.id);
+        setIsRegistered(result.registered && result.status !== 'cancelled');
+        setRegistrationStatus(result.status || null);
       }
     }
     setLoading(false);
@@ -115,12 +123,14 @@ export default function EventDetailPage() {
     setMessage(null);
 
     try {
-      await registerForEvent(event.id, user.id, event.price);
+      const result = await registerForEvent(event.id, user.id);
       setIsRegistered(true);
-      if (event.price > 0) {
-        setMessage({ type: 'success', text: 'Berhasil mendaftar. Silakan lengkapi pembayaran di Dasbor Anda.' });
+      setRegistrationStatus(result.status || 'registered');
+      
+      if (result.status === 'waitlisted') {
+        setMessage({ type: 'info', text: result.message });
       } else {
-        setMessage({ type: 'success', text: 'Selamat! Kamu berhasil mendaftar untuk event ini.' });
+        setMessage({ type: 'success', text: result.message });
       }
     } catch (error: any) {
       console.error("Registration error:", error);
@@ -153,6 +163,10 @@ export default function EventDetailPage() {
   }
 
   const isPast = new Date(event.eventDate) < new Date();
+  const registrationDeadline = event.registrationDeadline ? new Date(event.registrationDeadline) : new Date(event.eventDate);
+  const isRegistrationClosed = registrationDeadline < new Date();
+  const isSoldOut = (event.registrationCount || 0) >= (event.maxSlots || 100);
+  const remainingSlots = Math.max(0, (event.maxSlots || 100) - (event.registrationCount || 0));
 
   return (
     <div className="min-h-screen bg-[#09090f] text-white selection:bg-purple-500/30">
@@ -234,6 +248,13 @@ export default function EventDetailPage() {
               </div>
             </div>
 
+            {/* Countdown Section */}
+            {!isPast && (
+              <div className="card p-10 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent border-purple-500/20">
+                <CountdownTimer targetDate={event.eventDate} />
+              </div>
+            )}
+
             {/* Description Section */}
             <div className="card p-10 bg-[#0c0c14] border-white/5 space-y-8">
               <div className="flex items-center gap-3 border-b border-white/5 pb-6">
@@ -246,11 +267,35 @@ export default function EventDetailPage() {
                   {event.shortDescription}
                 </p>
                 <div className="h-px bg-white/5 my-8" />
-                <div className="text-slate-400 leading-relaxed whitespace-pre-wrap">
-                  {event.description || "Tidak ada deskripsi tambahan untuk event ini."}
+                <div className="text-slate-400 leading-relaxed prose prose-invert prose-purple max-w-none 
+                  prose-p:text-slate-400 prose-p:leading-relaxed prose-p:mb-4
+                  prose-headings:text-white prose-headings:mt-6 prose-headings:mb-3 prose-headings:font-bold
+                  prose-li:text-slate-400 prose-li:my-1
+                  prose-strong:text-purple-400 prose-strong:font-bold
+                  prose-code:text-cyan-300 prose-code:bg-cyan-500/10 prose-code:px-1 prose-code:rounded
+                  prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5 prose-pre:p-4
+                ">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {event.description || "Tidak ada deskripsi tambahan untuk event ini."}
+                  </ReactMarkdown>
                 </div>
               </div>
             </div>
+
+            {/* Speaker Profiles */}
+            {event.speakerInfo && event.speakerInfo.length > 0 && (
+              <div className="card p-10 bg-[#0c0c14] border-white/5 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-[80px] -mr-32 -mt-32" />
+                <SpeakerSection speakers={event.speakerInfo} />
+              </div>
+            )}
+
+            {/* In-content Ad Placement */}
+            <NativeAdCard 
+              location="event_detail_inline" 
+              variant="inline" 
+              className="mt-8 shadow-xl shadow-purple-500/5"
+            />
 
             {/* FAQ/Note Section */}
             <div className="p-8 rounded-[2.5rem] bg-amber-500/5 border border-amber-500/10 flex items-start gap-6">
@@ -277,32 +322,73 @@ export default function EventDetailPage() {
                          <span>Tipe Acara</span>
                          <span className="text-white">{event.location}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                         <span className="text-slate-400 font-medium">Biaya Pendaftaran</span>
-                         <span className="text-2xl font-black text-white">
-                           {event.price === 0 ? <span className="text-emerald-400">GRATIS</span> : `Rp ${event.price.toLocaleString('id-ID')}`}
-                         </span>
-                      </div>
-                   </div>
+                       <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-medium">Tingkat Kesulitan</span>
+                          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                            event.level === 'Starter' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            event.level === 'Accelerator' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                            'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                          }`}>
+                            {event.level || 'Starter'}
+                          </span>
+                       </div>
+                       <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-medium">Biaya Pendaftaran</span>
+                          <span className="text-2xl font-black text-white">
+                            {event.price === 0 ? <span className="text-emerald-400">GRATIS</span> : `Rp ${event.price.toLocaleString('id-ID')}`}
+                          </span>
+                       </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex items-center justify-between">
+                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sisa Kuota</span>
+                       <span className={`text-sm font-black ${remainingSlots < 10 ? 'text-red-400' : 'text-white'}`}>
+                          {remainingSlots} / {event.maxSlots || 100} Kursi
+                       </span>
+                    </div>
 
                    {isPast ? (
                      <div className="p-6 rounded-3xl bg-red-500/5 border border-red-500/10 text-center">
                         <AlertCircle className="mx-auto text-red-500 mb-3" size={32} />
-                        <p className="text-sm font-bold text-red-400">Pendaftaran Ditutup</p>
-                        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest uppercase">Event Ini Sudah Selesai</p>
+                        <p className="text-sm font-bold text-red-400">Event Sudah Selesai</p>
+                        {event.recordingUrl && (
+                          <a href={event.recordingUrl} target="_blank" rel="noopener noreferrer" className="btn-primary mt-4 !h-10 !px-6 text-xs inline-flex items-center gap-2">
+                            <ExternalLink size={14} /> Tonton Rekaman
+                          </a>
+                        )}
+                     </div>
+                   ) : isRegistrationClosed ? (
+                     <div className="p-6 rounded-3xl bg-amber-500/5 border border-amber-500/10 text-center">
+                        <AlertCircle className="mx-auto text-amber-500 mb-3" size={32} />
+                        <p className="text-sm font-bold text-amber-400">Pendaftaran Ditutup</p>
+                        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">Batas waktu registrasi sudah lewat</p>
                      </div>
                    ) : isRegistered ? (
                      <div className="space-y-4">
-                        <div className="p-6 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-center animate-bounce-in">
-                           <CheckCircle className="mx-auto text-emerald-400 mb-3" size={40} />
-                           <p className="text-lg font-black text-white">Sudah Terdaftar!</p>
-                           {event.price > 0 ? (
-                             <p className="text-xs text-amber-400 mt-1">Silakan lengkapi pembayaran di Dasbor &rarr; Event Saya.</p>
+                        <div className={`p-6 rounded-3xl border text-center animate-bounce-in ${
+                          registrationStatus === 'waitlisted' 
+                            ? 'bg-amber-500/10 border-amber-500/20' 
+                            : 'bg-emerald-500/10 border-emerald-500/20'
+                        }`}>
+                           {registrationStatus === 'waitlisted' ? (
+                             <>
+                               <Clock className="mx-auto text-amber-400 mb-3" size={40} />
+                               <p className="text-lg font-black text-white">Dalam Waiting List</p>
+                               <p className="text-xs text-amber-400 mt-1">Kami akan memberi tahu jika ada slot tersedia.</p>
+                             </>
                            ) : (
-                             <p className="text-xs text-slate-400 mt-1">Kami telah mencatat kehadiranmu.</p>
+                             <>
+                               <CheckCircle className="mx-auto text-emerald-400 mb-3" size={40} />
+                               <p className="text-lg font-black text-white">Sudah Terdaftar!</p>
+                               {event.price > 0 ? (
+                                 <p className="text-xs text-amber-400 mt-1">Silakan lengkapi pembayaran di Dasbor &rarr; Event Terdaftar.</p>
+                               ) : (
+                                 <p className="text-xs text-slate-400 mt-1">Kami telah mencatat kehadiranmu.</p>
+                               )}
+                             </>
                            )}
                         </div>
-                        {event.registrationLink && event.price === 0 && (
+                        {event.registrationLink && event.price === 0 && registrationStatus !== 'waitlisted' && (
                           <a 
                             href={event.registrationLink} 
                             target="_blank" 
@@ -318,20 +404,28 @@ export default function EventDetailPage() {
                         </p>
                      </div>
                    ) : (
-                     <div className="space-y-6">
-                        <button 
-                          onClick={handleRegister}
-                          disabled={submitting}
-                          className="w-full btn-primary !h-16 text-lg font-black uppercase tracking-[0.2em] shadow-2xl shadow-purple-500/40 group overflow-hidden relative"
-                        >
-                          {submitting ? (
-                            <Loader2 className="animate-spin" size={24} />
-                          ) : (
-                            <span className="flex items-center justify-center gap-3">
-                              Daftar Sekarang <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
-                            </span>
-                          )}
-                        </button>
+                      <div className="space-y-6">
+                         <button 
+                           onClick={handleRegister}
+                           disabled={submitting || isSoldOut}
+                           className={`w-full !h-16 text-lg font-black uppercase tracking-[0.2em] shadow-2xl group overflow-hidden relative rounded-3xl transition-all ${
+                             isSoldOut 
+                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5 shadow-none' 
+                             : 'btn-primary shadow-purple-500/40'
+                           }`}
+                         >
+                           {submitting ? (
+                             <Loader2 className="animate-spin" size={24} />
+                           ) : isSoldOut ? (
+                             <span className="flex items-center justify-center gap-3">
+                               Kuota Penuh — Masuk Waiting List <Clock size={20} />
+                             </span>
+                           ) : (
+                             <span className="flex items-center justify-center gap-3">
+                               Daftar Sekarang <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
+                             </span>
+                           )}
+                         </button>
 
                         <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/2 border border-white/5">
                            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
@@ -346,9 +440,11 @@ export default function EventDetailPage() {
 
                    {message && (
                      <div className={`p-4 rounded-2xl border text-sm flex items-center gap-3 transition-all ${
-                       message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
+                       message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                       : message.type === 'info' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                       : 'bg-red-500/10 border-red-500/20 text-red-400'
                      }`}>
-                       {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                       {message.type === 'success' ? <CheckCircle size={18} /> : message.type === 'info' ? <Clock size={18} /> : <AlertCircle size={18} />}
                        {message.text}
                      </div>
                    )}
@@ -384,7 +480,29 @@ export default function EventDetailPage() {
                      </div>
                    )}
                 </div>
-             </div>
+              </div>
+
+              {/* Calendar Integration */}
+              {!isPast && (
+                <div className="flex justify-center mt-6">
+                  <AddToCalendar 
+                    event={{
+                      title: event.title,
+                      description: event.shortDescription,
+                      location: event.location,
+                      startDate: event.eventDate,
+                      endDate: event.eventEndDate
+                    }} 
+                  />
+                </div>
+              )}
+
+             {/* Sidebar Ad Placement */}
+             <NativeAdCard 
+               location="event_sidebar" 
+               variant="compact" 
+               className="mt-8"
+             />
           </div>
         </div>
       </div>

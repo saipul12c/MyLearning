@@ -283,8 +283,36 @@ DROP POLICY IF EXISTS "Users can view own registrations" ON event_registrations;
 CREATE POLICY "Users can view own registrations" ON event_registrations FOR SELECT USING (auth.uid() = user_id OR is_admin());
 DROP POLICY IF EXISTS "Users can register themselves" ON event_registrations;
 CREATE POLICY "Users can register themselves" ON event_registrations FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- HARDENED: User can only update proof fields (via RPC), not payment_status or admin_notes
 DROP POLICY IF EXISTS "Users can manage own registration" ON event_registrations;
-CREATE POLICY "Users can manage own registration" ON event_registrations FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own proof only" ON event_registrations;
+CREATE POLICY "Users can update own proof only" ON event_registrations
+  FOR UPDATE USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Instructor can VIEW registrants of their own events
+DROP POLICY IF EXISTS "Instructors can view registrants of own events" ON event_registrations;
+CREATE POLICY "Instructors can view registrants of own events" ON event_registrations
+  FOR SELECT USING (
+    is_instructor() AND EXISTS (
+      SELECT 1 FROM platform_events
+      WHERE platform_events.id = event_registrations.event_id
+      AND platform_events.created_by = auth.uid()
+    )
+  );
+
+-- Instructor can MANAGE registrants of their own events (verify attendance, etc.)
+DROP POLICY IF EXISTS "Instructors can manage registrations of own events" ON event_registrations;
+CREATE POLICY "Instructors can manage registrations of own events" ON event_registrations
+  FOR UPDATE USING (
+    is_instructor() AND EXISTS (
+      SELECT 1 FROM platform_events
+      WHERE platform_events.id = event_registrations.event_id
+      AND platform_events.created_by = auth.uid()
+    )
+  );
+
 DROP POLICY IF EXISTS "Admins can manage all registrations" ON event_registrations;
 CREATE POLICY "Admins can manage all registrations" ON event_registrations FOR ALL USING (is_admin());
 

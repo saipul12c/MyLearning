@@ -463,6 +463,42 @@ export const getCourseBySlug = cache(async (slug: string): Promise<Course | null
   return course;
 });
 
+export const getCourseById = cache(async (id: string): Promise<Course | null> => {
+  const { data, error } = await supabase
+    .from("courses")
+    .select(`
+      id, title, slug, short_description, thumbnail_url, 
+      price, discount_price, admin_discount_price, level, language, duration_hours, 
+      total_lessons, rating, total_reviews, total_students,
+      is_published, is_featured, learning_points, requirements, preview_video_url, tags,
+      categories(id, name, slug),
+      instructors(name, slug, bio, avatar_url, expertise, rating, qris_url, website_url, linkedin_url),
+      lessons:lessons(id, title, duration_minutes, is_free_preview, description, order_index, video_url),
+      vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
+    `)
+    .eq("id", id)
+    .order('order_index', { referencedTable: 'lessons', ascending: true })
+    .single();
+
+  if (error || !data) {
+    if (error) console.error(`Error fetching course ID ${id} from Supabase:`, error);
+    return null;
+  };
+  
+  const course = mapDbToCourse(data);
+  if (data.lessons) {
+    course.lessons = data.lessons.map((l: any) => ({
+        id: l.id,
+        title: l.title,
+        durationMinutes: l.duration_minutes,
+        isFreePreview: l.is_free_preview,
+        description: l.description,
+        videoUrl: l.video_url
+      }));
+  }
+  return course;
+});
+
 
 // Admin CRUD
 export async function upsertCourse(courseData: Partial<Course>) {

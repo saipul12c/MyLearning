@@ -18,6 +18,9 @@ export type PromotionLocation =
   | "video_card"
   | "privacy_sidebar"
   | "privacy_policy_inline"
+  | "event_listing"
+  | "event_sidebar"
+  | "event_detail_inline"
   | "all";
 
 export interface Promotion {
@@ -51,7 +54,7 @@ export interface Promotion {
 export interface PromotionRequest {
   id: string;
   userId: string;
-  courseId: string;
+  courseId?: string;
   title: string;
   description: string;
   imageUrl: string;
@@ -93,6 +96,9 @@ export const LOCATION_MULTIPLIERS: Record<PromotionLocation, number> = {
   video_card: 1.5,
   privacy_sidebar: 1.0,
   privacy_policy_inline: 1.1,
+  event_listing: 1.2,
+  event_sidebar: 1.1,
+  event_detail_inline: 1.2,
   all: 3.5, // Global placement multiplier
 };
 

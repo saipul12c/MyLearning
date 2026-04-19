@@ -398,7 +398,7 @@ CREATE INDEX IF NOT EXISTS idx_promo_logs_ip ON promotion_impression_logs(ip_add
 CREATE TABLE IF NOT EXISTS promotion_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
-  course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
   title VARCHAR(200) NOT NULL,
   description TEXT,
   image_url TEXT,
@@ -433,34 +433,91 @@ CREATE TABLE IF NOT EXISTS platform_events (
   thumbnail_url TEXT,
   banner_url TEXT,
   event_date TIMESTAMPTZ NOT NULL,
+  event_end_date TIMESTAMPTZ, -- Waktu selesai event
+  registration_deadline TIMESTAMPTZ, -- Batas waktu registrasi (NULL = ikut event_date)
   location VARCHAR(200) DEFAULT 'Online',
   registration_link TEXT, -- Optional external link
   price INTEGER DEFAULT 0,
   is_published BOOLEAN DEFAULT FALSE,
   is_featured BOOLEAN DEFAULT FALSE,
+  category VARCHAR(50) DEFAULT 'Webinar',
+  level VARCHAR(20) DEFAULT 'Starter',
+  max_slots INTEGER DEFAULT 100,
+  registration_count INTEGER DEFAULT 0, -- Denormalized counter, maintained by trigger
+  speaker_info JSONB DEFAULT '[]'::jsonb,
+  recording_url TEXT, -- Link rekaman setelah event selesai
+  tags TEXT[] DEFAULT '{}', -- Multi-tag support
   created_by UUID REFERENCES user_profiles(user_id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Ensure new columns exist for re-runnability on existing tables
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS event_end_date TIMESTAMPTZ;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS registration_deadline TIMESTAMPTZ;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS registration_count INTEGER DEFAULT 0;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS recording_url TEXT;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Webinar';
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS level VARCHAR(20) DEFAULT 'Starter';
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS max_slots INTEGER DEFAULT 100;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS speaker_info JSONB DEFAULT '[]'::jsonb;
+
+-- Drop old constraint and recreate with 'waitlisted' status
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE table_name = 'event_registrations' AND constraint_type = 'CHECK'
+    AND constraint_name LIKE '%status%'
+  ) THEN
+    ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_status_check;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS event_registrations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   event_id UUID NOT NULL REFERENCES platform_events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
-  status VARCHAR(20) DEFAULT 'registered' CHECK (status IN ('registered', 'attended', 'cancelled')),
+  status VARCHAR(20) DEFAULT 'registered' CHECK (status IN ('registered', 'attended', 'cancelled', 'waitlisted')),
   payment_status VARCHAR(20) DEFAULT 'free' CHECK (payment_status IN ('free', 'pending', 'waiting_verification', 'paid', 'rejected')),
   payment_amount INTEGER DEFAULT 0,
   payment_proof_url TEXT,
   submission_url TEXT,
   admin_notes TEXT,
+  certificate_url TEXT, -- Sertifikat kehadiran event
+  waitlist_position INTEGER, -- Posisi waiting list (NULL = bukan waitlist)
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(event_id, user_id)
 );
 
+-- Ensure new columns exist for re-runnability
+ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS certificate_url TEXT;
+ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS waitlist_position INTEGER;
+
+-- Re-add the constraint with 'waitlisted' if table already existed
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.check_constraints
+    WHERE constraint_name = 'event_registrations_status_check'
+    AND check_clause LIKE '%waitlisted%'
+  ) THEN
+    BEGIN
+      ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_status_check;
+      ALTER TABLE event_registrations ADD CONSTRAINT event_registrations_status_check
+        CHECK (status IN ('registered', 'attended', 'cancelled', 'waitlisted'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_platform_events_slug ON platform_events(slug);
 CREATE INDEX IF NOT EXISTS idx_platform_events_date ON platform_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_platform_events_registration_deadline ON platform_events(registration_deadline);
 CREATE INDEX IF NOT EXISTS idx_event_registrations_event ON event_registrations(event_id);
 CREATE INDEX IF NOT EXISTS idx_event_registrations_user ON event_registrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_status ON event_registrations(event_id, status);
 
 -- ============================================
 -- 13. VIEWS

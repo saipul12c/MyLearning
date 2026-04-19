@@ -23,14 +23,14 @@ import {
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 import Image from "next/image";
-import PromotionRequestModal from "@/app/components/PromotionRequestModal";
+import { useRouter } from "next/navigation";
 
 export default function AdsHistory() {
   const { user, isAdmin } = useAuth();
+  const router = useRouter();
   const [requests, setRequests] = useState<PromotionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [promoModalMode, setPromoModalMode] = useState<'custom' | 'course' | null>(null);
 
   useEffect(() => {
     if (user) fetchMyAds();
@@ -85,13 +85,13 @@ export default function AdsHistory() {
             
             <div className="flex flex-wrap gap-4">
                <button 
-                  onClick={() => setPromoModalMode('custom')}
+                  onClick={() => router.push('/dashboard/ads/create?mode=custom')}
                   className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
                 >
                   <Plus size={16} /> Iklan Kustom
                </button>
                <button 
-                  onClick={() => setPromoModalMode('course')}
+                  onClick={() => router.push('/dashboard/ads/create?mode=course')}
                   className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-purple-900/20 hover:shadow-purple-700/40 hover:scale-105 active:scale-95 flex items-center gap-2"
                 >
                   <Megaphone size={16} /> Promosi Kursus
@@ -157,8 +157,8 @@ export default function AdsHistory() {
             </div>
             <h3 className="text-white font-black text-xl tracking-tight">Belum Ada Riwayat Iklan</h3>
             <p className="text-slate-500 text-sm mt-2 max-w-xs mx-auto">Mulai promosikan kursus Anda sekarang untuk menjangkau jutaan pelajar aktif di MyLearning.</p>
-            <button 
-               onClick={() => setPromoModalMode('course')}
+             <button 
+               onClick={() => router.push('/dashboard/ads/create?mode=course')}
                className="mt-8 bg-white text-black px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95"
             >
                Buat Iklan Pertama
@@ -286,12 +286,7 @@ export default function AdsHistory() {
         </div>
       )}
 
-      {promoModalMode && (
-        <PromotionRequestModal 
-           mode={promoModalMode}
-           onClose={() => setPromoModalMode(null)}
-        />
-      )}
+
     </div>
   );
 }

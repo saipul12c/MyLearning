@@ -7,10 +7,11 @@ import {
   Clock, DollarSign, LayoutGrid, List as ListIcon, ChevronRight, Eye
 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
-import { instructorGetEvents, createEvent, updateEvent, getEventRegistrants, PlatformEvent, deleteEvent } from "@/lib/events";
+import { instructorGetEvents, createEvent, updateEvent, getEventRegistrants, PlatformEvent, deleteEvent, generateSlug } from "@/lib/events";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
+import Link from "next/link";
 
 export default function InstructorEventsPage() {
   const { isInstructor, loading: authLoading, user } = useAuth();
@@ -29,11 +30,17 @@ export default function InstructorEventsPage() {
     shortDescription: "",
     description: "",
     eventDate: "",
+    eventEndDate: "",
+    registrationDeadline: "",
     location: "Online",
     registrationLink: "",
     price: 0,
     isPublished: false,
     thumbnailUrl: "",
+    category: "Webinar",
+    level: "Starter",
+    maxSlots: 100,
+    tags: [] as string[],
   });
 
   useEffect(() => {
@@ -59,11 +66,17 @@ export default function InstructorEventsPage() {
         shortDescription: event.shortDescription || "",
         description: event.description || "",
         eventDate: format(new Date(event.eventDate), "yyyy-MM-dd'T'HH:mm"),
+        eventEndDate: event.eventEndDate ? format(new Date(event.eventEndDate), "yyyy-MM-dd'T'HH:mm") : "",
+        registrationDeadline: event.registrationDeadline ? format(new Date(event.registrationDeadline), "yyyy-MM-dd'T'HH:mm") : "",
         location: event.location || "Online",
         registrationLink: event.registrationLink || "",
         price: event.price || 0,
         isPublished: event.isPublished,
         thumbnailUrl: event.thumbnailUrl || "",
+        category: event.category || "Webinar",
+        level: event.level || "Starter",
+        maxSlots: event.maxSlots || 100,
+        tags: event.tags || [],
       });
     } else {
       setEditingEvent(null);
@@ -73,11 +86,17 @@ export default function InstructorEventsPage() {
         shortDescription: "",
         description: "",
         eventDate: "",
+        eventEndDate: "",
+        registrationDeadline: "",
         location: "Online",
         registrationLink: "",
         price: 0,
         isPublished: false,
         thumbnailUrl: "",
+        category: "Webinar",
+        level: "Starter",
+        maxSlots: 100,
+        tags: [],
       });
     }
     setIsModalOpen(true);
@@ -145,7 +164,7 @@ export default function InstructorEventsPage() {
           <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4">
             <span>Instructor</span>
             <span>/</span>
-            <span className="text-slate-300">Event Saya</span>
+            <span className="text-slate-300">Kelola Event</span>
           </div>
           <h1 className="text-4xl font-black text-white tracking-tight flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
@@ -261,6 +280,13 @@ export default function InstructorEventsPage() {
                   </td>
                   <td className="px-6 py-6 text-right">
                     <div className="flex items-center justify-end gap-2">
+                       <Link 
+                        href={`/dashboard/instructor/events/${event.id}`}
+                        className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-emerald-500/20 transition-all"
+                        title="Lihat Peserta"
+                      >
+                        <Users size={16} />
+                      </Link>
                        <button 
                         onClick={() => handleOpenModal(event)}
                         className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-purple-500/20 transition-all"
@@ -315,7 +341,10 @@ export default function InstructorEventsPage() {
                     <input 
                       type="text" 
                       value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      onChange={(e) => {
+                        const title = e.target.value;
+                        setFormData({ ...formData, title, slug: editingEvent ? formData.slug : generateSlug(title) });
+                      }}
                       placeholder="Contoh: Webinar Next.js 14"
                       className="input !bg-white/5 !border-white/10"
                       required
@@ -351,12 +380,22 @@ export default function InstructorEventsPage() {
                       className="input min-h-[150px] !py-4 !bg-white/5 !border-white/10 resize-none"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Tags (pisahkan dengan koma)</label>
+                    <input 
+                      type="text" 
+                      value={(formData.tags || []).join(', ')}
+                      onChange={(e) => setFormData({ ...formData, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+                      placeholder="nextjs, supabase, webinar"
+                      className="input !bg-white/5 !border-white/10"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-6">
                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Tanggal & Waktu</label>
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Waktu Mulai</label>
                         <input 
                           type="datetime-local" 
                           value={formData.eventDate}
@@ -366,6 +405,66 @@ export default function InstructorEventsPage() {
                         />
                       </div>
                       <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Waktu Selesai</label>
+                        <input 
+                          type="datetime-local" 
+                          value={formData.eventEndDate}
+                          onChange={(e) => setFormData({ ...formData, eventEndDate: e.target.value })}
+                          className="input !bg-white/5 !border-white/10"
+                        />
+                      </div>
+                   </div>
+
+                   <div className="space-y-2">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Deadline Pendaftaran (Opsional)</label>
+                     <input 
+                       type="datetime-local" 
+                       value={formData.registrationDeadline}
+                       onChange={(e) => setFormData({ ...formData, registrationDeadline: e.target.value })}
+                       className="input !bg-white/5 !border-white/10"
+                     />
+                   </div>
+
+                   <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Kategori</label>
+                        <select 
+                          value={formData.category}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                          className="input !bg-white/5 !border-white/10"
+                        >
+                          <option value="Webinar">Webinar</option>
+                          <option value="Workshop">Workshop</option>
+                          <option value="Competition">Competition</option>
+                          <option value="Talkshow">Talkshow</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Level</label>
+                        <select 
+                          value={formData.level}
+                          onChange={(e) => setFormData({ ...formData, level: e.target.value })}
+                          className="input !bg-white/5 !border-white/10"
+                        >
+                          <option value="Starter">Starter</option>
+                          <option value="Accelerator">Accelerator</option>
+                          <option value="Mastery">Mastery</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Kuota</label>
+                        <input 
+                          type="number" 
+                          value={formData.maxSlots}
+                          onChange={(e) => setFormData({ ...formData, maxSlots: parseInt(e.target.value) || 100 })}
+                          className="input !bg-white/5 !border-white/10"
+                          min={1}
+                        />
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Harga Event (Rp)</label>
                         <input 
                           type="number" 
@@ -374,18 +473,17 @@ export default function InstructorEventsPage() {
                           className="input !bg-white/5 !border-white/10"
                         />
                       </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Lokasi</label>
+                        <input 
+                          type="text" 
+                          value={formData.location}
+                          onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                          placeholder="Zoom / Jakarta"
+                          className="input !bg-white/5 !border-white/10"
+                        />
+                      </div>
                    </div>
-
-                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Lokasi</label>
-                    <input 
-                      type="text" 
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      placeholder="Zoom / Jakarta"
-                      className="input !bg-white/5 !border-white/10"
-                    />
-                  </div>
 
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Link Meeting (Cth: Zoom)</label>

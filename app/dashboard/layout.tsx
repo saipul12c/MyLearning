@@ -19,7 +19,7 @@ const userMenuGroups = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/dashboard/courses", label: "Jelajahi Kursus", icon: Library },
       { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
-      { href: "/dashboard/events", label: "Event Saya", icon: Calendar },
+      { href: "/dashboard/events", label: "Event Terdaftar", icon: Calendar },
       { href: "/dashboard/vouchers", label: "Dompet Voucher", icon: Ticket },
       { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
       { href: "/dashboard/profile", label: "Profil", icon: User },
@@ -34,6 +34,13 @@ const adminMenuGroups = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
       { href: "/dashboard/admin/analytics", label: "Analitik & Penjualan", icon: Shield },
+    ]
+  },
+  {
+    title: "Pembelajaran Saya",
+    items: [
+      { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
+      { href: "/dashboard/events", label: "Event Terdaftar", icon: Calendar },
     ]
   },
   {
@@ -79,10 +86,17 @@ const instructorMenuGroups = [
     ]
   },
   {
+    title: "Pembelajaran Saya",
+    items: [
+      { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
+      { href: "/dashboard/events", label: "Event Terdaftar", icon: Calendar },
+    ]
+  },
+  {
     title: "Manajemen Konten",
     items: [
       { href: "/dashboard/admin/courses", label: "Kelola Kursus", icon: GraduationCap },
-      { href: "/dashboard/instructor/events", label: "Event Saya", icon: Calendar },
+      { href: "/dashboard/instructor/events", label: "Kelola Event", icon: Calendar },
       { href: "/dashboard/admin/enrollments", label: "Kelola Enrollment", icon: BookMarked },
       { href: "/dashboard/admin/users", label: "Daftar Siswa", icon: Users },
     ]

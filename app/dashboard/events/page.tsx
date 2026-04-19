@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/app/components/AuthContext";
-import { getMyRegistrations, updateRegistration } from "@/lib/events";
+import { getMyRegistrations, cancelRegistration, updateRegistrationProof } from "@/lib/events";
 import { supabase } from "@/lib/supabase";
 import { 
   Calendar, Upload, CheckCircle, Clock, MapPin, Loader2, Award, FileText,
@@ -11,12 +11,18 @@ import {
 import Link from "next/link";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import TicketCard from "@/app/components/events/TicketCard";
+import { X, Ticket } from "lucide-react";
+import NativeAdCard from "@/app/components/NativeAdCard";
 
 export default function UserEventsPage() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -36,6 +42,7 @@ export default function UserEventsPage() {
     if (!file || !user) return;
 
     setUploading(regId);
+    setNotification(null);
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${regId}_${Date.now()}.${fileExt}`;
@@ -47,23 +54,34 @@ export default function UserEventsPage() {
 
       if (uploadError) throw uploadError;
 
-      const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucket}/${fileName}`;
-      // Note: For private buckets, we construct the path and use signed URLs or just path. Here we'll save the path so admin can download it safely.
       const path = uploadData.path;
+      const field = type === 'payment' ? 'payment_proof' : 'submission';
+      await updateRegistrationProof(regId, user.id, field as any, path);
 
-      if (type === 'payment') {
-        await updateRegistration(regId, { payment_proof_url: path, payment_status: 'waiting_verification' });
-      } else {
-        await updateRegistration(regId, { submission_url: path });
-      }
-
-      alert("File berhasil diunggah!");
+      setNotification({ type: 'success', text: 'File berhasil diunggah!' });
       fetchRegistrations();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload error:", error);
-      alert("Gagal mengunggah file. Silakan coba lagi.");
+      setNotification({ type: 'error', text: error.message || 'Gagal mengunggah file. Silakan coba lagi.' });
     } finally {
       setUploading(null);
+    }
+  };
+
+  const handleCancelRegistration = async (regId: string) => {
+    if (!user) return;
+    if (!confirm('Yakin ingin membatalkan registrasi event ini?')) return;
+
+    setCancelling(regId);
+    setNotification(null);
+    try {
+      await cancelRegistration(regId, user.id);
+      setNotification({ type: 'success', text: 'Registrasi berhasil dibatalkan.' });
+      fetchRegistrations();
+    } catch (error: any) {
+      setNotification({ type: 'error', text: error.message || 'Gagal membatalkan registrasi.' });
+    } finally {
+      setCancelling(null);
     }
   };
 
@@ -88,6 +106,16 @@ export default function UserEventsPage() {
         <p className="text-slate-400 text-sm mt-3 font-medium">Kelola tiket event, webinar, dan kompetisi (seperti Bug Hunter) yang Anda ikuti.</p>
       </div>
 
+      {notification && (
+        <div className={`p-4 rounded-2xl border text-sm flex items-center gap-3 animate-fade-in ${
+          notification.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
+        }`}>
+          {notification.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
+          {notification.text}
+          <button onClick={() => setNotification(null)} className="ml-auto text-current opacity-50 hover:opacity-100 transition-opacity"><X size={16} /></button>
+        </div>
+      )}
+
       {registrations.length === 0 ? (
         <div className="card p-12 text-center border-white/5 border-dashed">
           <Calendar className="mx-auto text-slate-700 mb-4" size={48} />
@@ -101,6 +129,8 @@ export default function UserEventsPage() {
             const eventInfo = reg.event;
             const isBugHunter = eventInfo.slug.includes("bug-hunter");
             const isCancelled = reg.status === 'cancelled';
+            const isWaitlisted = reg.status === 'waitlisted';
+            const canCancel = !isCancelled && reg.status !== 'attended' && new Date(eventInfo.event_date) > new Date();
 
             return (
               <div key={reg.id} className={`card p-6 bg-[#0c0c14] border-white/5 flex flex-col gap-6 ${isCancelled ? 'opacity-60' : ''}`}>
@@ -109,14 +139,25 @@ export default function UserEventsPage() {
                     <span className={`inline-flex px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest mb-3 ${
                       reg.status === 'attended' ? 'bg-emerald-500/10 text-emerald-400' 
                       : reg.status === 'cancelled' ? 'bg-red-500/10 text-red-400'
+                      : reg.status === 'waitlisted' ? 'bg-amber-500/10 text-amber-400'
                       : 'bg-purple-500/10 text-purple-400'
                     }`}>
-                      {reg.status === 'attended' ? 'Hadir' : reg.status === 'cancelled' ? 'Dibatalkan' : 'Terdaftar'}
+                      {reg.status === 'attended' ? 'Hadir' : reg.status === 'cancelled' ? 'Dibatalkan' : reg.status === 'waitlisted' ? 'Waiting List' : 'Terdaftar'}
                     </span>
                     <Link href={`/events/${eventInfo.slug}`} className="hover:text-purple-400 transition-colors">
                       <h3 className="text-xl font-bold text-white line-clamp-1">{eventInfo.title}</h3>
                     </Link>
                   </div>
+                  {canCancel && (
+                    <button 
+                      onClick={() => handleCancelRegistration(reg.id)}
+                      disabled={cancelling === reg.id}
+                      className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      {cancelling === reg.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                      Batalkan
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -132,17 +173,25 @@ export default function UserEventsPage() {
 
                 <div className="pt-4 border-t border-white/5 space-y-4">
                   {/* Link Akses — hanya jika sudah lunas atau gratis */}
-                  {(reg.payment_status === 'paid' || reg.payment_status === 'free') && !isCancelled ? (
-                     <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex flex-col items-center justify-center text-center">
-                        <CheckCircle className="text-emerald-400 mb-2" size={24} />
-                        <p className="text-sm text-emerald-300 font-medium">Akses Anda Terkonfirmasi</p>
-                        {eventInfo.registration_link && (
-                          <a href={eventInfo.registration_link} target="_blank" rel="noopener noreferrer" className="mt-3 btn-primary !h-10 !px-6 text-xs flex items-center gap-2">
-                            <ExternalLink size={14} /> Buka / Gabung Event
-                          </a>
-                        )}
-                     </div>
-                  ) : null}
+                   {(reg.payment_status === 'paid' || reg.payment_status === 'free') && !isCancelled ? (
+                      <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex flex-col items-center justify-center text-center">
+                         <CheckCircle className="text-emerald-400 mb-2" size={24} />
+                         <p className="text-sm text-emerald-300 font-medium">Akses Anda Terkonfirmasi</p>
+                         <div className="flex gap-3 mt-4 w-full">
+                            <button 
+                              onClick={() => setExpandedTicketId(expandedTicketId === reg.id ? null : reg.id)}
+                              className="flex-1 btn-secondary !h-10 !px-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                            >
+                               <Ticket size={14} /> {expandedTicketId === reg.id ? 'Tutup Tiket' : 'Lihat Tiket'}
+                            </button>
+                            {eventInfo.registration_link && (
+                              <a href={eventInfo.registration_link} target="_blank" rel="noopener noreferrer" className="flex-1 btn-primary !h-10 !px-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                                <ExternalLink size={14} /> Buka Event
+                              </a>
+                            )}
+                         </div>
+                      </div>
+                   ) : null}
 
                   {/* Pembayaran ditolak */}
                   {reg.payment_status === 'rejected' && (
@@ -243,6 +292,38 @@ export default function UserEventsPage() {
                      </div>
                   )}
                 </div>
+
+                {/* Inline Ticket Display */}
+                {expandedTicketId === reg.id && (
+                  <div className="mt-4 pt-6 border-t border-white/5 animate-fade-in flex flex-col xl:flex-row gap-6 items-stretch justify-center w-full">
+                     <div className="w-full xl:w-auto xl:max-w-sm mx-auto xl:mx-0 shrink-0">
+                       <TicketCard 
+                         registration={{
+                           id: reg.id,
+                           status: reg.status,
+                           createdAt: reg.created_at,
+                           event: {
+                             title: eventInfo.title,
+                             eventDate: eventInfo.event_date,
+                             location: eventInfo.location,
+                             shortDescription: eventInfo.short_description
+                           },
+                           userProfile: {
+                             fullName: reg.profile?.full_name || user?.fullName || "Peserta MyLearning"
+                           }
+                         }} 
+                       />
+                     </div>
+                     <div className="w-full flex-1 flex flex-col items-center xl:items-start justify-center gap-4">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                           <span className="w-8 h-[1px] bg-white/10"></span>
+                           Sponsor
+                           <span className="w-8 h-[1px] bg-white/10"></span>
+                        </div>
+                        <NativeAdCard location="dashboard_card" variant="featured" className="w-full" />
+                     </div>
+                  </div>
+                )}
               </div>
             );
           })}

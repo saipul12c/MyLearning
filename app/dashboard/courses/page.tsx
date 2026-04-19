@@ -10,11 +10,9 @@ import { formatPrice, formatNumber } from "@/lib/utils";
 import { getCoursesWithCount, getCategories } from "@/lib/courses";
 import { getLevelLabel, getLevelBg, enrollCourse, getActiveEnrollment, getExpiryDays } from "@/lib/enrollment";
 import { Star, Users, Clock, BookOpen, Search, X, AlertCircle, CheckCircle, Megaphone, Loader2, Sparkles, Filter } from "lucide-react";
-import PromotionRequestModal from "@/app/components/PromotionRequestModal";
 
 export default function DashboardCoursesPage() {
-  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
-  const [selectedCourseForPromo, setSelectedCourseForPromo] = useState<Course | null>(null);
+
   const [instructorProfileId, setInstructorProfileId] = useState<string | null>(null);
   const { user, isAdmin, isInstructor } = useAuth();
   
@@ -268,10 +266,7 @@ export default function DashboardCoursesPage() {
                     <div className="flex items-center gap-2">
                       {(isAdmin || (isInstructor && course.instructorId === instructorProfileId)) && (
                         <button
-                            onClick={() => {
-                                setSelectedCourseForPromo(course);
-                                setIsPromoModalOpen(true);
-                            }}
+                            onClick={() => router.push(`/dashboard/ads/create?mode=course&courseId=${course.id}`)}
                             className="p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white transition-all"
                             title="Promosi Kursus"
                         >
@@ -327,12 +322,7 @@ export default function DashboardCoursesPage() {
         </div>
       )}
 
-      {isPromoModalOpen && selectedCourseForPromo && (
-        <PromotionRequestModal 
-          course={selectedCourseForPromo}
-          onClose={() => setIsPromoModalOpen(false)}
-        />
-      )}
+
     </div>
   );
 }

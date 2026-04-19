@@ -52,6 +52,9 @@ const PROMO_LOCATIONS = [
   { value: "video_card", label: "Autoplay Video Card", multiplier: "1.5x" },
   { value: "privacy_sidebar", label: "Privacy Sidebar", multiplier: "1.0x" },
   { value: "privacy_policy_inline", label: "Privacy Policy Inline", multiplier: "1.1x" },
+  { value: "event_listing", label: "Event Gallery Listing", multiplier: "1.2x" },
+  { value: "event_sidebar", label: "Event Detail Sidebar", multiplier: "1.1x" },
+  { value: "event_detail_inline", label: "Event Detail Inline", multiplier: "1.2x" },
 ];
 import Image from "next/image";
 

@@ -9,6 +9,8 @@ export interface PlatformEvent {
   thumbnailUrl?: string;
   bannerUrl?: string;
   eventDate: string;
+  eventEndDate?: string;
+  registrationDeadline?: string;
   location: string;
   registrationLink?: string;
   price: number;
@@ -18,29 +20,57 @@ export interface PlatformEvent {
   createdAt: string;
   updatedAt: string;
   // Extra fields
+  category?: string;
+  level?: string;
+  maxSlots?: number;
+  speakerInfo?: any[]; // Array of speaker objects
   registrationCount?: number;
+  recordingUrl?: string;
+  tags?: string[];
 }
 
 export interface EventRegistration {
   id: string;
   eventId: string;
   userId: string;
-  status: "registered" | "attended" | "cancelled";
+  status: "registered" | "attended" | "cancelled" | "waitlisted";
   paymentStatus?: "free" | "pending" | "waiting_verification" | "paid" | "rejected";
   paymentAmount?: number;
   paymentProofUrl?: string;
   submissionUrl?: string;
   adminNotes?: string;
+  certificateUrl?: string;
+  waitlistPosition?: number;
   createdAt: string;
   event?: PlatformEvent;
 }
 
+// ---------- Utility ----------
+
+export function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 100);
+}
+
 // ---------- Public Functions ----------
+
+// Optimized: only select columns needed for listing (no description)
+const LISTING_COLUMNS = `
+  id, title, slug, short_description, thumbnail_url, banner_url,
+  event_date, event_end_date, registration_deadline, location, 
+  registration_link, price, is_published, is_featured, category, level,
+  max_slots, registration_count, recording_url, tags, created_by, 
+  created_at, updated_at
+`;
 
 export async function getEvents(): Promise<PlatformEvent[]> {
   const { data, error } = await supabase
     .from("platform_events")
-    .select("*")
+    .select(LISTING_COLUMNS)
     .eq("is_published", true)
     .order("event_date", { ascending: true });
 
@@ -55,8 +85,9 @@ export async function getEvents(): Promise<PlatformEvent[]> {
 export async function getEventBySlug(slug: string): Promise<PlatformEvent | null> {
   const { data, error } = await supabase
     .from("platform_events")
-    .select("*")
+    .select("*, registrationCount:event_registrations(count)")
     .eq("slug", slug)
+    .eq("is_published", true)
     .single();
 
   if (error) {
@@ -67,26 +98,61 @@ export async function getEventBySlug(slug: string): Promise<PlatformEvent | null
   return formatEvent(data);
 }
 
-// ---------- User Registration Functions ----------
+// ---------- User Registration Functions (RPC-based, server-validated) ----------
 
-export async function registerForEvent(eventId: string, userId: string, price: number = 0) {
-  const isPaid = price > 0;
-  const initialPaymentStatus = isPaid ? 'pending' : 'free';
-
-  const { data, error } = await supabase
-    .from("event_registrations")
-    .insert({
-      event_id: eventId,
-      user_id: userId,
-      status: "registered",
-      payment_status: initialPaymentStatus,
-      payment_amount: price
-    })
-    .select()
-    .single();
+export async function registerForEvent(eventId: string, userId: string) {
+  const { data, error } = await supabase.rpc("register_for_event_safe", {
+    p_event_id: eventId,
+    p_user_id: userId,
+  });
 
   if (error) throw error;
-  return data;
+
+  const result = data as any;
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result;
+}
+
+export async function cancelRegistration(registrationId: string, userId: string) {
+  const { data, error } = await supabase.rpc("cancel_event_registration", {
+    p_registration_id: registrationId,
+    p_user_id: userId,
+  });
+
+  if (error) throw error;
+
+  const result = data as any;
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result;
+}
+
+export async function updateRegistrationProof(
+  registrationId: string,
+  userId: string,
+  field: "payment_proof" | "submission",
+  filePath: string
+) {
+  const { data, error } = await supabase.rpc("update_event_registration_proof", {
+    p_registration_id: registrationId,
+    p_user_id: userId,
+    p_field: field,
+    p_file_path: filePath,
+  });
+
+  if (error) throw error;
+
+  const result = data as any;
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result;
 }
 
 export async function updateRegistration(id: string, updates: any) {
@@ -101,10 +167,10 @@ export async function updateRegistration(id: string, updates: any) {
   return data;
 }
 
-export async function checkIfRegistered(eventId: string, userId: string): Promise<boolean> {
+export async function checkIfRegistered(eventId: string, userId: string): Promise<{ registered: boolean; status?: string; registrationId?: string }> {
   const { data, error } = await supabase
     .from("event_registrations")
-    .select("id")
+    .select("id, status")
     .eq("event_id", eventId)
     .eq("user_id", userId)
     .single();
@@ -113,7 +179,10 @@ export async function checkIfRegistered(eventId: string, userId: string): Promis
     console.error("Error checking registration:", error);
   }
 
-  return !!data;
+  if (data) {
+    return { registered: true, status: data.status, registrationId: data.id };
+  }
+  return { registered: false };
 }
 
 export async function getMyRegistrations(userId: string): Promise<any[]> {
@@ -121,7 +190,8 @@ export async function getMyRegistrations(userId: string): Promise<any[]> {
     .from("event_registrations")
     .select(`
       *,
-      event:platform_events(*)
+      event:platform_events(*),
+      profile:user_profiles(*)
     `)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -139,7 +209,7 @@ export async function getMyRegistrations(userId: string): Promise<any[]> {
 export async function adminGetEvents(): Promise<PlatformEvent[]> {
   const { data, error } = await supabase
     .from("platform_events")
-    .select("*, registrationCount:event_registrations(count)")
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -147,16 +217,13 @@ export async function adminGetEvents(): Promise<PlatformEvent[]> {
     return [];
   }
 
-  return (data || []).map(item => ({
-    ...formatEvent(item),
-    registrationCount: item.registrationCount?.[0]?.count || 0
-  }));
+  return (data || []).map(formatEvent);
 }
 
 export async function instructorGetEvents(instructorUserId: string): Promise<PlatformEvent[]> {
   const { data, error } = await supabase
     .from("platform_events")
-    .select("*, registrationCount:event_registrations(count)")
+    .select("*")
     .eq("created_by", instructorUserId)
     .order("created_at", { ascending: false });
 
@@ -165,10 +232,7 @@ export async function instructorGetEvents(instructorUserId: string): Promise<Pla
     return [];
   }
 
-  return (data || []).map(item => ({
-    ...formatEvent(item),
-    registrationCount: item.registrationCount?.[0]?.count || 0
-  }));
+  return (data || []).map(formatEvent);
 }
 
 export async function createEvent(eventData: Partial<PlatformEvent>) {
@@ -236,6 +300,8 @@ function formatEvent(item: any): PlatformEvent {
     thumbnailUrl: item.thumbnail_url,
     bannerUrl: item.banner_url,
     eventDate: item.event_date,
+    eventEndDate: item.event_end_date,
+    registrationDeadline: item.registration_deadline,
     location: item.location,
     registrationLink: item.registration_link,
     price: item.price,
@@ -244,6 +310,13 @@ function formatEvent(item: any): PlatformEvent {
     createdBy: item.created_by,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
+    category: item.category,
+    level: item.level,
+    maxSlots: item.max_slots,
+    speakerInfo: item.speaker_info,
+    registrationCount: item.registration_count ?? item.registrationCount?.[0]?.count ?? 0,
+    recordingUrl: item.recording_url,
+    tags: item.tags,
   };
 }
 
@@ -256,11 +329,19 @@ export function deformatEvent(item: Partial<PlatformEvent>): any {
   if (item.thumbnailUrl !== undefined) mapped.thumbnail_url = item.thumbnailUrl;
   if (item.bannerUrl !== undefined) mapped.banner_url = item.bannerUrl;
   if (item.eventDate !== undefined) mapped.event_date = item.eventDate;
+  if (item.eventEndDate !== undefined) mapped.event_end_date = item.eventEndDate || null;
+  if (item.registrationDeadline !== undefined) mapped.registration_deadline = item.registrationDeadline || null;
   if (item.location !== undefined) mapped.location = item.location;
   if (item.registrationLink !== undefined) mapped.registration_link = item.registrationLink;
   if (item.price !== undefined) mapped.price = item.price;
   if (item.isPublished !== undefined) mapped.is_published = item.isPublished;
   if (item.isFeatured !== undefined) mapped.is_featured = item.isFeatured;
   if (item.createdBy !== undefined) mapped.created_by = item.createdBy;
+  if (item.category !== undefined) mapped.category = item.category;
+  if (item.level !== undefined) mapped.level = item.level;
+  if (item.maxSlots !== undefined) mapped.max_slots = item.maxSlots;
+  if (item.speakerInfo !== undefined) mapped.speaker_info = item.speakerInfo;
+  if (item.recordingUrl !== undefined) mapped.recording_url = item.recordingUrl || null;
+  if (item.tags !== undefined) mapped.tags = item.tags;
   return mapped;
 }
