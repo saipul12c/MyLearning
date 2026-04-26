@@ -53,7 +53,7 @@ export default function InstructorEventDetailPage() {
     setEventData(eData);
     
     const rData = await getEventRegistrants(eventId);
-    setRegistrants(rData);
+    setRegistrants(rData.data);
     setLoading(false);
   };
 

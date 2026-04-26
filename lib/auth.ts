@@ -19,6 +19,9 @@ export interface User {
   experience?: string;
   website?: string;
   linkedin?: string;
+  twitter?: string;
+  instagram?: string;
+  github?: string;
   avatarUrl?: string;
   isOnline: boolean;
   lastSeenAt: string;
@@ -181,6 +184,9 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     isBanned: profile.is_banned || false,
     banReason: profile.ban_reason || "",
     linkedin: profile.linkedin_url || "",
+    twitter: profile.twitter_url || "",
+    instagram: profile.instagram_url || "",
+    github: profile.github_url || "",
     website: profile.website_url || "",
     specialization: profile.specialization || "",
     experience: profile.experience || "",
@@ -213,6 +219,9 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     lastSeenAt: profile.last_seen_at || profile.created_at,
     isBanned: profile.is_banned || false,
     linkedin: profile.linkedin_url || "",
+    twitter: profile.twitter_url || "",
+    instagram: profile.instagram_url || "",
+    github: profile.github_url || "",
     website: profile.website_url || "",
     specialization: profile.specialization || "",
     experience: profile.experience || "",
@@ -221,7 +230,7 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
 
 export async function updateProfile(
   userId: string,
-  updates: Partial<Pick<User, "fullName" | "phone" | "bio" | "avatarUrl" | "linkedin" | "website" | "specialization" | "experience">>
+  updates: Partial<Pick<User, "fullName" | "phone" | "bio" | "avatarUrl" | "linkedin" | "twitter" | "instagram" | "github" | "website" | "specialization" | "experience">>
 ): Promise<{ success: boolean; user?: SafeUser; error?: string }> {
   try {
     const updateData: Record<string, any> = {};
@@ -230,6 +239,9 @@ export async function updateProfile(
     if (updates.bio !== undefined) updateData.bio = updates.bio;
     if (updates.avatarUrl !== undefined) updateData.avatar_url = updates.avatarUrl;
     if (updates.linkedin !== undefined) updateData.linkedin_url = updates.linkedin;
+    if (updates.twitter !== undefined) updateData.twitter_url = updates.twitter;
+    if (updates.instagram !== undefined) updateData.instagram_url = updates.instagram;
+    if (updates.github !== undefined) updateData.github_url = updates.github;
     if (updates.website !== undefined) updateData.website_url = updates.website;
     if (updates.specialization !== undefined) updateData.specialization = updates.specialization;
     if (updates.experience !== undefined) updateData.experience = updates.experience;
@@ -259,6 +271,9 @@ export async function updateProfile(
         isOnline: data.is_online || false,
         lastSeenAt: data.last_seen_at || data.created_at,
         linkedin: data.linkedin_url || "",
+        twitter: data.twitter_url || "",
+        instagram: data.instagram_url || "",
+        github: data.github_url || "",
         website: data.website_url || "",
         specialization: data.specialization || "",
         experience: data.experience || "",

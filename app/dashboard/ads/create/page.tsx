@@ -1,5 +1,7 @@
 "use client";
 
+// Re-scanning route to fix type validation error
+
 import PromotionRequestForm from "@/app/components/PromotionRequestForm";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";

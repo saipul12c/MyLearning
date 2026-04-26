@@ -44,7 +44,7 @@ export default function AdminEventDetailPage() {
     
     // Fetch registrants
     const rData = await getEventRegistrants(eventId);
-    setRegistrants(rData);
+    setRegistrants(rData.data);
     setLoading(false);
   };
 
@@ -206,6 +206,7 @@ export default function AdminEventDetailPage() {
                           <select value={attendance} onChange={(e) => setAttendance(e.target.value)} className="input w-full">
                              <option value="registered">Terdaftar</option>
                              <option value="attended">Hadir</option>
+                             <option value="waitlisted">Waiting List</option>
                              <option value="cancelled">Batal</option>
                           </select>
                        </div>

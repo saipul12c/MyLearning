@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { useState, useEffect } from "react";
 
 interface TicketCardProps {
   registration: {
@@ -26,12 +27,18 @@ interface TicketCardProps {
 }
 
 export default function TicketCard({ registration }: TicketCardProps) {
-  const qrData = JSON.stringify({
-    registrationId: registration.id,
-    eventId: registration.event.title,
-    userName: registration.userProfile.fullName,
-    verifyUrl: `${window.location.origin}/verify-ticket/${registration.id}`
-  });
+  const [qrData, setQrData] = useState("");
+
+  useEffect(() => {
+    // ✅ Only access window on client-side to prevent SSR hydration mismatch
+    const data = JSON.stringify({
+      registrationId: registration.id,
+      eventId: registration.event.title,
+      userName: registration.userProfile.fullName,
+      verifyUrl: `${window.location.origin}/verify-ticket/${registration.id}`
+    });
+    setQrData(data);
+  }, [registration.id, registration.event.title, registration.userProfile.fullName]);
 
   const handlePrint = () => {
     window.print();

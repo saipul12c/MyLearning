@@ -11,6 +11,7 @@ import { type Promotion, trackImpressionsBatch } from "@/lib/promotions";
 import { useEffect } from "react";
 import PromotionCard from "../components/PromotionCard";
 import VerifiedBadge from "../components/VerifiedBadge";
+import { recordInterest } from "@/lib/interests";
 
 interface CoursesClientProps {
   initialCourses: Course[];
@@ -64,6 +65,17 @@ export default function CoursesClient({ initialCourses, initialCategories, initi
       return () => clearTimeout(timer);
     }
   }, [promotions, hasTrackedBatch]);
+
+  // Track user interest when category filter is active
+  useEffect(() => {
+    if (selectedCategory && selectedCategory !== "all") {
+       // Find the category ID from the list to be consistent
+       const cat = initialCategories.find(c => c.slug === selectedCategory);
+       if (cat) {
+          recordInterest(cat.id);
+       }
+    }
+  }, [selectedCategory, initialCategories]);
 
 
   const filteredCourses = useMemo(() => {

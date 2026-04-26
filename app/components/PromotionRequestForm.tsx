@@ -136,7 +136,9 @@ export default function PromotionRequestForm({ course: initialCourse, mode, onCl
     privacy_policy_inline: "Disisipkan secara elegan di antara poin-poin hukum kebijakan privasi, menjangkau audiens yang teliti.",
     event_listing: "Iklan premium yang muncul secara natural di antara daftar event di galeri event Platform.",
     event_sidebar: "Penempatan strategis di bilah sisi halaman detail event, tepat di samping formulir pendaftaran.",
-    event_detail_inline: "Iklan yang menyatu di dalam konten deskripsi pada halaman detail event untuk engagement tinggi."
+    event_detail_inline: "Iklan yang menyatu di dalam konten deskripsi pada halaman detail event untuk engagement tinggi.",
+    instructor_tips: "Menampilkan konten promosi khusus di baris tips instruktur di dashboard panel pengajar.",
+    student_engagement: "Posisi strategis di dashboard instruktur untuk mempromosikan tools atau kursus engagement siswa."
   };
 
   const totalPrice = useMemo(() => {
@@ -340,6 +342,8 @@ export default function PromotionRequestForm({ course: initialCourse, mode, onCl
                     <option value="event_listing">Event Gallery Listing (1.2x)</option>
                     <option value="event_sidebar">Event Detail Sidebar (1.1x)</option>
                     <option value="event_detail_inline">Event Detail Inline (1.2x)</option>
+                    <option value="instructor_tips">Instructor Tips Row (1.1x)</option>
+                    <option value="student_engagement">Student Engagement Row (1.1x)</option>
                   </select>
                   <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl mt-2">
                      <p className="text-[11px] text-purple-200 leading-relaxed font-medium">

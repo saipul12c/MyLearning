@@ -122,7 +122,19 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-purple-500/10 blur-[100px] rounded-full group-hover:bg-purple-500/20 transition-all duration-700" />
         
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-8 md:p-12">
-          {promotion.imageUrl && (
+          {promotion.videoUrl ? (
+            <div className="relative w-full md:w-64 aspect-video md:aspect-square rounded-2xl overflow-hidden border border-white/5 shadow-2xl bg-black">
+              <video
+                src={promotion.videoUrl}
+                poster={promotion.imageUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+              />
+            </div>
+          ) : promotion.imageUrl && (
             <div className="relative w-full md:w-64 aspect-video md:aspect-square rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
               <Image 
                 src={promotion.imageUrl} 
@@ -192,7 +204,17 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
         className="card flex flex-col p-0 overflow-hidden group hover:border-purple-500/40 transition-all duration-500"
       >
         <div className="relative h-32 w-full bg-[#0c0c14]">
-          {promotion.imageUrl ? (
+          {promotion.videoUrl ? (
+            <video
+              src={promotion.videoUrl}
+              poster={promotion.imageUrl}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          ) : promotion.imageUrl ? (
             <Image 
               src={promotion.imageUrl} 
               alt={promotion.title} 

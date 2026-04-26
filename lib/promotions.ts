@@ -21,6 +21,8 @@ export type PromotionLocation =
   | "event_listing"
   | "event_sidebar"
   | "event_detail_inline"
+  | "instructor_tips"
+  | "student_engagement"
   | "all";
 
 export interface Promotion {
@@ -99,6 +101,8 @@ export const LOCATION_MULTIPLIERS: Record<PromotionLocation, number> = {
   event_listing: 1.2,
   event_sidebar: 1.1,
   event_detail_inline: 1.2,
+  instructor_tips: 1.1,
+  student_engagement: 1.1,
   all: 3.5, // Global placement multiplier
 };
 
@@ -170,21 +174,48 @@ export function mapDbToRequest(db: any): PromotionRequest {
   };
 }
 
-export async function getActivePromotions(location: PromotionLocation, categoryId?: string): Promise<Promotion[]> {
+export async function getActivePromotions(
+  location: PromotionLocation, 
+  categoryId?: string, 
+  interestIds: string[] = []
+): Promise<Promotion[]> {
   try {
-    const { data, error } = await supabase.rpc("get_active_promotions_optimized", {
-      p_location: location,
-      p_category_id: categoryId
-    });
+    // 1. TRY CONTEXTUAL MATCH (Highest relevance)
+    if (categoryId) {
+      const { data, error } = await supabase.rpc("get_active_promotions_optimized", {
+        p_location: location,
+        p_category_id: categoryId
+      });
 
-    if (error) throw error;
-    
-    // If no specific match, get a random one for fallback logic
-    if (!data || data.length === 0) {
-        return getRandomFallbackPromotions();
+      if (!error && data && data.length > 0) {
+        return data.map(mapDbToPromotion);
+      }
     }
 
-    return data.map(mapDbToPromotion);
+    // 2. TRY BEHAVIORAL INTERESTS (Second highest relevance)
+    if (interestIds.length > 0) {
+      // Fetch for top interests in parallel
+      const interestFetches = interestIds.map(async (id) => {
+        const { data } = await supabase.rpc("get_active_promotions_optimized", {
+          p_location: location,
+          p_category_id: id
+        });
+        return data || [];
+      });
+
+      const interestResults = await Promise.all(interestFetches);
+      const flattened = interestResults.flat();
+
+      if (flattened.length > 0) {
+          // De-duplicate if same ad returned for multiple interests
+          const uniqueMap = new Map();
+          flattened.forEach((p: any) => uniqueMap.set(p.id, p));
+          return Array.from(uniqueMap.values()).map(mapDbToPromotion);
+      }
+    }
+
+    // 3. GLOBAL FALLBACK (Random/High traffic)
+    return getRandomFallbackPromotions();
   } catch (err) {
     console.error(`Error fetching promotions for ${location}:`, err);
     return [];
@@ -422,6 +453,43 @@ export async function getAllPromotionsAdmin(): Promise<Promotion[]> {
   } catch (err) {
     console.error("Error fetching admin promotions:", err);
     return [];
+  }
+}
+
+export async function getPromotionsAdminPaginated(
+  page: number, 
+  pageSize: number, 
+  search: string = ""
+): Promise<{ data: Promotion[], totalCount: number }> {
+  try {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    let query = supabase
+      .from("promotions")
+      .select("*", { count: "exact" });
+
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,location.ilike.%${search}%`);
+    }
+
+    query = query
+      .order("is_active", { ascending: false })
+      .order("priority", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+    
+    return { 
+      data: (data || []).map(mapDbToPromotion),
+      totalCount: count || 0
+    };
+  } catch (err) {
+    console.error("Error fetching paginated admin promotions:", err);
+    return { data: [], totalCount: 0 };
   }
 }
 

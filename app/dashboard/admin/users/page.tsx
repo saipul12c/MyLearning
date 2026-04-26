@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
 import Skeleton from "@/app/components/ui/Skeleton";
+import SearchHighlight from "@/app/components/SearchHighlight";
 
 export default function AdminUsersPage() {
   const { user, isAdmin, isInstructor } = useAuth();
@@ -271,10 +272,12 @@ export default function AdminUsersPage() {
                         </div>
                         <div className="flex flex-col">
                           <span className="text-white font-semibold group-hover:text-purple-400 transition-colors flex items-center gap-1.5">
-                            {u.fullName}
+                            <SearchHighlight text={u.fullName} query={searchQuery} />
                             {u.isBanned && <Ban size={12} className="text-red-500" />}
                           </span>
-                          <span className="text-slate-500 text-[10px] font-mono">{u.email}</span>
+                          <span className="text-slate-500 text-[10px] font-mono">
+                            <SearchHighlight text={u.email} query={searchQuery} />
+                          </span>
                         </div>
                       </button>
                     </td>

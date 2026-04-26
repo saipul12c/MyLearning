@@ -78,9 +78,50 @@ export async function uploadPromotionVideo(file: File): Promise<{ url: string | 
 /**
  * Generic Upload Helper
  */
+
+// Allowed image MIME types and their safe extensions
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 async function uploadToBucket(file: File, bucket: string, folder: string): Promise<{ url: string | null; error: any }> {
   try {
-    const fileExt = file.name.split('.').pop();
+    // 1. Validate file size
+    if (file.size > MAX_IMAGE_SIZE) {
+      return { url: null, error: new Error("File terlalu besar. Maksimal 10 MB.") };
+    }
+
+    // 2. Validate and sanitize file type
+    // Use MIME type (more reliable than extension) to determine safe extension
+    const safeExt = ALLOWED_IMAGE_TYPES[file.type];
+    const rawExt = file.name.split('.').pop()?.toLowerCase();
+
+    // For non-image buckets (like submissions), allow any file
+    const isImageBucket = ['thumbnails', 'payments', 'avatars'].includes(bucket);
+    
+    let fileExt: string;
+    if (isImageBucket) {
+      if (!safeExt) {
+        const blockedFormats = ['.ico', '.bmp', '.tiff', '.svg', '.psd'];
+        const extStr = rawExt ? `.${rawExt}` : 'unknown';
+        return { 
+          url: null, 
+          error: new Error(
+            `Format file "${extStr}" tidak didukung. Gunakan JPG, PNG, WebP, atau GIF.`
+          ) 
+        };
+      }
+      fileExt = safeExt;
+    } else {
+      fileExt = rawExt || 'bin';
+    }
+
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = `${folder}/${fileName}`;
 

@@ -7,11 +7,13 @@ import {
   Clock, DollarSign, LayoutGrid, List as ListIcon, ChevronRight, Eye
 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
-import { instructorGetEvents, createEvent, updateEvent, getEventRegistrants, PlatformEvent, deleteEvent, generateSlug } from "@/lib/events";
+import { instructorGetEvents, createEvent, updateEvent, getEventRegistrants, PlatformEvent, deleteEvent, generateSlug, stripInstructorOnlyFields } from "@/lib/events";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
 import Link from "next/link";
+import { fuzzyMatch } from "@/lib/search-utils";
+import SearchHighlight from "@/app/components/SearchHighlight";
 
 export default function InstructorEventsPage() {
   const { isInstructor, loading: authLoading, user } = useAuth();
@@ -41,6 +43,10 @@ export default function InstructorEventsPage() {
     level: "Starter",
     maxSlots: 100,
     tags: [] as string[],
+    speakerInfo: [] as any[],
+    bannerUrl: "",
+    recordingUrl: "",
+    themeColor: "#7c3aed",
   });
 
   useEffect(() => {
@@ -53,7 +59,7 @@ export default function InstructorEventsPage() {
     if (!user) return;
     setLoading(true);
     const data = await instructorGetEvents(user.id);
-    setEvents(data);
+    setEvents(data.data);
     setLoading(false);
   };
 
@@ -77,6 +83,10 @@ export default function InstructorEventsPage() {
         level: event.level || "Starter",
         maxSlots: event.maxSlots || 100,
         tags: event.tags || [],
+        speakerInfo: event.speakerInfo || [],
+        bannerUrl: event.bannerUrl || "",
+        recordingUrl: event.recordingUrl || "",
+        themeColor: event.themeColor || "#7c3aed",
       });
     } else {
       setEditingEvent(null);
@@ -97,6 +107,10 @@ export default function InstructorEventsPage() {
         level: "Starter",
         maxSlots: 100,
         tags: [],
+        speakerInfo: [],
+        bannerUrl: "",
+        recordingUrl: "",
+        themeColor: "#7c3aed",
       });
     }
     setIsModalOpen(true);
@@ -108,9 +122,9 @@ export default function InstructorEventsPage() {
     setIsSubmitting(true);
     try {
       if (editingEvent) {
-        await updateEvent(editingEvent.id, formData);
+        await updateEvent(editingEvent.id, stripInstructorOnlyFields(formData));
       } else {
-        await createEvent({ ...formData, createdBy: user.id });
+        await createEvent(stripInstructorOnlyFields({ ...formData, createdBy: user.id }));
       }
       setIsModalOpen(false);
       fetchEvents();
@@ -134,8 +148,8 @@ export default function InstructorEventsPage() {
   };
 
   const filteredEvents = events.filter(e => 
-    e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    fuzzyMatch(e.title, searchQuery) ||
+    fuzzyMatch(e.slug, searchQuery)
   );
 
   if (authLoading || loading) {
@@ -255,9 +269,13 @@ export default function InstructorEventsPage() {
                       )}
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-bold text-white group-hover:text-purple-400 transition-colors">{event.title}</p>
+                          <p className="font-bold text-white group-hover:text-purple-400 transition-colors">
+                            <SearchHighlight text={event.title} query={searchQuery} />
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">/{event.slug}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">
+                          /<SearchHighlight text={event.slug} query={searchQuery} className="bg-cyan-500/20 text-cyan-200" />
+                        </p>
                       </div>
                     </div>
                   </td>
@@ -390,6 +408,77 @@ export default function InstructorEventsPage() {
                       className="input !bg-white/5 !border-white/10"
                     />
                   </div>
+
+                  {/* Speaker Management Section */}
+                  <div className="p-6 rounded-[2.5rem] bg-white/2 border border-white/5 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Manajemen Pembicara</h4>
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData({ ...formData, speakerInfo: [...formData.speakerInfo, { name: "", role: "", bio: "", avatarUrl: "" }] })}
+                        className="p-2 rounded-lg bg-white/5 text-purple-400 hover:bg-purple-500/10 transition-all border border-white/10"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {formData.speakerInfo.map((speaker: any, idx: number) => (
+                        <div key={idx} className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3 relative group">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const newList = [...formData.speakerInfo];
+                              newList.splice(idx, 1);
+                              setFormData({ ...formData, speakerInfo: newList });
+                            }}
+                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <input 
+                              type="text" 
+                              placeholder="Nama Pembicara" 
+                              value={speaker.name}
+                              onChange={(e) => {
+                                const newList = [...formData.speakerInfo];
+                                newList[idx].name = e.target.value;
+                                setFormData({ ...formData, speakerInfo: newList });
+                              }}
+                              className="input !py-2 !text-xs !bg-white/5"
+                            />
+                            <input 
+                              type="text" 
+                              placeholder="Role / Jabatan" 
+                              value={speaker.role}
+                              onChange={(e) => {
+                                const newList = [...formData.speakerInfo];
+                                newList[idx].role = e.target.value;
+                                setFormData({ ...formData, speakerInfo: newList });
+                              }}
+                              className="input !py-2 !text-xs !bg-white/5"
+                            />
+                          </div>
+                          <input 
+                            type="text" 
+                            placeholder="URL Foto Avatar" 
+                            value={speaker.avatarUrl}
+                            onChange={(e) => {
+                              const newList = [...formData.speakerInfo];
+                              newList[idx].avatarUrl = e.target.value;
+                              setFormData({ ...formData, speakerInfo: newList });
+                            }}
+                            className="input !py-2 !text-xs !bg-white/5"
+                          />
+                        </div>
+                      ))}
+                      {formData.speakerInfo.length === 0 && (
+                        <p className="text-[10px] text-center text-slate-600 font-bold uppercase tracking-widest py-4">Belum ada pembicara ditambahkan.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -504,6 +593,41 @@ export default function InstructorEventsPage() {
                       onChange={(e) => setFormData({ ...formData, thumbnailUrl: e.target.value })}
                       placeholder="URL gambar banner acara"
                       className="input !bg-white/5 !border-white/10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Banner URL (Hero Detail Page)</label>
+                    <input 
+                      type="text" 
+                      value={formData.bannerUrl}
+                      onChange={(e) => setFormData({ ...formData, bannerUrl: e.target.value })}
+                      placeholder="URL gambar hero besar"
+                      className="input !bg-white/5 !border-white/10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Link Rekaman (Setelah Selesai)</label>
+                    <input 
+                      type="text" 
+                      value={formData.recordingUrl}
+                      onChange={(e) => setFormData({ ...formData, recordingUrl: e.target.value })}
+                      placeholder="Link YouTube/GDrive Rekaman"
+                      className="input !bg-white/5 !border-white/10"
+                    />
+                  </div>
+
+                  <div className="mb-4 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: formData.themeColor }} />
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">Warna Tema Event</span>
+                    </div>
+                    <input 
+                      type="color" 
+                      value={formData.themeColor}
+                      onChange={(e) => setFormData({ ...formData, themeColor: e.target.value })}
+                      className="w-12 h-8 rounded bg-transparent border-none cursor-pointer"
                     />
                   </div>
 

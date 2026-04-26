@@ -25,7 +25,13 @@ const sections = [
   { id: "kontak", title: "Hubungi Legal", icon: MessageCircle, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
 ];
 
-export default function PrivacyPage() {
+import { getPromotionsBatch } from "@/lib/promotions";
+
+export default async function PrivacyPage() {
+  const adBatch = await getPromotionsBatch(["privacy_sidebar", "privacy_policy_inline"]);
+  const sidebarPromo = adBatch["privacy_sidebar"]?.[0] || null;
+  const inlinePromo = adBatch["privacy_policy_inline"]?.[0] || null;
+
   return (
     <div className="min-h-screen bg-[#08080c]">
       {/* Hero Section */}
@@ -134,7 +140,7 @@ export default function PrivacyPage() {
 
               {/* Sidebar Ad Placement */}
               <div className="mt-8">
-                <NativeAdCard location="privacy_sidebar" variant="compact" />
+                <NativeAdCard location="privacy_sidebar" variant="compact" initialPromo={sidebarPromo} />
               </div>
             </aside>
 
@@ -304,7 +310,7 @@ export default function PrivacyPage() {
 
                 {/* Interstitial Inline Ad */}
                 <div className="py-2">
-                   <NativeAdCard location="privacy_policy_inline" variant="inline" />
+                   <NativeAdCard location="privacy_policy_inline" variant="inline" initialPromo={inlinePromo} />
                 </div>
 
                 {/* 7. Kontak Detailed */}

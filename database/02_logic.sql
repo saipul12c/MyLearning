@@ -763,11 +763,12 @@ DECLARE
   v_reg_deadline TIMESTAMPTZ;
   v_deadline TIMESTAMPTZ;
 BEGIN
-  -- Fetch event info
+  -- Fetch event info (FOR UPDATE prevents race condition on concurrent registration)
   SELECT max_slots, is_published, event_date, registration_deadline
   INTO v_max_capacity, v_is_published, v_event_date, v_reg_deadline
   FROM platform_events
-  WHERE id = NEW.event_id;
+  WHERE id = NEW.event_id
+  FOR UPDATE;
 
   -- Check published
   IF NOT v_is_published THEN
@@ -805,19 +806,35 @@ CREATE TRIGGER trg_check_event_capacity
 BEFORE INSERT ON event_registrations
 FOR EACH ROW EXECUTE FUNCTION check_event_capacity();
 
--- E3. TRIGGER FUNCTION: Sync registration_count on platform_events
+-- E3. TRIGGER FUNCTION: Sync registration counts (confirmed, waitlisted, total)
 CREATE OR REPLACE FUNCTION sync_event_registration_count()
 RETURNS TRIGGER AS $$
 DECLARE
   v_event_id UUID;
+  v_confirmed_count INTEGER;
+  v_waitlisted_count INTEGER;
 BEGIN
   v_event_id := COALESCE(NEW.event_id, OLD.event_id);
 
+  -- Count confirmed (registered/attended) registrations
+  SELECT COUNT(*) INTO v_confirmed_count
+  FROM event_registrations
+  WHERE event_id = v_event_id 
+    AND status IN ('registered', 'attended');
+
+  -- Count waitlisted registrations
+  SELECT COUNT(*) INTO v_waitlisted_count
+  FROM event_registrations
+  WHERE event_id = v_event_id 
+    AND status = 'waitlisted';
+
+  -- Update event with accurate counts
   UPDATE platform_events
-  SET registration_count = (
-    SELECT COUNT(*) FROM event_registrations
-    WHERE event_id = v_event_id AND status NOT IN ('cancelled', 'waitlisted')
-  )
+  SET 
+    confirmed_registrations = v_confirmed_count,
+    waitlisted_count = v_waitlisted_count,
+    registration_count = v_confirmed_count + v_waitlisted_count,
+    updated_at = NOW()
   WHERE id = v_event_id;
 
   RETURN NULL;
@@ -996,3 +1013,482 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION update_event_registration_proof TO authenticated;
 
+-- E7. RPC: Validate Event Manager (used by client-side updateRegistration for security)
+CREATE OR REPLACE FUNCTION validate_event_manager(
+  p_registration_id UUID
+)
+RETURNS JSON AS $$
+DECLARE
+  v_event_id UUID;
+  v_event_creator UUID;
+  v_caller_role TEXT;
+BEGIN
+  -- Get event_id from registration
+  SELECT event_id INTO v_event_id
+  FROM event_registrations
+  WHERE id = p_registration_id;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('allowed', false, 'reason', 'Registration not found.');
+  END IF;
+
+  -- Check if caller is admin
+  v_caller_role := (auth.jwt() -> 'app_metadata' ->> 'role');
+  IF v_caller_role = 'admin' THEN
+    RETURN json_build_object('allowed', true);
+  END IF;
+
+  -- Check if caller is instructor AND owns the event
+  IF v_caller_role = 'instructor' THEN
+    SELECT created_by INTO v_event_creator
+    FROM platform_events
+    WHERE id = v_event_id;
+
+    IF v_event_creator = auth.uid() THEN
+      RETURN json_build_object('allowed', true);
+    END IF;
+  END IF;
+
+  RETURN json_build_object('allowed', false, 'reason', 'Not authorized to manage this registration.');
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN json_build_object('allowed', false, 'reason', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION validate_event_manager TO authenticated;
+
+-- E8. TRIGGER: Auto-update updated_at on event_registrations
+CREATE OR REPLACE FUNCTION update_event_registration_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_event_registration_timestamp ON event_registrations;
+CREATE TRIGGER trg_update_event_registration_timestamp
+BEFORE UPDATE ON event_registrations
+FOR EACH ROW EXECUTE FUNCTION update_event_registration_timestamp();
+
+-- E9. HELPER: Get Accurate Event Capacity Info
+CREATE OR REPLACE FUNCTION get_event_capacity_info(p_event_id UUID)
+RETURNS TABLE(
+  total_capacity INTEGER,
+  confirmed_registrations INTEGER,
+  waitlisted_count INTEGER,
+  registration_count INTEGER,
+  available_slots INTEGER,
+  is_full BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_max_slots INTEGER;
+  v_confirmed_count INTEGER;
+  v_waitlisted_count INTEGER;
+  v_registration_count INTEGER;
+  v_available_slots INTEGER;
+BEGIN
+  SELECT 
+    pe.max_slots,
+    pe.confirmed_registrations,
+    pe.waitlisted_count,
+    pe.registration_count
+  INTO 
+    v_max_slots,
+    v_confirmed_count,
+    v_waitlisted_count,
+    v_registration_count
+  FROM platform_events pe
+  WHERE pe.id = p_event_id;
+
+  v_available_slots := GREATEST(0, COALESCE(v_max_slots, 100) - COALESCE(v_confirmed_count, 0));
+
+  RETURN QUERY SELECT 
+    COALESCE(v_max_slots, 100),
+    COALESCE(v_confirmed_count, 0),
+    COALESCE(v_waitlisted_count, 0),
+    COALESCE(v_registration_count, 0),
+    v_available_slots,
+    (v_available_slots = 0);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_event_capacity_info(UUID) TO authenticated;
+
+-- E10. UTILITY: Fix/Recalculate all event capacity counts
+-- Usage: SELECT * FROM fix_all_event_capacities();
+CREATE OR REPLACE FUNCTION fix_all_event_capacities()
+RETURNS TABLE(event_id UUID, confirmed INTEGER, waitlisted INTEGER, total INTEGER)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH event_counts AS (
+    SELECT 
+      pe.id,
+      COUNT(CASE WHEN er.status IN ('registered', 'attended') THEN 1 END)::INTEGER as confirmed_count,
+      COUNT(CASE WHEN er.status = 'waitlisted' THEN 1 END)::INTEGER as waitlisted_count,
+      COUNT(CASE WHEN er.status NOT IN ('cancelled') THEN 1 END)::INTEGER as total_count
+    FROM platform_events pe
+    LEFT JOIN event_registrations er ON pe.id = er.event_id
+    GROUP BY pe.id
+  )
+  UPDATE platform_events
+  SET 
+    confirmed_registrations = ec.confirmed_count,
+    waitlisted_count = ec.waitlisted_count,
+    registration_count = ec.total_count
+  FROM event_counts ec
+  WHERE platform_events.id = ec.id
+  RETURNING platform_events.id, ec.confirmed_count, ec.waitlisted_count, ec.total_count;
+END;
+$$;
+
+-- ============================================
+-- E11. MISSING FUNCTIONS ADDED FROM AUDIT
+-- ============================================
+
+-- 1. SEARCH: Ranked Course Search
+DROP FUNCTION IF EXISTS search_courses_ranked(TEXT, TEXT, INTEGER, INTEGER);
+CREATE OR REPLACE FUNCTION search_courses_ranked(
+  p_query TEXT,
+  p_category_slug TEXT DEFAULT 'all',
+  p_limit INTEGER DEFAULT 20,
+  p_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  id UUID,
+  title VARCHAR,
+  slug VARCHAR,
+  short_description VARCHAR,
+  thumbnail_url TEXT,
+  price INTEGER,
+  discount_price INTEGER,
+  admin_discount_price INTEGER,
+  level VARCHAR,
+  language VARCHAR,
+  duration_hours NUMERIC,
+  total_lessons INTEGER,
+  rating NUMERIC,
+  total_reviews INTEGER,
+  total_students INTEGER,
+  is_published BOOLEAN,
+  is_featured BOOLEAN,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
+  tags TEXT[],
+  category_id UUID,
+  category_name VARCHAR,
+  category_slug VARCHAR,
+  instructor_name VARCHAR,
+  instructor_slug VARCHAR,
+  instructor_avatar_url TEXT,
+  instructor_website_url TEXT,
+  instructor_linkedin_url TEXT,
+  rank REAL
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id,
+    c.title,
+    c.slug,
+    c.short_description,
+    c.thumbnail_url,
+    c.price,
+    c.discount_price,
+    c.admin_discount_price,
+    c.level,
+    c.language,
+    c.duration_hours,
+    c.total_lessons,
+    c.rating,
+    c.total_reviews,
+    c.total_students,
+    c.is_published,
+    c.is_featured,
+    c.created_at,
+    c.updated_at,
+    c.tags,
+    cat.id AS category_id,
+    cat.name AS category_name,
+    cat.slug AS category_slug,
+    i.name AS instructor_name,
+    i.slug AS instructor_slug,
+    i.avatar_url AS instructor_avatar_url,
+    i.website_url AS instructor_website_url,
+    i.linkedin_url AS instructor_linkedin_url,
+    ts_rank(c.title_description_vector, websearch_to_tsquery('indonesian', p_query)) AS rank
+  FROM courses c
+  JOIN categories cat ON c.category_id = cat.id
+  JOIN instructors i ON c.instructor_id = i.id
+  WHERE c.is_published = true
+    AND c.title_description_vector @@ websearch_to_tsquery('indonesian', p_query)
+    AND (p_category_slug = 'all' OR cat.slug = p_category_slug)
+  ORDER BY rank DESC, c.total_students DESC
+  LIMIT p_limit
+  OFFSET p_offset;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION search_courses_ranked TO anon, authenticated, service_role;
+
+-- 2. AD ANALYTICS: Revenue Summary
+DROP FUNCTION IF EXISTS get_ad_revenue_summary();
+CREATE OR REPLACE FUNCTION get_ad_revenue_summary()
+RETURNS TABLE (
+  total_revenue BIGINT,
+  total_active_campaigns BIGINT,
+  total_completed_campaigns BIGINT,
+  total_pending_requests BIGINT,
+  total_impressions BIGINT,
+  total_clicks BIGINT,
+  average_ctr NUMERIC
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COALESCE((SELECT SUM(total_price)::BIGINT FROM promotion_requests WHERE status = 'active' OR status = 'completed'), 0),
+    COALESCE((SELECT COUNT(*)::BIGINT FROM promotions WHERE is_active = true), 0),
+    COALESCE((SELECT COUNT(*)::BIGINT FROM promotions WHERE is_active = false), 0),
+    COALESCE((SELECT COUNT(*)::BIGINT FROM promotion_requests WHERE status IN ('draft', 'waiting_verification')), 0),
+    COALESCE((SELECT SUM(current_impressions)::BIGINT FROM promotions), 0),
+    COALESCE((SELECT SUM(current_clicks)::BIGINT FROM promotions), 0),
+    CASE 
+      WHEN COALESCE((SELECT SUM(current_impressions) FROM promotions), 0) > 0
+      THEN ROUND(
+        (COALESCE((SELECT SUM(current_clicks) FROM promotions), 0)::NUMERIC / 
+         COALESCE((SELECT SUM(current_impressions) FROM promotions), 1)::NUMERIC) * 100, 2
+      )
+      ELSE 0
+    END;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_ad_revenue_summary TO authenticated;
+
+-- 3. AD ANALYTICS: Monthly Revenue
+DROP FUNCTION IF EXISTS get_monthly_ad_revenue(INTEGER);
+CREATE OR REPLACE FUNCTION get_monthly_ad_revenue(p_year INTEGER)
+RETURNS TABLE (
+  month INTEGER,
+  month_name TEXT,
+  revenue BIGINT,
+  campaigns BIGINT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    EXTRACT(MONTH FROM pr.created_at)::INTEGER AS month,
+    TO_CHAR(pr.created_at, 'Mon') AS month_name,
+    COALESCE(SUM(pr.total_price)::BIGINT, 0) AS revenue,
+    COUNT(*)::BIGINT AS campaigns
+  FROM promotion_requests pr
+  WHERE EXTRACT(YEAR FROM pr.created_at) = p_year
+    AND pr.status IN ('active', 'completed')
+  GROUP BY EXTRACT(MONTH FROM pr.created_at), TO_CHAR(pr.created_at, 'Mon')
+  ORDER BY month;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_monthly_ad_revenue TO authenticated;
+
+-- 4. AD ANALYTICS: Top Performing Ads
+DROP FUNCTION IF EXISTS get_top_performing_ads(INTEGER);
+CREATE OR REPLACE FUNCTION get_top_performing_ads(p_limit INTEGER DEFAULT 10)
+RETURNS TABLE (
+  id UUID,
+  title VARCHAR,
+  location VARCHAR,
+  current_impressions INTEGER,
+  current_clicks INTEGER,
+  ctr NUMERIC,
+  is_active BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    p.id,
+    p.title,
+    p.location,
+    p.current_impressions,
+    p.current_clicks,
+    CASE 
+      WHEN p.current_impressions > 0 
+      THEN ROUND((p.current_clicks::NUMERIC / p.current_impressions::NUMERIC) * 100, 2)
+      ELSE 0
+    END AS ctr,
+    p.is_active
+  FROM promotions p
+  WHERE p.current_impressions > 0
+  ORDER BY p.current_clicks DESC, p.current_impressions DESC
+  LIMIT p_limit;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_top_performing_ads TO authenticated;
+
+-- 5. AD ANALYTICS: Revenue by Location
+DROP FUNCTION IF EXISTS get_ad_revenue_by_location();
+CREATE OR REPLACE FUNCTION get_ad_revenue_by_location()
+RETURNS TABLE (
+  location VARCHAR,
+  total_revenue BIGINT,
+  total_impressions BIGINT,
+  total_clicks BIGINT,
+  campaign_count BIGINT,
+  average_ctr NUMERIC
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    p.location,
+    COALESCE(SUM(pr.total_price)::BIGINT, 0) AS total_revenue,
+    COALESCE(SUM(p.current_impressions)::BIGINT, 0) AS total_impressions,
+    COALESCE(SUM(p.current_clicks)::BIGINT, 0) AS total_clicks,
+    COUNT(DISTINCT p.id)::BIGINT AS campaign_count,
+    CASE 
+      WHEN SUM(p.current_impressions) > 0
+      THEN ROUND((SUM(p.current_clicks)::NUMERIC / SUM(p.current_impressions)::NUMERIC) * 100, 2)
+      ELSE 0
+    END AS average_ctr
+  FROM promotions p
+  LEFT JOIN promotion_requests pr ON p.id = pr.id
+  GROUP BY p.location
+  ORDER BY total_revenue DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_ad_revenue_by_location TO authenticated;
+
+-- 6. AD ANALYTICS: Archived Promotions
+DROP FUNCTION IF EXISTS get_archived_promotions(INTEGER);
+CREATE OR REPLACE FUNCTION get_archived_promotions(p_limit INTEGER DEFAULT 50)
+RETURNS TABLE (
+  id UUID,
+  title VARCHAR,
+  location VARCHAR,
+  target_impressions INTEGER,
+  current_impressions INTEGER,
+  current_clicks INTEGER,
+  total_price INTEGER,
+  start_date TIMESTAMPTZ,
+  end_date TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    pa.id,
+    pa.title,
+    pa.location,
+    pa.target_impressions,
+    pa.current_impressions,
+    pa.current_clicks,
+    pa.total_price,
+    pa.start_date,
+    pa.end_date,
+    pa.archived_at
+  FROM promotion_archives pa
+  ORDER BY pa.archived_at DESC
+  LIMIT p_limit;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_archived_promotions TO authenticated;
+
+-- 7. AD ANALYTICS: Impression Logs
+DROP FUNCTION IF EXISTS get_impression_logs(UUID, INTEGER);
+CREATE OR REPLACE FUNCTION get_impression_logs(
+  p_promo_id UUID DEFAULT NULL,
+  p_limit INTEGER DEFAULT 100
+)
+RETURNS TABLE (
+  id UUID,
+  promo_id UUID,
+  user_id UUID,
+  ip_address TEXT,
+  created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    pil.id,
+    pil.promo_id,
+    pil.user_id,
+    pil.ip_address,
+    pil.created_at
+  FROM promotion_impression_logs pil
+  WHERE (p_promo_id IS NULL OR pil.promo_id = p_promo_id)
+  ORDER BY pil.created_at DESC
+  LIMIT p_limit;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_impression_logs TO authenticated;
+
+-- 8. AD ANALYTICS: Suspicious Activity Detection
+DROP FUNCTION IF EXISTS get_suspicious_ad_activity(INTEGER);
+CREATE OR REPLACE FUNCTION get_suspicious_ad_activity(p_threshold INTEGER DEFAULT 50)
+RETURNS TABLE (
+  ip_address TEXT,
+  user_id UUID,
+  impression_count BIGINT,
+  first_seen TIMESTAMPTZ,
+  last_seen TIMESTAMPTZ,
+  promo_ids UUID[]
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    pil.ip_address,
+    pil.user_id,
+    COUNT(*)::BIGINT AS impression_count,
+    MIN(pil.created_at) AS first_seen,
+    MAX(pil.created_at) AS last_seen,
+    ARRAY_AGG(DISTINCT pil.promo_id) AS promo_ids
+  FROM promotion_impression_logs pil
+  WHERE pil.created_at > NOW() - INTERVAL '1 hour'
+  GROUP BY pil.ip_address, pil.user_id
+  HAVING COUNT(*) >= p_threshold
+  ORDER BY impression_count DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_suspicious_ad_activity TO authenticated;
+
+-- 9. FIX: Missing Trigger for validate_ad_request_price
+-- Fungsi sudah ada di 02_logic.sql tapi trigger-nya
+-- tidak pernah di-CREATE. Ini celah keamanan!
+DROP TRIGGER IF EXISTS trg_validate_ad_request_price ON promotion_requests;
+CREATE TRIGGER trg_validate_ad_request_price
+BEFORE INSERT OR UPDATE OF target_impressions, duration_days, location, total_price ON promotion_requests
+FOR EACH ROW EXECUTE FUNCTION validate_ad_request_price();

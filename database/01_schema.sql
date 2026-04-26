@@ -33,6 +33,9 @@ ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS website_url TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS specialization TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS experience TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS twitter_url TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS instagram_url TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS github_url TEXT;
 
 DO $$ 
 BEGIN 
@@ -443,10 +446,13 @@ CREATE TABLE IF NOT EXISTS platform_events (
   category VARCHAR(50) DEFAULT 'Webinar',
   level VARCHAR(20) DEFAULT 'Starter',
   max_slots INTEGER DEFAULT 100,
-  registration_count INTEGER DEFAULT 0, -- Denormalized counter, maintained by trigger
+  registration_count INTEGER DEFAULT 0, -- Denormalized counter: total active (confirmed + waitlisted)
+  confirmed_registrations INTEGER DEFAULT 0, -- Only registered/attended (actual seats taken)
+  waitlisted_count INTEGER DEFAULT 0, -- Only waitlisted users
   speaker_info JSONB DEFAULT '[]'::jsonb,
   recording_url TEXT, -- Link rekaman setelah event selesai
   tags TEXT[] DEFAULT '{}', -- Multi-tag support
+  theme_color VARCHAR(50) DEFAULT '#7c3aed', -- Custom theme color for branding
   created_by UUID REFERENCES user_profiles(user_id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -455,6 +461,7 @@ CREATE TABLE IF NOT EXISTS platform_events (
 -- Ensure new columns exist for re-runnability on existing tables
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS event_end_date TIMESTAMPTZ;
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS registration_deadline TIMESTAMPTZ;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS banner_url TEXT;
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS registration_count INTEGER DEFAULT 0;
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS recording_url TEXT;
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
@@ -462,6 +469,9 @@ ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAUL
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS level VARCHAR(20) DEFAULT 'Starter';
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS max_slots INTEGER DEFAULT 100;
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS speaker_info JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS theme_color VARCHAR(50) DEFAULT '#7c3aed';
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS confirmed_registrations INTEGER DEFAULT 0;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS waitlisted_count INTEGER DEFAULT 0;
 
 -- Drop old constraint and recreate with 'waitlisted' status
 DO $$
@@ -488,12 +498,14 @@ CREATE TABLE IF NOT EXISTS event_registrations (
   certificate_url TEXT, -- Sertifikat kehadiran event
   waitlist_position INTEGER, -- Posisi waiting list (NULL = bukan waitlist)
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(event_id, user_id)
 );
 
 -- Ensure new columns exist for re-runnability
 ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS certificate_url TEXT;
 ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS waitlist_position INTEGER;
+ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Re-add the constraint with 'waitlisted' if table already existed
 DO $$
@@ -611,3 +623,30 @@ ON CONFLICT (id) DO NOTHING;
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
+
+-- ============================================
+-- 14. AD EVENTS
+-- Tracking dismissal & interaction analytics
+-- ============================================
+CREATE TABLE IF NOT EXISTS ad_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  promotion_id UUID REFERENCES promotions(id) ON DELETE CASCADE,
+  event_type VARCHAR(50) NOT NULL CHECK (event_type IN ('dismiss', 'click', 'view', 'hover')),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_events_promotion_id ON ad_events(promotion_id);
+CREATE INDEX IF NOT EXISTS idx_ad_events_type ON ad_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_ad_events_user_id ON ad_events(user_id);
+
+ALTER TABLE ad_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert ad events" ON ad_events;
+CREATE POLICY "Anyone can insert ad events" ON ad_events
+  FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can view ad events" ON ad_events;
+CREATE POLICY "Admins can view ad events" ON ad_events
+  FOR SELECT USING (is_admin());

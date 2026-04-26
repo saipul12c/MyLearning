@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import { getInstructorCourses, getInstructorStats } from "@/lib/instructor";
 import { type Course } from "@/lib/data";
 import Link from "next/link";
-import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink, Megaphone } from "lucide-react";
+import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink, Megaphone, Sparkles } from "lucide-react";
 import Skeleton from "./ui/Skeleton";
 import SignatureManager from "./SignatureManager";
+import NativeAdCard from "./NativeAdCard";
+import { getPromotionsBatch, type Promotion } from "@/lib/promotions";
 
 interface InstructorDashboardProps {
   userId: string;
@@ -16,16 +18,19 @@ interface InstructorDashboardProps {
 export default function InstructorDashboard({ userId, userName }: InstructorDashboardProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [stats, setStats] = useState({ totalStudents: 0, totalCourses: 0, rating: 0 });
+  const [promos, setPromos] = useState<Record<string, Promotion[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      const [coursesData, statsData] = await Promise.all([
+      const [coursesData, statsData, promosData] = await Promise.all([
         getInstructorCourses(userId),
-        getInstructorStats(userId)
+        getInstructorStats(userId),
+        getPromotionsBatch(["instructor_tips", "student_engagement"])
       ]);
       setCourses(coursesData);
       setStats(statsData);
+      setPromos(promosData);
       setLoading(false);
     };
     fetchData();
@@ -144,21 +149,37 @@ export default function InstructorDashboard({ userId, userName }: InstructorDash
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <div className="grid sm:grid-cols-2 gap-4 h-full">
-            <div className="card p-6 bg-purple-500/5 border-purple-500/10">
-               <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
-                 <Clock size={16} className="text-purple-400" /> Tips Instruktur
-               </h4>
-               <p className="text-slate-400 text-xs leading-relaxed">
-                 Pastikan materi video Anda memiliki kualitas audio yang jelas. Siswa cenderung memberikan rating lebih tinggi pada kursus dengan audio jernih.
-               </p>
+            <div className="card p-6 bg-purple-500/5 border-purple-500/10 flex flex-col justify-between">
+               <div>
+                 <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                   <Clock size={16} className="text-purple-400" /> Tips Instruktur
+                 </h4>
+                 <p className="text-slate-400 text-xs leading-relaxed mb-4">
+                   Pastikan materi video Anda memiliki kualitas audio yang jelas. Siswa cenderung memberikan rating lebih tinggi pada kursus dengan audio jernih.
+                 </p>
+               </div>
+               <NativeAdCard 
+                 location="instructor_tips" 
+                 variant="compact" 
+                 className="mt-auto" 
+                 initialPromo={promos["instructor_tips"]?.[0]} 
+               />
             </div>
-            <div className="card p-6 bg-cyan-500/5 border-cyan-500/10">
-               <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
-                 <Award size={16} className="text-cyan-400" /> Engagement Siswa
-               </h4>
-               <p className="text-slate-400 text-xs leading-relaxed">
-                 Gunakan Proyek Akhir untuk menguji kreativitas siswa. Nilai hasil kerja mereka untuk memberikan pengalaman belajar yang personal.
-               </p>
+            <div className="card p-6 bg-cyan-500/5 border-cyan-500/10 flex flex-col justify-between">
+               <div>
+                 <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                   <Award size={16} className="text-cyan-400" /> Engagement Siswa
+                 </h4>
+                 <p className="text-slate-400 text-xs leading-relaxed mb-4">
+                   Gunakan Proyek Akhir untuk menguji kreativitas siswa. Nilai hasil kerja mereka untuk memberikan pengalaman belajar yang personal.
+                 </p>
+               </div>
+               <NativeAdCard 
+                 location="student_engagement" 
+                 variant="compact" 
+                 className="mt-auto" 
+                 initialPromo={promos["student_engagement"]?.[0]} 
+               />
             </div>
           </div>
         </div>

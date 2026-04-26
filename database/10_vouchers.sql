@@ -3,15 +3,58 @@
 -- MyLearning - Voucher & Discount System v2.1
 -- ============================================
 
--- 1. Extend vouchers table with robust targeting & metadata
-ALTER TABLE IF EXISTS public.vouchers 
-ADD COLUMN IF NOT EXISTS category_slug TEXT,
-ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ DEFAULT NOW(),
-ADD COLUMN IF NOT EXISTS target_user_id UUID REFERENCES auth.users(id),
-ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
+-- 1. Vouchers Table (Full Definition)
+CREATE TABLE IF NOT EXISTS public.vouchers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  description TEXT,
+  discount_type VARCHAR(20) NOT NULL DEFAULT 'percentage' CHECK (discount_type IN ('percentage', 'fixed')),
+  discount_value NUMERIC NOT NULL DEFAULT 0,
+  min_purchase NUMERIC DEFAULT 0,
+  max_discount NUMERIC DEFAULT 0,
+  usage_limit INTEGER DEFAULT 0,  -- 0 = unlimited
+  used_count INTEGER DEFAULT 0,
+  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+  instructor_id UUID REFERENCES instructors(id) ON DELETE SET NULL,
+  is_active BOOLEAN DEFAULT true,
+  expiry_date TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  -- Extended columns
+  category_slug TEXT,
+  start_date TIMESTAMPTZ DEFAULT NOW(),
+  target_user_id UUID REFERENCES auth.users(id),
+  is_featured BOOLEAN DEFAULT false
+);
 
--- Add index for performance on targeting
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
+CREATE INDEX IF NOT EXISTS idx_vouchers_course_id ON vouchers(course_id);
+CREATE INDEX IF NOT EXISTS idx_vouchers_instructor_id ON vouchers(instructor_id);
 CREATE INDEX IF NOT EXISTS idx_vouchers_targeting ON vouchers(category_slug, target_user_id, is_active);
+
+-- 2. Voucher Usage Tracking (For user limits)
+CREATE TABLE IF NOT EXISTS public.voucher_usage (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  voucher_id UUID NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  enrollment_id UUID REFERENCES enrollments(id) ON DELETE SET NULL,
+  used_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(voucher_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_voucher_usage_voucher_id ON voucher_usage(voucher_id);
+CREATE INDEX IF NOT EXISTS idx_voucher_usage_user_id ON voucher_usage(user_id);
+
+ALTER TABLE voucher_usage ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users see own usage" ON voucher_usage;
+CREATE POLICY "Users see own usage" ON voucher_usage
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins view all usage" ON voucher_usage;
+CREATE POLICY "Admins view all usage" ON voucher_usage
+  FOR SELECT USING (is_admin());
 
 -- 2. New Table: Voucher Wallet (To track saved vouchers)
 CREATE TABLE IF NOT EXISTS public.voucher_wallet (

@@ -8,6 +8,7 @@ import {
   Globe, Briefcase, GraduationCap, Eye, Trash2,
   Ticket, ChevronRight, PieChart, ExternalLink
 } from "lucide-react";
+import SocialIcon from "@/app/components/SocialIcon";
 import Link from "next/link";
 import { uploadAvatar } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +27,9 @@ export default function ProfilePage() {
   
   // Professional State
   const [linkedin, setLinkedin] = useState(user?.linkedin || "");
+  const [twitter, setTwitter] = useState(user?.twitter || "");
+  const [instagram, setInstagram] = useState(user?.instagram || "");
+  const [github, setGithub] = useState(user?.github || "");
   const [website, setWebsite] = useState(user?.website || "");
   const [specialization, setSpecialization] = useState(user?.specialization || "");
   const [experience, setExperience] = useState(user?.experience || "");
@@ -57,7 +61,7 @@ export default function ProfilePage() {
     if (user.fullName) score += 20;
     if (user.phone) score += 15;
     if (user.bio) score += 15;
-    if (user.linkedin || user.website) score += 15;
+    if (user.linkedin || user.website || user.twitter || user.instagram || user.github) score += 15;
     if (user.specialization) score += 15;
     return Math.min(100, score);
   };
@@ -71,7 +75,8 @@ export default function ProfilePage() {
     
     const updates = { 
       fullName, phone, bio, avatarUrl,
-      linkedin, website, specialization, experience
+      linkedin, twitter, instagram, github,
+      website, specialization, experience
     };
 
     const result = await updateProfile(updates);
@@ -280,6 +285,31 @@ export default function ProfilePage() {
                       <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} className="input-premium !pl-12" placeholder="https://yourwebsite.com" />
                     </div>
                   </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Instagram</label>
+                    <div className="relative group">
+                      <SocialIcon name="instagram" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-pink-500 transition-colors" />
+                      <input type="url" value={instagram} onChange={(e) => setInstagram(e.target.value)} className="input-premium !pl-12" placeholder="https://instagram.com/..." />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Twitter (X)</label>
+                    <div className="relative group">
+                      <SocialIcon name="twitter" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                      <input type="url" value={twitter} onChange={(e) => setTwitter(e.target.value)} className="input-premium !pl-12" placeholder="https://twitter.com/..." />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">GitHub Profile</label>
+                   <div className="relative group">
+                     <SocialIcon name="github" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-white transition-colors" />
+                     <input type="url" value={github} onChange={(e) => setGithub(e.target.value)} className="input-premium !pl-12" placeholder="https://github.com/..." />
+                   </div>
                 </div>
 
                 <div className="space-y-2">

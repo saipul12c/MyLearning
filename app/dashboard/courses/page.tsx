@@ -7,9 +7,11 @@ import { useAuth } from "@/app/components/AuthContext";
 import { getInstructorProfile } from "@/lib/instructor";
 import { type Course, type Category } from "@/lib/data";
 import { formatPrice, formatNumber } from "@/lib/utils";
-import { getCoursesWithCount, getCategories } from "@/lib/courses";
+import { getCoursesWithCount, getCategories, getCourseSearchSuggestions } from "@/lib/courses";
 import { getLevelLabel, getLevelBg, enrollCourse, getActiveEnrollment, getExpiryDays } from "@/lib/enrollment";
 import { Star, Users, Clock, BookOpen, Search, X, AlertCircle, CheckCircle, Megaphone, Loader2, Sparkles, Filter } from "lucide-react";
+import SearchHighlight from "@/app/components/SearchHighlight";
+import SearchAutocomplete from "@/app/components/SearchAutocomplete";
 
 export default function DashboardCoursesPage() {
 
@@ -183,22 +185,23 @@ export default function DashboardCoursesPage() {
         </div>
       )}
 
-      {/* Search + Filters */}
+      {/* Search + Filters - Upgraded with Autocomplete */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <SearchAutocomplete 
             placeholder="Cari kursus dari jutaan pilihan..."
-            className="input !pl-11 !pr-10"
+            initialValue={search}
+            onSearch={(val) => {
+              setSearch(val);
+              setPage(1);
+            }}
+            getSuggestions={getCourseSearchSuggestions}
+            onSuggestionClick={(s) => {
+              setSearch(s.title);
+              setPage(1);
+            }}
+            historyKey="dashboard_courses_search_history"
           />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
-              <X size={16} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -242,7 +245,9 @@ export default function DashboardCoursesPage() {
                   </span>
                 </div>
                 <div className="p-4 space-y-3">
-                  <h3 className="text-white font-bold text-sm leading-snug line-clamp-2 group-hover:text-purple-300 transition-colors uppercase tracking-tight">{course.title}</h3>
+                  <h3 className="text-white font-bold text-sm leading-snug line-clamp-2 group-hover:text-purple-300 transition-colors uppercase tracking-tight">
+                    <SearchHighlight text={course.title} query={search} />
+                  </h3>
                   <p className="text-slate-500 text-xs font-medium">{course.instructor}</p>
                   <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400">
                     <span className="flex items-center gap-1"><Star size={12} className="text-yellow-400 fill-yellow-400" /> {course.rating}</span>

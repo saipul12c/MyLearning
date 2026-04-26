@@ -86,3 +86,67 @@ export async function getInstructorByFullName(fullName: string): Promise<PublicP
   if (!instructor) return null;
   return await getPublicProfile(instructor.user_id);
 }
+
+export async function getAllInstructors() {
+  const { data, error } = await supabase
+    .from("instructors")
+    .select("*, user_profiles(full_name, avatar_url, bio, role)")
+    .eq("is_verified", true)
+    .order("total_students", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching all instructors:", error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getInstructorReviews(instructorId: string) {
+  // Mengambil ulasan (reviews) yang terkait dengan kursus dari instruktur ini
+  // Kita harus melakukan inner join manual atau menggunakan postgrest syntax
+  
+  // 1. Get courses of instructor
+  const { data: courses } = await supabase.from('courses').select('id, title').eq('instructor_id', instructorId);
+  if (!courses || courses.length === 0) return [];
+  
+  const courseIds = courses.map(c => c.id);
+  
+  // 2. Get reviews for these courses
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, rating, comment, created_at, user_profiles(full_name, avatar_url)')
+    .in('course_id', courseIds)
+    .eq('is_approved', true)
+    .order('created_at', { ascending: false })
+    .limit(10);
+    
+  if (error) {
+    console.error("Error fetching instructor reviews:", error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getUserPublicHistory(userId: string) {
+  const { data: enrollments, error: enrError } = await supabase
+    .from('enrollments')
+    .select('id, course_title, course_slug, progress_percentage, enrolled_at, completed_at')
+    .eq('user_id', userId)
+    .in('payment_status', ['paid', 'completed'])
+    .order('enrolled_at', { ascending: false });
+    
+  if (enrError) console.error("Error fetching user history:", enrError);
+  
+  const { data: certificates, error: certError } = await supabase
+    .from('certificates')
+    .select('id, certificate_number, issued_at, course_title, instructor_name, certificate_url')
+    .eq('user_id', userId)
+    .order('issued_at', { ascending: false });
+    
+  if (certError) console.error("Error fetching user certificates:", certError);
+  
+  return {
+    enrollments: enrollments || [],
+    certificates: certificates || []
+  };
+}

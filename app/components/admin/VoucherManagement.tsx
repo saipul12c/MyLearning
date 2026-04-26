@@ -148,8 +148,13 @@ export default function VoucherManagement({ role }: Props) {
     setIsSaving(true);
     
     // Convert empty strings to null for DB
+    // Convert empty strings to null and remove frontend-only fields
+    const { bulk_count, bulk_prefix, is_active, is_featured, ...coreData } = formData;
+    
     const payload = {
-      ...formData,
+      ...coreData,
+      is_active,
+      is_featured,
       course_id: formData.course_id || null,
       category_slug: formData.category_slug || null,
       target_user_id: formData.target_user_id || null,
@@ -293,52 +298,82 @@ export default function VoucherManagement({ role }: Props) {
                     </div>
                  </div>
 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Target Penjualan</label>
-                       <select 
-                         className="input-premium w-full" 
-                         value={formData.course_id || formData.category_slug ? (formData.course_id ? 'course' : 'category') : 'all'}
-                         onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'all') setFormData({...formData, course_id: "", category_slug: ""});
-                            else if (val === 'course') setFormData({...formData, category_slug: ""});
-                            else if (val === 'category') setFormData({...formData, course_id: ""});
-                         }}
+                  <div className="space-y-4 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Pilih Detail Target (Pilih satu dari 10 pilihan cepat)</label>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                       {/* Option 1: All Platform */}
+                       <button 
+                         type="button"
+                         onClick={() => setFormData({...formData, course_id: "", category_slug: ""})}
+                         className={`p-3 rounded-xl border text-[10px] font-bold text-center transition-all ${
+                            formData.course_id === "" && formData.category_slug === "" 
+                            ? "bg-purple-500/20 border-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.2)]" 
+                            : "bg-white/5 border-white/5 text-slate-500 hover:bg-white/10"
+                         }`}
                        >
-                          <option value="all">{role === 'instructor' ? 'Seluruh Kursus Saya' : 'Seluruh Platform'}</option>
-                          <option value="course">Kursus Spesifik</option>
-                          {role === 'admin' && <option value="category">Kategori Spesifik</option>}
+                          <Ticket size={14} className="mx-auto mb-1 opacity-50" />
+                          SELURUH PLATFORM
+                       </button>
+
+                       {/* Options 2-4: Categories (Admin only) or first courses */}
+                       {(role === 'admin' ? categories.slice(0, 4) : []).map(cat => (
+                          <button 
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setFormData({...formData, category_slug: cat.slug, course_id: ""})}
+                            className={`p-3 rounded-xl border text-[10px] font-bold text-center transition-all ${
+                               formData.category_slug === cat.slug 
+                               ? "bg-amber-500/20 border-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.2)]" 
+                               : "bg-white/5 border-white/5 text-slate-500 hover:bg-white/10"
+                            }`}
+                          >
+                             <Filter size={14} className="mx-auto mb-1 opacity-50" />
+                             KAT: {cat.name.toUpperCase()}
+                          </button>
+                       ))}
+
+                       {/* Remaining options: Courses */}
+                       {courses.slice(0, role === 'admin' ? 10 - 1 - Math.min(4, categories.length) : 9).map(course => (
+                          <button 
+                            key={course.id}
+                            type="button"
+                            onClick={() => setFormData({...formData, course_id: course.id, category_slug: ""})}
+                            className={`p-3 rounded-xl border text-[10px] font-bold text-center transition-all line-clamp-2 overflow-hidden items-center justify-center flex flex-col ${
+                               formData.course_id === course.id 
+                               ? "bg-cyan-500/20 border-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.2)]" 
+                               : "bg-white/5 border-white/5 text-slate-500 hover:bg-white/10"
+                            }`}
+                          >
+                             <Search size={14} className="mx-auto mb-1 opacity-50" />
+                             {course.title.toUpperCase()}
+                          </button>
+                       ))}
+                    </div>
+
+                    {/* Search/Fallback for more items */}
+                    <div className="flex items-center gap-3 mt-2">
+                       <div className="text-[10px] text-slate-500 font-bold uppercase whitespace-nowrap">Atau cari lainnya:</div>
+                       <select 
+                          className="input-premium flex-1 !h-10 text-xs" 
+                          value={formData.course_id || formData.category_slug || ""}
+                          onChange={(e) => {
+                             const val = e.target.value;
+                             const isCat = categories.find(c => c.slug === val);
+                             if (val === "") setFormData({...formData, course_id: "", category_slug: ""});
+                             else if (isCat) setFormData({...formData, category_slug: val, course_id: ""});
+                             else setFormData({...formData, course_id: val, category_slug: ""});
+                          }}
+                       >
+                          <option value="">-- Cari Item Lainnya --</option>
+                          <optgroup label="Kategori">
+                             {categories.map(c => <option key={c.id} value={c.slug}>{c.name}</option>)}
+                          </optgroup>
+                          <optgroup label="Kursus">
+                             {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                          </optgroup>
                        </select>
                     </div>
-                    
-                    {formData.course_id !== undefined && (
-                      <div className="space-y-1.5">
-                         <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Pilih Detail Target</label>
-                         {formData.course_id === "" && formData.category_slug === "" ? (
-                            <div className="input-premium w-full flex items-center text-slate-500 italic text-xs">Berlaku untuk semua item</div>
-                         ) : formData.course_id !== "" || (formData.category_slug === "" && !formData.category_slug) ? (
-                            <select 
-                              className="input-premium w-full" 
-                              value={formData.course_id}
-                              onChange={(e) => setFormData({...formData, course_id: e.target.value})}
-                            >
-                               <option value="">-- Pilih Kursus --</option>
-                               {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                            </select>
-                         ) : (
-                            <select 
-                              className="input-premium w-full" 
-                              value={formData.category_slug}
-                              onChange={(e) => setFormData({...formData, category_slug: e.target.value})}
-                            >
-                               <option value="">-- Pilih Kategori --</option>
-                               {categories.map(c => <option key={c.id} value={c.slug}>{c.name}</option>)}
-                            </select>
-                         )}
-                      </div>
-                    )}
-                 </div>
+                  </div>
 
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">

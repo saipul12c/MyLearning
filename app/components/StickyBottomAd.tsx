@@ -5,7 +5,7 @@ import { getActivePromotions, type Promotion, trackImpression, trackClick, track
 import { X, ExternalLink, ArrowRight, Sparkles, Clock } from "lucide-react";
 import Image from "next/image";
 
-export default function StickyBottomAd() {
+export default function StickyBottomAd({ initialPromo = null }: { initialPromo?: Promotion | null }) {
   const [promo, setPromo] = useState<Promotion | null>(null);
   const [show, setShow] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -16,24 +16,19 @@ export default function StickyBottomAd() {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch ad
+  // Set ad from initialPromo
   useEffect(() => {
-    async function fetchAd() {
+    if (initialPromo) {
       try {
         // Check if already dismissed this session
         const dismissedAll = sessionStorage.getItem("sticky_ad_dismissed");
         if (dismissedAll) return;
-
-        const promos = await getActivePromotions("sticky_bottom");
-        if (promos.length > 0) {
-          setPromo(promos[0]);
-        }
+        setPromo(initialPromo);
       } catch {
         // Silently fail
       }
     }
-    fetchAd();
-  }, []);
+  }, [initialPromo]);
 
   // Show after 60% scroll
   useEffect(() => {

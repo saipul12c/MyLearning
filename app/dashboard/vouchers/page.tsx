@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
+import { fuzzyMatch } from "@/lib/search-utils";
+import SearchHighlight from "@/app/components/SearchHighlight";
 
 export default function VoucherWalletPage() {
   const { user } = useAuth();
@@ -47,9 +49,9 @@ export default function VoucherWalletPage() {
   };
 
   const filtered = vouchers.filter(v => 
-    v.code.toLowerCase().includes(filter.toLowerCase()) || 
-    (v.instructorName?.toLowerCase().includes(filter.toLowerCase())) ||
-    (v.categorySlug?.toLowerCase().includes(filter.toLowerCase()))
+    fuzzyMatch(v.code, filter) || 
+    (v.instructorName && fuzzyMatch(v.instructorName, filter)) ||
+    (v.categorySlug && fuzzyMatch(v.categorySlug, filter))
   );
 
   if (loading) {
@@ -178,7 +180,7 @@ export default function VoucherWalletPage() {
                         </div>
                         
                         <h3 className="text-white font-bold text-lg leading-tight uppercase tracking-tight">
-                           {voucher.instructorName ? `Voucher ${voucher.instructorName}` : "Diskon Spesial MyLearning"}
+                           <SearchHighlight text={voucher.instructorName ? `Voucher ${voucher.instructorName}` : "Diskon Spesial MyLearning"} query={filter} />
                         </h3>
                         
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
@@ -195,7 +197,9 @@ export default function VoucherWalletPage() {
 
                      <div className="flex items-center gap-3 mt-6">
                         <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between group/code transition-all hover:bg-white/10 shadow-inner">
-                           <code className="text-white font-mono font-black text-sm tracking-wider">{voucher.code}</code>
+                           <code className="text-white font-mono font-black text-sm tracking-wider">
+  <SearchHighlight text={voucher.code} query={filter} className="bg-purple-500/30 text-purple-200" />
+</code>
                            <button 
                               onClick={() => handleCopy(voucher.id, voucher.code)}
                               className="text-slate-500 hover:text-white transition-colors p-1"

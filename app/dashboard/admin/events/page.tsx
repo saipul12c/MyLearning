@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   Calendar, Plus, Search, Filter, MoreVertical, Edit2, Trash2, 
   Users, MapPin, ExternalLink, CheckCircle, XCircle, Loader2,
-  Clock, DollarSign, LayoutGrid, List as ListIcon, ChevronRight, Eye
+  Clock, DollarSign, LayoutGrid, List as ListIcon, ChevronRight, Eye, ArrowLeft, ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
 import { adminGetEvents, createEvent, updateEvent, deformatEvent, deleteEvent, PlatformEvent, generateSlug } from "@/lib/events";
@@ -22,6 +22,12 @@ export default function AdminEventsPage() {
   const [editingEvent, setEditingEvent] = useState<PlatformEvent | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const itemsPerPage = 10;
 
   // Form State
   const [formData, setFormData] = useState({
@@ -38,23 +44,38 @@ export default function AdminEventsPage() {
     isPublished: false,
     isFeatured: false,
     thumbnailUrl: "",
+    bannerUrl: "",
+    recordingUrl: "",
+    themeColor: "#7c3aed", // Default purple
     category: "Webinar",
     level: "Starter",
     maxSlots: 100,
     tags: [] as string[],
+    speakerInfo: [] as any[],
   });
 
   useEffect(() => {
     if (isAdmin) {
       fetchEvents();
     }
-  }, [isAdmin]);
+  }, [isAdmin, currentPage, searchQuery]);
 
   const fetchEvents = async () => {
     setLoading(true);
-    const data = await adminGetEvents();
-    setEvents(data);
-    setLoading(false);
+    try {
+      const result = await adminGetEvents({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchQuery || undefined,
+      });
+      setEvents(result.data);
+      setTotalEvents(result.total);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error("Fetch events error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenModal = (event?: PlatformEvent) => {
@@ -74,10 +95,14 @@ export default function AdminEventsPage() {
         isPublished: event.isPublished,
         isFeatured: event.isFeatured,
         thumbnailUrl: event.thumbnailUrl || "",
+        bannerUrl: event.bannerUrl || "",
+        recordingUrl: event.recordingUrl || "",
+        themeColor: event.themeColor || "#7c3aed",
         category: event.category || "Webinar",
         level: event.level || "Starter",
         maxSlots: event.maxSlots || 100,
         tags: event.tags || [],
+        speakerInfo: event.speakerInfo || [],
       });
     } else {
       setEditingEvent(null);
@@ -95,10 +120,14 @@ export default function AdminEventsPage() {
         isPublished: false,
         isFeatured: false,
         thumbnailUrl: "",
+        bannerUrl: "",
+        recordingUrl: "",
+        themeColor: "#7c3aed",
         category: "Webinar",
         level: "Starter",
         maxSlots: 100,
         tags: [],
+        speakerInfo: [],
       });
     }
     setIsModalOpen(true);
@@ -115,6 +144,7 @@ export default function AdminEventsPage() {
         await createEvent({ ...formData, createdBy: user.id });
       }
       setIsModalOpen(false);
+      setCurrentPage(1); // Reset to first page after creating new event
       fetchEvents();
     } catch (error) {
       console.error("Submit error:", error);
@@ -128,6 +158,7 @@ export default function AdminEventsPage() {
     try {
       await deleteEvent(id);
       setShowDeleteConfirm(null);
+      setCurrentPage(1); // Reset to first page after delete
       fetchEvents();
     } catch (error) {
       console.error("Delete error:", error);
@@ -135,10 +166,7 @@ export default function AdminEventsPage() {
     }
   };
 
-  const filteredEvents = events.filter(e => 
-    e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.slug.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEvents = events; // Already filtered by server via search parameter
 
   if (authLoading || loading) {
     return (
@@ -188,12 +216,10 @@ export default function AdminEventsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {[
-          { label: "Total Event", value: events.length, icon: Calendar, color: "text-blue-400", bg: "bg-blue-400/10" },
-          { label: "Aktif/Published", value: events.filter(e => e.isPublished).length, icon: CheckCircle, color: "text-emerald-400", bg: "bg-emerald-400/10" },
-          { label: "Draft", value: events.filter(e => !e.isPublished).length, icon: Clock, color: "text-amber-400", bg: "bg-amber-400/10" },
-          { label: "Total Pendaftar", value: events.reduce((acc, curr) => acc + (curr.registrationCount || 0), 0), icon: Users, color: "text-purple-400", bg: "bg-purple-400/10" },
+          { label: "Total Event", value: totalEvents, icon: Calendar, color: "text-blue-400", bg: "bg-blue-400/10" },
+          { label: "Total Pendaftar", value: events.reduce((acc, curr) => acc + (curr.registrationCount || 0), 0), icon: Users, color: "text-purple-400", bg: "bg-purple-400/10", note: "(halaman ini)" },
         ].map((stat, i) => (
           <div key={i} className="card p-6 border-white/5 bg-[#0c0c14] hover:border-white/10 transition-colors">
             <div className="flex items-center gap-4">
@@ -342,7 +368,50 @@ export default function AdminEventsPage() {
         </div>
       </div>
 
-      {/* Event Modal */}
+      {/* Pagination Controls */}
+      {totalEvents > 0 && (
+        <div className="card border-white/5 bg-[#0c0c14] p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="text-sm text-slate-400 font-medium">
+            Menampilkan <span className="text-white font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>-<span className="text-white font-bold">{Math.min(currentPage * itemsPerPage, totalEvents)}</span> dari <span className="text-white font-bold">{totalEvents}</span> event
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-3 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              title="Sebelumnya"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              {Array.from({ length: Math.ceil(totalEvents / itemsPerPage) }, (_, i) => i + 1).map(pageNum => (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`px-3 py-2 rounded-lg font-bold text-sm transition-all ${
+                    pageNum === currentPage 
+                      ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+            </div>
+            
+            <button 
+              onClick={() => setCurrentPage(p => p + 1)}
+              disabled={!hasMore}
+              className="p-3 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              title="Selanjutnya"
+            >
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
@@ -358,9 +427,23 @@ export default function AdminEventsPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+              <div className="mb-8 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: formData.themeColor }} />
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Pratinjau Warna Tema</span>
+                </div>
+                <input 
+                  type="color" 
+                  value={formData.themeColor}
+                  onChange={(e) => setFormData({ ...formData, themeColor: e.target.value })}
+                  className="w-12 h-8 rounded bg-transparent border-none cursor-pointer"
+                />
+              </div>
+
               <form id="event-form" onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-8">
                 {/* Information Column */}
                 <div className="space-y-6">
+                  {/* ... (existing fields) ... */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Judul Event</label>
                     <input 
@@ -414,6 +497,77 @@ export default function AdminEventsPage() {
                       placeholder="nextjs, supabase, webinar"
                       className="input !bg-white/5 !border-white/10"
                     />
+                  </div>
+
+                  {/* Speaker Management Section */}
+                  <div className="p-6 rounded-[2.5rem] bg-white/2 border border-white/5 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Manajemen Pembicara</h4>
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData({ ...formData, speakerInfo: [...formData.speakerInfo, { name: "", role: "", bio: "", avatarUrl: "" }] })}
+                        className="p-2 rounded-lg bg-white/5 text-purple-400 hover:bg-purple-500/10 transition-all border border-white/10"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {formData.speakerInfo.map((speaker, idx) => (
+                        <div key={idx} className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3 relative group">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const newList = [...formData.speakerInfo];
+                              newList.splice(idx, 1);
+                              setFormData({ ...formData, speakerInfo: newList });
+                            }}
+                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <input 
+                              type="text" 
+                              placeholder="Nama Pembicara" 
+                              value={speaker.name}
+                              onChange={(e) => {
+                                const newList = [...formData.speakerInfo];
+                                newList[idx].name = e.target.value;
+                                setFormData({ ...formData, speakerInfo: newList });
+                              }}
+                              className="input !py-2 !text-xs !bg-white/5"
+                            />
+                            <input 
+                              type="text" 
+                              placeholder="Role / Jabatan" 
+                              value={speaker.role}
+                              onChange={(e) => {
+                                const newList = [...formData.speakerInfo];
+                                newList[idx].role = e.target.value;
+                                setFormData({ ...formData, speakerInfo: newList });
+                              }}
+                              className="input !py-2 !text-xs !bg-white/5"
+                            />
+                          </div>
+                          <input 
+                            type="text" 
+                            placeholder="URL Foto Avatar" 
+                            value={speaker.avatarUrl}
+                            onChange={(e) => {
+                              const newList = [...formData.speakerInfo];
+                              newList[idx].avatarUrl = e.target.value;
+                              setFormData({ ...formData, speakerInfo: newList });
+                            }}
+                            className="input !py-2 !text-xs !bg-white/5"
+                          />
+                        </div>
+                      ))}
+                      {formData.speakerInfo.length === 0 && (
+                        <p className="text-[10px] text-center text-slate-600 font-bold uppercase tracking-widest py-4">Belum ada pembicara ditambahkan.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -523,12 +677,34 @@ export default function AdminEventsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Thumbnail URL</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Thumbnail URL (Grid Card)</label>
                     <input 
                       type="text" 
                       value={formData.thumbnailUrl}
                       onChange={(e) => setFormData({ ...formData, thumbnailUrl: e.target.value })}
                       placeholder="URL gambar banner acara"
+                      className="input !bg-white/5 !border-white/10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Banner URL (Hero Detail Page)</label>
+                    <input 
+                      type="text" 
+                      value={formData.bannerUrl}
+                      onChange={(e) => setFormData({ ...formData, bannerUrl: e.target.value })}
+                      placeholder="URL gambar hero besar"
+                      className="input !bg-white/5 !border-white/10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Link Rekaman (Setelah Selesai)</label>
+                    <input 
+                      type="text" 
+                      value={formData.recordingUrl}
+                      onChange={(e) => setFormData({ ...formData, recordingUrl: e.target.value })}
+                      placeholder="Link YouTube/GDrive Rekaman"
                       className="input !bg-white/5 !border-white/10"
                     />
                   </div>

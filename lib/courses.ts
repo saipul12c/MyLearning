@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { supabase } from "./supabase";
+import { normalizeQuery } from "./search-utils";
 import { 
   type Course, 
   type Lesson, 
@@ -222,7 +223,35 @@ export async function getCoursesWithCount(options: {
   }
 
   if (search) {
-    query = query.textSearch('title_description_vector', search, {
+    const cleanQuery = normalizeQuery(search);
+    
+    // Attempt to use Ranked Search RPC for better relevancy
+    const { data: rankedData, error: rpcError, count: rpcCount } = await supabase.rpc('search_courses_ranked', {
+      p_query: cleanQuery,
+      p_category_slug: category,
+      p_limit: pageSize,
+      p_offset: from
+    }, { count: 'exact' });
+
+    if (!rpcError && rankedData) {
+      return {
+        data: (rankedData || []).map((db: any) => mapDbToCourse({
+          ...db,
+          categories: { id: db.category_id, name: db.category_name, slug: db.category_slug },
+          instructors: { 
+            name: db.instructor_name, 
+            slug: db.instructor_slug, 
+            avatar_url: db.instructor_avatar_url,
+            website_url: db.instructor_website_url,
+            linkedin_url: db.instructor_linkedin_url
+          }
+        })),
+        count: rpcCount || 0
+      };
+    }
+
+    // Fallback to standard TextSearch if RPC fails or is not installed
+    query = query.textSearch('title_description_vector', cleanQuery, {
       config: 'indonesian',
       type: 'websearch'
     });
@@ -277,7 +306,7 @@ export async function getAllCoursesAdmin(): Promise<Course[]> {
 export async function getCourseCount(): Promise<number> {
   const { count, error } = await supabase
     .from("courses")
-    .select("*", { count: 'exact', head: true })
+    .select("id", { count: 'exact', head: true })
     .eq("is_published", true);
   
   if (error) {
@@ -439,12 +468,14 @@ export const getCourseBySlug = cache(async (slug: string): Promise<Course | null
     `)
     .eq("slug", slug)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    if (error) console.error(`Error fetching course ${slug} from Supabase:`, error);
+  if (error) {
+    console.error(`Error fetching course ${slug} from Supabase:`, error);
     return null;
-  };
+  }
+
+  if (!data) return null;
   
   const course = mapDbToCourse(data);
   
@@ -478,12 +509,14 @@ export const getCourseById = cache(async (id: string): Promise<Course | null> =>
     `)
     .eq("id", id)
     .order('order_index', { referencedTable: 'lessons', ascending: true })
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    if (error) console.error(`Error fetching course ID ${id} from Supabase:`, error);
+  if (error) {
+    console.error(`Error fetching course ID ${id} from Supabase:`, error);
     return null;
-  };
+  }
+
+  if (!data) return null;
   
   const course = mapDbToCourse(data);
   if (data.lessons) {
@@ -672,9 +705,9 @@ export async function getSystemStats() {
       { count: instructorCount },
       { data: ratingData }
     ] = await Promise.all([
-      supabase.from("user_profiles").select("*", { count: 'exact', head: true }).eq('role', 'user'),
-      supabase.from("courses").select("*", { count: 'exact', head: true }).eq('is_published', true),
-      supabase.from("instructors").select("*", { count: 'exact', head: true }),
+      supabase.from("user_profiles").select("id", { count: 'exact', head: true }).eq('role', 'user'),
+      supabase.from("courses").select("id", { count: 'exact', head: true }).eq('is_published', true),
+      supabase.from("instructors").select("id", { count: 'exact', head: true }),
       supabase.from("courses").select("rating").eq("is_published", true)
     ]);
 
@@ -700,4 +733,31 @@ export async function getSystemStats() {
       ratingPercentage: 96
     };
   }
+}
+
+/**
+ * Fetches quick suggestions for search autocomplete.
+ * Optimized for speed, returns limited fields.
+ */
+export async function getCourseSearchSuggestions(query: string, limit = 5): Promise<{id: string, title: string, slug: string}[]> {
+  if (!query || query.length < 2) return [];
+  
+  const cleanQuery = normalizeQuery(query);
+  
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id, title, slug")
+    .textSearch("title_description_vector", cleanQuery, {
+      config: 'indonesian',
+      type: 'websearch'
+    })
+    .eq("is_published", true)
+    .limit(limit);
+
+  if (error) {
+    console.error("Course suggestions error:", error);
+    return [];
+  }
+
+  return (data || []) as {id: string, title: string, slug: string}[];
 }

@@ -3,7 +3,9 @@ import { Mail, Phone, MapPin } from "lucide-react";
 import Logo from "./Logo";
 import NativeAdCard from "./NativeAdCard";
 
-export default function Footer() {
+import { type Promotion } from "@/lib/promotions";
+
+export default function Footer({ initialPromo = null }: { initialPromo?: Promotion | null }) {
   return (
     <footer className="relative mt-auto border-t border-white/5">
       {/* Gradient divider */}
@@ -107,7 +109,7 @@ export default function Footer() {
 
         {/* Partner Pilihan - Native Ad Slot */}
         <div className="mt-10 pt-8 border-t border-white/5">
-          <NativeAdCard location="footer_native" variant="compact" className="max-w-lg" />
+          <NativeAdCard location="footer_native" variant="compact" className="max-w-lg" initialPromo={initialPromo} />
         </div>
 
         {/* Bottom bar */}

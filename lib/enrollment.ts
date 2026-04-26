@@ -145,7 +145,7 @@ export async function enrollCourse(
     // 1. Check for existing enrollment
     const { data: existing } = await supabase
       .from("enrollments")
-      .select("*")
+      .select("id")
       .eq("user_id", userId)
       .eq("course_slug", courseSlug)
       .in("payment_status", ["paid", "waiting_verification", "pending"])
@@ -158,7 +158,7 @@ export async function enrollCourse(
     // 2. Check for any active enrollment (Limit 1 active)
     const { data: active } = await supabase
       .from("enrollments")
-      .select("*")
+      .select("id, course_title, course_slug")
       .eq("user_id", userId)
       .eq("payment_status", "paid")
       .maybeSingle();
@@ -357,7 +357,7 @@ export async function verifyPayment(
 
     const { data: enr, error: fetchError } = await supabase
       .from("enrollments")
-      .select("*")
+      .select("id, payment_retry_count, voucher_id, course_id, payment_amount, discount_amount, user_id, course_title")
       .eq("id", enrollmentId)
       .single();
 
@@ -465,9 +465,9 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
 
     // Batch fetch all progress in parallel
     const [lessonData, quizData, assignmentData] = await Promise.all([
-      supabase.from("lesson_progress").select("*").in("enrollment_id", enrollmentIds).eq("is_completed", true),
-      supabase.from("quiz_progress").select("*").in("enrollment_id", enrollmentIds),
-      supabase.from("assignment_progress").select("*").in("enrollment_id", enrollmentIds)
+      supabase.from("lesson_progress").select("enrollment_id, lesson_id").in("enrollment_id", enrollmentIds).eq("is_completed", true),
+      supabase.from("quiz_progress").select("enrollment_id, quiz_id, score, answers, passed, submitted_at").in("enrollment_id", enrollmentIds),
+      supabase.from("assignment_progress").select("enrollment_id, assignment_id, passed, score, submission_url, submission_notes, admin_feedback").in("enrollment_id", enrollmentIds)
     ]);
 
     const lessonProgressMap = (lessonData.data || []).reduce((acc: any, curr) => {
@@ -898,7 +898,7 @@ export async function saveContactMessage(
 }
 
 export async function getContactMessages(): Promise<ContactMessage[]> {
-  const { data } = await supabase.from("contact_messages").select("*").order("created_at", { ascending: false });
+  const { data } = await supabase.from("contact_messages").select("id, name, email, subject, message, status, created_at, admin_notes").order("created_at", { ascending: false });
   return (data || []).map(m => ({
     id: m.id,
     name: m.name,

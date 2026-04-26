@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "./components/AuthContext";
 import LayoutWrapper from "./components/LayoutWrapper";
 import ClientInitializer from "./components/ClientInitializer";
+import { getPromotionsBatch } from "@/lib/promotions";
 
 // Disabling next/font/google due to build-time connection issues.
 // Font is now handled in globals.css via standard @import or system fallback.
@@ -27,17 +28,28 @@ export const metadata: Metadata = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const adBatch = await getPromotionsBatch(["global_announcement", "sticky_bottom", "footer_native"]);
+  const globalPromos = adBatch["global_announcement"] || [];
+  const stickyPromo = adBatch["sticky_bottom"]?.[0] || null;
+  const footerPromo = adBatch["footer_native"]?.[0] || null;
+
   return (
     <html lang="id" className={`${inter.variable} antialiased`} data-scroll-behavior="smooth">
       <body className="min-h-screen flex flex-col">
         <AuthProvider>
           <ClientInitializer />
-          <LayoutWrapper>{children}</LayoutWrapper>
+          <LayoutWrapper 
+            globalPromos={globalPromos} 
+            stickyPromo={stickyPromo} 
+            footerPromo={footerPromo}
+          >
+            {children}
+          </LayoutWrapper>
         </AuthProvider>
       </body>
     </html>

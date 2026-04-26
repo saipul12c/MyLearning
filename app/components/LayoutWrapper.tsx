@@ -7,14 +7,23 @@ import LiveCS from "./LiveCS";
 import AnnouncementBar from "./AnnouncementBar";
 import StickyBottomAd from "./StickyBottomAd";
 
-export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
+import { type Promotion } from "@/lib/promotions";
+
+interface LayoutWrapperProps {
+  children: React.ReactNode;
+  globalPromos?: Promotion[];
+  stickyPromo?: Promotion | null;
+  footerPromo?: Promotion | null;
+}
+
+export default function LayoutWrapper({ children, globalPromos = [], stickyPromo = null, footerPromo = null }: LayoutWrapperProps) {
   const pathname = usePathname();
   const isDashboard = pathname.startsWith("/dashboard");
 
   if (isDashboard) {
     return (
       <>
-        <AnnouncementBar />
+        <AnnouncementBar initialPromos={globalPromos} />
         <div className="flex flex-col min-h-screen">
             {children}
         </div>
@@ -25,12 +34,12 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex flex-col min-h-screen">
-      <AnnouncementBar />
+      <AnnouncementBar initialPromos={globalPromos} />
       <Navbar />
       <main className="flex-1">{children}</main>
-      <Footer />
+      <Footer initialPromo={footerPromo} />
       <LiveCS />
-      <StickyBottomAd />
+      <StickyBottomAd initialPromo={stickyPromo} />
     </div>
   );
 }

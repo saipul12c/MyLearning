@@ -12,6 +12,7 @@ import { type Course, type Lesson } from "@/lib/data";
 import { formatPrice, formatNumber, formatDuration } from "@/lib/utils";
 import { getCourseAssessments, type CourseAssessments } from "@/lib/assessments";
 import CourseEnrollButton from "./CourseEnrollButton";
+import { recordInterest } from "@/lib/interests";
 import PreviewModal from "@/app/components/PreviewModal";
 import ReviewSection from "@/app/components/ReviewSection";
 import { getActivePromotions, type Promotion } from "@/lib/promotions";
@@ -52,7 +53,12 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
       setPromotions(promosData);
     }
     loadData();
-  }, [course.slug]);
+
+    // Track user interest in this category
+    if (course.categoryId) {
+      recordInterest(course.categoryId);
+    }
+  }, [course.slug, course.categoryId]);
 
   const liveStats = {
     rating: course.rating,

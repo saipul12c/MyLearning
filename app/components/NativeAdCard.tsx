@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { getActivePromotions, type Promotion, type PromotionLocation, trackImpression, trackClick, trackDismiss, isAdDismissed } from "@/lib/promotions";
 import { ExternalLink, ArrowRight, X, Sparkles } from "lucide-react";
 import Image from "next/image";
+import { getTopInterests, applyInterestDecay } from "@/lib/interests";
 
 interface NativeAdCardProps {
   location: PromotionLocation;
@@ -30,7 +31,11 @@ export default function NativeAdCard({ location, categoryId, className = "", var
 
     async function fetchAd() {
       try {
-        const promos = await getActivePromotions(location, categoryId);
+        // Apply decay to keep interests fresh
+        applyInterestDecay();
+        const interests = getTopInterests(3);
+
+        const promos = await getActivePromotions(location, categoryId, interests);
         const validPromo = promos.find(p => !isAdDismissed(p.id));
         setPromo(validPromo || null);
       } catch {
@@ -152,33 +157,46 @@ export default function NativeAdCard({ location, categoryId, className = "", var
           onClick={handleClick}
           target={promo.isExternal ? "_blank" : "_self"}
           rel={promo.isExternal ? "noopener noreferrer" : ""}
-          className="block relative overflow-hidden rounded-[2rem] border border-white/10 hover:border-purple-500/30 transition-all duration-500 bg-[#0c0c14] shadow-2xl hover:shadow-[0_0_40px_rgba(124,58,237,0.2)]"
+          className="block relative overflow-hidden rounded-[2.5rem] border border-white/10 hover:border-purple-500/30 transition-all duration-500 bg-[#0c0c14] shadow-2xl hover:shadow-[0_0_50px_rgba(124,58,237,0.15)]"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-cyan-500/10 group-hover:opacity-100 opacity-50 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5 group-hover:opacity-100 opacity-30 transition-opacity duration-500" />
           
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-8 md:p-12">
-            <div className="flex-1 space-y-4 min-w-0 text-center md:text-left">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-white backdrop-blur-md shadow-[0_0_15px_rgba(124,58,237,0.3)]">
-                <Sparkles size={12} className="text-purple-400" />
-                {promo.badgeText || "FEATURED PROMOTION"}
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-10 p-10 md:p-14">
+            <div className="flex-1 space-y-5 min-w-0 text-center md:text-left">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">
+                <Sparkles size={12} />
+                {promo.badgeText || "OFFICIAL PARTNER"}
               </div>
-              <h3 className="text-white font-black text-2xl md:text-4xl leading-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-cyan-400 transition-all duration-300">
+              <h3 className="text-white font-black text-3xl md:text-5xl leading-tight transition-all duration-300">
                  {promo.title}
               </h3>
-              <p className="text-slate-400 text-sm md:text-base line-clamp-3 leading-relaxed max-w-2xl">
+              <p className="text-slate-400 text-sm md:text-lg line-clamp-2 leading-relaxed max-w-2xl">
                  {promo.description}
               </p>
               
               <div className="pt-4 flex justify-center md:justify-start">
-                 <div className="btn-primary !px-8 !py-3.5 flex items-center gap-2 group/btn shadow-lg shadow-purple-500/20 text-xs font-black tracking-widest uppercase">
-                    Pelajari Lebih Lanjut
-                    {promo.isExternal ? <ExternalLink size={14} /> : <ArrowRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />}
+                 <div className="btn-primary !px-10 !py-4 flex items-center gap-3 group/btn shadow-xl shadow-purple-500/20 text-xs font-black tracking-widest uppercase rounded-2xl">
+                    Jelajahi Sekarang
+                    {promo.isExternal ? <ExternalLink size={16} /> : <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />}
                  </div>
               </div>
             </div>
 
-            {promo.imageUrl && (
-              <div className="relative w-full md:w-[400px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl skew-y-0 md:-skew-y-3 md:group-hover:skew-y-0 transition-transform duration-700">
+
+            {promo.videoUrl ? (
+              <div className="relative w-full md:w-[450px] aspect-video rounded-3xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+                <video
+                  src={promo.videoUrl}
+                  poster={promo.imageUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                />
+              </div>
+            ) : promo.imageUrl && (
+              <div className="relative w-full md:w-[450px] aspect-video rounded-3xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
                 <Image
                   src={promo.imageUrl}
                   alt={promo.title}
@@ -209,13 +227,25 @@ export default function NativeAdCard({ location, categoryId, className = "", var
         onClick={handleClick}
         target={promo.isExternal ? "_blank" : "_self"}
         rel={promo.isExternal ? "noopener noreferrer" : ""}
-        className="block relative overflow-hidden rounded-2xl border border-white/5 hover:border-purple-500/20 transition-all duration-500 bg-gradient-to-br from-purple-900/[0.06] via-transparent to-cyan-900/[0.04]"
+        className="block relative overflow-hidden rounded-2xl border border-white/5 hover:border-purple-500/40 transition-all duration-500 bg-gradient-to-br from-purple-500/[0.03] via-[#0c0c14] to-cyan-500/[0.03] shadow-xl hover:shadow-purple-500/5 group/ad"
       >
         <div className="absolute inset-0 bg-grid-white/[0.01] pointer-events-none" />
         <div className="absolute -top-20 -right-20 w-60 h-60 bg-purple-500/5 blur-[80px] rounded-full group-hover:bg-purple-500/10 transition-all duration-700 pointer-events-none" />
 
         <div className="relative z-10 flex flex-col sm:flex-row items-center gap-6 p-6 sm:p-8">
-          {promo.imageUrl && (
+          {promo.videoUrl ? (
+            <div className="relative w-full sm:w-36 h-28 sm:h-24 rounded-xl overflow-hidden border border-white/5 shrink-0 shadow-lg bg-black">
+              <video
+                src={promo.videoUrl}
+                poster={promo.imageUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+            </div>
+          ) : promo.imageUrl && (
             <div className="relative w-full sm:w-36 h-28 sm:h-24 rounded-xl overflow-hidden border border-white/5 shrink-0 shadow-lg">
               <Image
                 src={promo.imageUrl}

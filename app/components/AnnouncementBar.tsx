@@ -5,7 +5,7 @@ import { getActivePromotions, Promotion, trackImpression, dismissAdPersistent, i
 import { Sparkles, X, ArrowRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
-export default function AnnouncementBar() {
+export default function AnnouncementBar({ initialPromos = [] }: { initialPromos?: Promotion[] }) {
   const [promos, setPromos] = useState<Promotion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
@@ -13,14 +13,11 @@ export default function AnnouncementBar() {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
-    async function fetchPromos() {
-      const allPromos = await getActivePromotions("global_announcement");
-      // Filter out persistently dismissed ones
-      const validPromos = allPromos.filter(p => !isAdDismissedPersistent(p.id));
+    if (initialPromos && initialPromos.length > 0) {
+      const validPromos = initialPromos.filter(p => !isAdDismissedPersistent(p.id));
       setPromos(validPromos);
     }
-    fetchPromos();
-  }, []);
+  }, [initialPromos]);
 
   const promo = promos[currentIndex] || null;
 
