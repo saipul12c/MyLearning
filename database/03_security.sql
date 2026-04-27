@@ -157,6 +157,8 @@ CREATE POLICY "Users can manage own discussions" ON discussions FOR UPDATE USING
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users manage own notifications" ON notifications;
 CREATE POLICY "Users manage own notifications" ON notifications FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins can manage all notifications" ON notifications;
+CREATE POLICY "Admins can manage all notifications" ON notifications FOR ALL USING (is_admin());
 
 -- 9. ASSESSMENTS
 ALTER TABLE assessment_definitions ENABLE ROW LEVEL SECURITY;
@@ -315,6 +317,26 @@ CREATE POLICY "Instructors can manage registrations of own events" ON event_regi
 
 DROP POLICY IF EXISTS "Admins can manage all registrations" ON event_registrations;
 CREATE POLICY "Admins can manage all registrations" ON event_registrations FOR ALL USING (is_admin());
+-- 16b. EVENT SUBMISSIONS Policies
+ALTER TABLE event_submissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own submissions" ON event_submissions;
+CREATE POLICY "Users can view own submissions" ON event_submissions FOR SELECT USING (auth.uid() = user_id OR is_admin());
+DROP POLICY IF EXISTS "Users can submit themselves" ON event_submissions;
+CREATE POLICY "Users can submit themselves" ON event_submissions FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own submissions" ON event_submissions;
+CREATE POLICY "Users can update own submissions" ON event_submissions FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Instructors can manage submissions of own events" ON event_submissions;
+CREATE POLICY "Instructors can manage submissions of own events" ON event_submissions
+  FOR ALL USING (
+    is_instructor() AND EXISTS (
+      SELECT 1 FROM platform_events
+      WHERE platform_events.id = event_submissions.event_id
+      AND platform_events.created_by = auth.uid()
+    )
+  );
+DROP POLICY IF EXISTS "Admins can manage all submissions" ON event_submissions;
+CREATE POLICY "Admins can manage all submissions" ON event_submissions FOR ALL USING (is_admin());
 
 -- ======================================================
 -- 13. STORAGE POLICIES

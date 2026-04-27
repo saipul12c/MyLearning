@@ -7,7 +7,7 @@ import { useAuth } from "@/app/components/AuthContext";
 import {
   BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut, Bell,
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
-  Phone, Ticket, Megaphone, History, Calendar
+  Phone, Ticket, Megaphone, History, Calendar, Mail
 } from "lucide-react";
 import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
@@ -72,6 +72,7 @@ const adminMenuGroups = [
     title: "Sistem",
     items: [
       { href: "/dashboard/admin/announcements", label: "Siaran Pengumuman", icon: Megaphone },
+      { href: "/dashboard/admin/email-logs", label: "Email Logs", icon: Mail },
       { href: "/dashboard/admin/settings", label: "Pengaturan", icon: Settings },
     ]
   }

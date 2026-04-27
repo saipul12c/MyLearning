@@ -533,6 +533,66 @@ export async function getUserEnrollments(userId: string): Promise<Enrollment[]> 
   }
 }
 
+/**
+ * Fetches all pending assignments and final projects across all courses for grading.
+ * Primarily for Admin and Instructors.
+ */
+export async function getGradingQueue(instructorId?: string): Promise<{
+  assignments: any[];
+  projects: any[];
+}> {
+  try {
+    // 1. Fetch Pending Final Projects
+    // Criteria: final_project_url is not null AND final_project_completed is false
+    let projectQuery = supabase
+      .from("enrollments")
+      .select(`
+        id, user_id, course_id, course_title, enrolled_at,
+        final_project_url, final_project_notes, final_project_feedback,
+        user:user_profiles(full_name, avatar_url),
+        course:courses(instructor_id)
+      `)
+      .not("final_project_url", "is", null)
+      .eq("final_project_completed", false);
+
+    if (instructorId) {
+      projectQuery = projectQuery.eq("course.instructor_id", instructorId);
+    }
+
+    // 2. Fetch Pending Assignments
+    // We look for assignment_progress where passed is false but submission_url is not null
+    let assignmentQuery = supabase
+      .from("assignment_progress")
+      .select(`
+        id, enrollment_id, user_id, assignment_id, score, passed, 
+        submission_url, submission_notes, admin_feedback, submitted_at,
+        user:user_profiles(full_name, avatar_url),
+        enrollment:enrollments(course_title, course_id, course:courses(instructor_id))
+      `)
+      .not("submission_url", "is", null)
+      .eq("passed", false);
+
+    const [projRes, assRes] = await Promise.all([
+      projectQuery.order("enrolled_at", { ascending: true }),
+      assignmentQuery.order("submitted_at", { ascending: true })
+    ]);
+
+    // Filter assignments by instructor if needed (client side if needed or refine query)
+    let assignments = assRes.data || [];
+    if (instructorId) {
+      assignments = assignments.filter((a: any) => a.enrollment?.course?.instructor_id === instructorId);
+    }
+
+    return {
+      assignments,
+      projects: projRes.data || []
+    };
+  } catch (err) {
+    console.error("Error fetching grading queue:", err);
+    return { assignments: [], projects: [] };
+  }
+}
+
 export async function getActiveEnrollment(userId: string): Promise<Enrollment | null> {
   const all = await getUserEnrollments(userId);
   return all.find(e => e.status === "active") || null;
@@ -604,6 +664,61 @@ export async function getAllEnrollmentsAdmin(
   } catch (error: any) {
     console.error("Admin Enrollment Fetch Error:", error);
     return { data: [], totalCount: 0, error: error.message };
+  }
+}
+
+/**
+ * Grade a student's submission (Assignment or Final Project)
+ */
+export async function gradeSubmission(options: {
+  type: 'assignment' | 'project';
+  id: string; // assignment_progress id OR enrollment id
+  passed: boolean;
+  score?: number;
+  feedback: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    if (options.type === 'assignment') {
+      const { error } = await supabase
+        .from("assignment_progress")
+        .update({
+          passed: options.passed,
+          score: options.score || (options.passed ? 100 : 0),
+          admin_feedback: options.feedback,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", options.id);
+      
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("enrollments")
+        .update({
+          final_project_completed: options.passed,
+          final_project_feedback: options.feedback,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", options.id);
+      
+      if (error) throw error;
+    }
+
+    // Trigger progress update side-effects
+    const enrollmentId = options.type === 'project' 
+      ? options.id 
+      : (await supabase.from("assignment_progress").select("enrollment_id").eq("id", options.id).single()).data?.enrollment_id;
+    
+    if (enrollmentId) {
+      await updateEnrollmentProgress(enrollmentId);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error grading submission:", err);
+    return { success: false, error: err.message };
   }
 }
 

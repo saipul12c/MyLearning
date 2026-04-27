@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { getInstructorCourses, getInstructorStats } from "@/lib/instructor";
 import { type Course } from "@/lib/data";
 import Link from "next/link";
-import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink, Megaphone, Sparkles } from "lucide-react";
+import { BookOpen, Users, Star, ArrowRight, Plus, Clock, TrendingUp, Award, ExternalLink, Megaphone, Sparkles, ClipboardCheck } from "lucide-react";
 import Skeleton from "./ui/Skeleton";
 import SignatureManager from "./SignatureManager";
 import NativeAdCard from "./NativeAdCard";
@@ -60,7 +60,11 @@ export default function InstructorDashboard({ userId, userName }: InstructorDash
           <h1 className="text-2xl font-bold text-white tracking-tight">Instructor <span className="gradient-text">Panel</span></h1>
           <p className="text-slate-400 text-sm mt-1">Hello, Instructor {userName.split(" ")[0]}! Kelola materi dan murid Anda.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/admin/grading" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-white/10 hover:border-emerald-500/30">
+            <ClipboardCheck size={14} className="group-hover:scale-110 transition-transform text-emerald-400" />
+            Antrian Penilaian
+          </Link>
           <Link href="/dashboard/ads" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-white/10 hover:border-purple-500/30">
             <Megaphone size={14} className="group-hover:scale-110 transition-transform text-purple-400" />
             Promosi Saya

@@ -166,29 +166,68 @@ export default function ActiveCourseCard({
           )}
 
           {activeTab === "project" && activeAssessments && activeAssessments.finalProject && (
-            <div className={`p-5 rounded-xl border ${active.finalProjectCompleted ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/5 bg-white/[0.02]"}`}>
-              <h4 className="text-white font-semibold mb-2">{activeAssessments.finalProject.title}</h4>
-              <p className="text-slate-400 text-sm mb-4">{activeAssessments.finalProject.description}</p>
+            <div className={`p-6 rounded-2xl border transition-all duration-500 ${active.finalProjectCompleted ? "border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.05)]" : "border-white/5 bg-white/[0.02]"}`}>
+              <div className="flex items-center justify-between mb-4">
+                 <h4 className="text-white font-bold text-lg">{activeAssessments.finalProject.title}</h4>
+                 {active.finalProjectCompleted ? (
+                   <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest">Lulus & Terverifikasi</span>
+                 ) : active.finalProjectUrl ? (
+                   <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Menunggu Penilaian</span>
+                 ) : (
+                   <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-widest">Belum Dikirim</span>
+                 )}
+              </div>
               
-              <div className="flex flex-col gap-2">
-                  <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">Instruksi Proyek:</p>
-                      <ul className="space-y-2">
+              <p className="text-slate-400 text-sm mb-6 leading-relaxed">{activeAssessments.finalProject.description}</p>
+              
+              <div className="flex flex-col gap-4">
+                  <div className="bg-white/5 p-5 rounded-2xl border border-white/5 relative overflow-hidden group/instr">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-2xl rounded-full group-hover/instr:bg-purple-500/10 transition-colors" />
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                         <Target size={14} className="text-purple-400" />
+                         Instruksi Proyek & Deliverables:
+                      </p>
+                      <ul className="space-y-3">
                           {activeAssessments.finalProject.deliverables.map((d: any, i: number) => (
-                              <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
-                                  <div className="w-1 h-1 rounded-full bg-purple-500 mt-1.5" />
-                                  {d}
+                              <li key={i} className="text-xs text-slate-300 flex items-start gap-3 group/li">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 mt-1.5 shrink-0 group-hover/li:scale-125 transition-transform" />
+                                  <span className="leading-relaxed">{d}</span>
                               </li>
                           ))}
                       </ul>
                   </div>
+
+                  {active.finalProjectUrl && !active.finalProjectCompleted && (
+                    <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
+                       <Clock size={16} className="text-amber-400 mt-0.5" />
+                       <div>
+                          <p className="text-xs font-bold text-amber-200">Proyek Anda Sedang Ditinjau</p>
+                          <p className="text-[10px] text-amber-500/70 mt-0.5">Estimasi penilaian: 2-3 hari kerja. Anda akan menerima notifikasi jika hasil sudah tersedia.</p>
+                       </div>
+                    </div>
+                  )}
+
+                  {active.finalProjectFeedback && (
+                    <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/10">
+                       <p className="text-[10px] text-purple-400 font-black uppercase tracking-widest mb-2">Feedback Instruktur:</p>
+                       <p className="text-xs text-slate-300 italic">"{active.finalProjectFeedback}"</p>
+                    </div>
+                  )}
                   
-                  <button 
-                    disabled={active.finalProjectCompleted}
-                    className={`btn-primary !py-3 w-full text-xs font-bold uppercase tracking-widest ${active.finalProjectCompleted ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    {active.finalProjectCompleted ? "PROYEK SELESAI" : "SUBMIT PROYEK AKHIR"}
-                  </button>
+                  {!active.finalProjectCompleted && !active.finalProjectUrl && (
+                    <button 
+                      className="btn-primary !py-4 w-full text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-500/20"
+                    >
+                      SUBMIT PROYEK AKHIR
+                    </button>
+                  )}
+
+                  {active.finalProjectCompleted && (
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                       <CheckCircle size={20} className="text-emerald-400" />
+                       <p className="text-xs font-bold text-emerald-400">Selamat! Proyek Anda telah diterima dan kursus ini telah selesai.</p>
+                    </div>
+                  )}
               </div>
             </div>
           )}

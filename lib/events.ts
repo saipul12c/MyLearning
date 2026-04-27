@@ -104,6 +104,8 @@ export interface PlatformEvent {
   recordingUrl?: string;
   tags?: string[];
   themeColor?: string; // Hex code or named color
+  prizes?: any[]; // Array of prizes (e.g. { rank: 1, reward: 'Rp 1.000.000' })
+  sponsors?: any[]; // Array of sponsors (e.g. { name: 'Company', logoUrl: '...' })
 }
 
 export interface EventRegistration {
@@ -121,6 +123,22 @@ export interface EventRegistration {
   createdAt: string;
   updatedAt?: string; // New: for tracking status changes
   event?: PlatformEvent;
+}
+
+export interface EventSubmission {
+  id: string;
+  eventId: string;
+  userId: string;
+  teamName?: string;
+  submissionUrl: string;
+  description?: string;
+  status: "submitted" | "graded" | "rejected";
+  score?: number;
+  rank?: number;
+  feedback?: string;
+  createdAt: string;
+  updatedAt: string;
+  profile?: any;
 }
 
 export interface GetEventsOptions {
@@ -759,6 +777,8 @@ function formatEvent(item: any): PlatformEvent {
     recordingUrl: item.recording_url,
     tags: item.tags,
     themeColor: item.theme_color,
+    prizes: item.prizes,
+    sponsors: item.sponsors,
   };
 }
 
@@ -786,7 +806,100 @@ export function deformatEvent(item: Partial<PlatformEvent>): any {
   if (item.recordingUrl !== undefined) mapped.recording_url = item.recordingUrl || null;
   if (item.tags !== undefined) mapped.tags = item.tags;
   if (item.themeColor !== undefined) mapped.theme_color = item.themeColor || null;
+  if (item.prizes !== undefined) mapped.prizes = item.prizes;
+  if (item.sponsors !== undefined) mapped.sponsors = item.sponsors;
   return mapped;
+}
+
+// ---------- Event Submissions ----------
+
+export async function submitEventChallenge(eventId: string, userId: string, submissionData: { submissionUrl: string, description?: string, teamName?: string }) {
+  try {
+    const { data, error } = await supabase
+      .from("event_submissions")
+      .upsert({
+        event_id: eventId,
+        user_id: userId,
+        submission_url: submissionData.submissionUrl,
+        description: submissionData.description,
+        team_name: submissionData.teamName,
+        status: "submitted",
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'event_id, user_id' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    logger.error("Error submitting challenge", error);
+    throw error;
+  }
+}
+
+export async function getEventSubmissions(eventId: string, options?: { page?: number; limit?: number }) {
+  const { page = 1, limit = 50 } = options || {};
+  const offset = (page - 1) * limit;
+
+  try {
+    const { data, error, count } = await supabase
+      .from("event_submissions")
+      .select(`
+        id, event_id, user_id, team_name, submission_url, description, status, score, rank, feedback, created_at, updated_at,
+        profile:user_profiles(id, full_name, email, avatar_url)
+      `, { count: "exact" })
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    return {
+      data: data || [],
+      total: count || 0,
+      hasMore: (count || 0) > offset + limit,
+    };
+  } catch (error) {
+    logger.error("Error fetching submissions", error);
+    return { data: [], total: 0, hasMore: false };
+  }
+}
+
+export async function gradeEventSubmission(submissionId: string, updates: { score?: number, rank?: number, status?: string, feedback?: string }) {
+  try {
+    const { data, error } = await supabase
+      .from("event_submissions")
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", submissionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    logger.error("Error grading submission", error);
+    throw error;
+  }
+}
+
+export async function getUserSubmission(eventId: string, userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("event_submissions")
+      .select("*")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    logger.error("Error fetching user submission", error);
+    return null;
+  }
 }
 
 /**
@@ -814,26 +927,67 @@ export async function getEventSearchSuggestions(query: string, limit = 5): Promi
 
 // ============================================
 // Email Notification Functions
+// Hybrid: DB logging (RPC) + actual email sending (EmailJS)
 // ============================================
+
+import {
+  sendRegistrationConfirmation,
+  sendPaymentApproved,
+  sendEventReminder,
+  sendRecordingNotification,
+} from "./email";
+
+/**
+ * Helper: Fetch user email and event details for email sending
+ */
+async function getEmailContext(userId: string, eventId: string) {
+  const [userResult, eventResult] = await Promise.all([
+    supabase.from("user_profiles").select("full_name, email").eq("user_id", userId).single(),
+    supabase.from("platform_events").select("title, slug, event_date, location, recording_url").eq("id", eventId).single(),
+  ]);
+  return {
+    userName: userResult.data?.full_name || "Peserta",
+    userEmail: userResult.data?.email || "",
+    eventName: eventResult.data?.title || "",
+    eventSlug: eventResult.data?.slug || "",
+    eventDate: eventResult.data?.event_date || "",
+    eventLocation: eventResult.data?.location || "",
+    recordingUrl: eventResult.data?.recording_url || "",
+  };
+}
 
 /**
  * Send registration confirmation email
  */
 export async function sendRegistrationEmail(userId: string, eventId: string): Promise<void> {
   try {
-    const { data, error } = await supabase.rpc('send_registration_email', {
+    // 1. Log to DB (RPC)
+    const { data } = await supabase.rpc('send_registration_email', {
       p_user_id: userId,
       p_event_id: eventId,
     });
 
-    if (error) {
-      logger.error(`send_registration_email failed: ${error.message}`);
-      return;
+    // 2. Actually send via EmailJS
+    const ctx = await getEmailContext(userId, eventId);
+    if (ctx.userEmail) {
+      const result = await sendRegistrationConfirmation({
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        eventName: ctx.eventName,
+        eventDate: ctx.eventDate,
+        eventLocation: ctx.eventLocation,
+        eventSlug: ctx.eventSlug,
+      });
+
+      // 3. Update log status
+      if (data?.success !== false) {
+        markEmailAsSent(data?.id, result.success ? 'sent' : 'failed');
+      }
     }
 
-    logger.info(`send_registration_email: Email sent for user ${userId}, event ${eventId}`);
+    logger.info(`sendRegistrationEmail: Done for user ${userId}, event ${eventId}`);
   } catch (error) {
-    logger.error('send_registration_email', error);
+    logger.error('sendRegistrationEmail', error);
   }
 }
 
@@ -842,19 +996,28 @@ export async function sendRegistrationEmail(userId: string, eventId: string): Pr
  */
 export async function sendPaymentApprovedEmail(userId: string, eventId: string): Promise<void> {
   try {
-    const { data, error } = await supabase.rpc('send_payment_approved_email', {
+    const { data } = await supabase.rpc('send_payment_approved_email', {
       p_user_id: userId,
       p_event_id: eventId,
     });
 
-    if (error) {
-      logger.error(`send_payment_approved_email failed: ${error.message}`);
-      return;
+    const ctx = await getEmailContext(userId, eventId);
+    if (ctx.userEmail) {
+      const result = await sendPaymentApproved({
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        eventName: ctx.eventName,
+        eventSlug: ctx.eventSlug,
+      });
+
+      if (data?.success !== false) {
+        markEmailAsSent(data?.id, result.success ? 'sent' : 'failed');
+      }
     }
 
-    logger.info(`send_payment_approved_email: Email sent for user ${userId}, event ${eventId}`);
+    logger.info(`sendPaymentApprovedEmail: Done for user ${userId}, event ${eventId}`);
   } catch (error) {
-    logger.error('send_payment_approved_email', error);
+    logger.error('sendPaymentApprovedEmail', error);
   }
 }
 
@@ -863,19 +1026,29 @@ export async function sendPaymentApprovedEmail(userId: string, eventId: string):
  */
 export async function sendEventReminderEmail(userId: string, eventId: string): Promise<void> {
   try {
-    const { data, error } = await supabase.rpc('send_event_reminder_email', {
+    const { data } = await supabase.rpc('send_event_reminder_email', {
       p_user_id: userId,
       p_event_id: eventId,
     });
 
-    if (error) {
-      logger.error(`send_event_reminder_email failed: ${error.message}`);
-      return;
+    const ctx = await getEmailContext(userId, eventId);
+    if (ctx.userEmail) {
+      const result = await sendEventReminder({
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        eventName: ctx.eventName,
+        eventDate: ctx.eventDate,
+        eventSlug: ctx.eventSlug,
+      });
+
+      if (data?.success !== false) {
+        markEmailAsSent(data?.id, result.success ? 'sent' : 'failed');
+      }
     }
 
-    logger.info(`send_event_reminder_email: Reminder sent for user ${userId}, event ${eventId}`);
+    logger.info(`sendEventReminderEmail: Reminder done for user ${userId}, event ${eventId}`);
   } catch (error) {
-    logger.error('send_event_reminder_email', error);
+    logger.error('sendEventReminderEmail', error);
   }
 }
 
@@ -884,27 +1057,37 @@ export async function sendEventReminderEmail(userId: string, eventId: string): P
  */
 export async function sendRecordingAvailableEmail(userId: string, eventId: string): Promise<void> {
   try {
-    const { data, error } = await supabase.rpc('send_recording_available_email', {
+    const { data } = await supabase.rpc('send_recording_available_email', {
       p_user_id: userId,
       p_event_id: eventId,
     });
 
-    if (error) {
-      logger.error(`send_recording_available_email failed: ${error.message}`);
-      return;
+    const ctx = await getEmailContext(userId, eventId);
+    if (ctx.userEmail && ctx.recordingUrl) {
+      const result = await sendRecordingNotification({
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        eventName: ctx.eventName,
+        recordingUrl: ctx.recordingUrl,
+      });
+
+      if (data?.success !== false) {
+        markEmailAsSent(data?.id, result.success ? 'sent' : 'failed');
+      }
     }
 
-    logger.info(`send_recording_available_email: Recording email sent for user ${userId}, event ${eventId}`);
+    logger.info(`sendRecordingAvailableEmail: Done for user ${userId}, event ${eventId}`);
   } catch (error) {
-    logger.error('send_recording_available_email', error);
+    logger.error('sendRecordingAvailableEmail', error);
   }
 }
 
 /**
- * Mark email as sent (for webhook callback)
+ * Mark email as sent (for DB log tracking)
  */
 export async function markEmailAsSent(logId: string, status: 'sent' | 'failed' = 'sent'): Promise<void> {
   try {
+    if (!logId) return;
     const { error } = await supabase.rpc('mark_email_as_sent', {
       p_log_id: logId,
       p_status: status,

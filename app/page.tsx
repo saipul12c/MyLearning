@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Shield,
   Zap,
+  Quote,
 } from "lucide-react";
 import { formatPrice, formatNumber } from "@/lib/utils";
 import { getCourses, getPopularCourses, getSystemStats } from "@/lib/courses";
@@ -20,6 +21,7 @@ import { getPromotionsBatch } from "@/lib/promotions";
 import PromotionCard from "./components/PromotionCard";
 import VerifiedBadge from "./components/VerifiedBadge";
 import NativeAdCard from "./components/NativeAdCard";
+import TestimonialWall from "./components/TestimonialWall";
 
 export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
@@ -27,16 +29,17 @@ export default async function HomePage() {
   const [popularCourses, stats, dbTestimonials, adBatch] = await Promise.all([
     getPopularCourses(8),
     getSystemStats(),
-    getLatestTestimonials(15),
+    getLatestTestimonials(20),
     getPromotionsBatch(["homepage_banner", "homepage_inline"])
   ]);
-  
-  const homepagePromos = adBatch["homepage_banner"] || [];
+
+  const homepagePromos = (adBatch["homepage_banner"] || []).slice(0, 3);
   const inlinePromo = adBatch["homepage_inline"]?.[0] || null;
-  
+
   // Robust Fallback + Shuffle
   const fallbackTestimonials = [
     {
+      id: "fb-1",
       userName: "Dimas Pratama",
       userBio: "Full-Stack Developer di Tokopedia",
       courseTitle: "Mastering React & Next.js",
@@ -45,6 +48,7 @@ export default async function HomePage() {
       rating: 5,
     },
     {
+      id: "fb-2",
       userName: "Anisa Putri",
       userBio: "Data Analyst di GoTo",
       courseTitle: "Python for Data Science",
@@ -53,6 +57,7 @@ export default async function HomePage() {
       rating: 5,
     },
     {
+      id: "fb-3",
       userName: "Raka Mahendra",
       userBio: "UI/UX Designer Freelance",
       courseTitle: "UI/UX Design Masterclass",
@@ -61,6 +66,7 @@ export default async function HomePage() {
       rating: 5,
     },
     {
+      id: "fb-4",
       userName: "Siti Aminah",
       userBio: "Mobile Developer di Grab",
       courseTitle: "Flutter Mobile Development",
@@ -69,6 +75,7 @@ export default async function HomePage() {
       rating: 5,
     },
     {
+      id: "fb-5",
       userName: "Budi Cahyono",
       userBio: "AI Engineer di Tech Indo",
       courseTitle: "Deep Learning AI",
@@ -77,6 +84,7 @@ export default async function HomePage() {
       rating: 5,
     },
     {
+      id: "fb-6",
       userName: "Cindy Lestari",
       userBio: "DevOps Engineer di Startup Kita",
       courseTitle: "DevOps for Engineers",
@@ -89,8 +97,7 @@ export default async function HomePage() {
   // Logic to mix and rotate
   const baseData = dbTestimonials.length >= 3 ? dbTestimonials : fallbackTestimonials;
   const testimonials = [...baseData]
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 6);
+    .sort(() => Math.random() - 0.5);
 
 
   return (
@@ -219,7 +226,7 @@ export default async function HomePage() {
                     </h3>
                   </Link>
 
-                  <Link 
+                  <Link
                     href={`/profile/${course.instructorId}`}
                     className="text-slate-500 text-xs mb-3 flex items-center gap-1 hover:text-purple-400 transition-colors w-fit"
                   >
@@ -378,69 +385,27 @@ export default async function HomePage() {
       </section>
 
       {/* ===== TESTIMONIALS ===== */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <span className="badge badge-primary mb-4 inline-block">
-              Testimoni
-            </span>
-            <h2 className="section-title text-center">
+      <section className="py-24 relative overflow-hidden">
+        {/* Background Decorative Orbs */}
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 bg-purple-500/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-cyan-500/5 blur-[120px] rounded-full" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400 mb-6">
+              <Sparkles size={12} />
+              Suara Komunitas
+            </div>
+            <h2 className="text-4xl md:text-5xl font-black text-white mb-6">
               Apa Kata <span className="gradient-text">Siswa</span> Kami
             </h2>
-            <p className="section-subtitle mx-auto text-center">
-              Ribuan siswa telah merasakan manfaat belajar di MyLearning
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+              Ribuan siswa telah meningkatkan karir mereka melalui platform kami. 
+              Inilah pengalaman nyata mereka dari berbagai kursus.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((testimonial: any, idx) => (
-              <div key={idx} className="card p-6 flex flex-col h-full">
-                {/* Stars */}
-                <div className="stars mb-4">
-                  {Array.from({ length: testimonial.rating }).map((_, i) => (
-                    <Star key={i} size={16} className="fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-                
-                <p className="text-slate-300 text-sm leading-relaxed mb-6 italic flex-grow">
-                  &ldquo;{testimonial.comment || testimonial.text}&rdquo;
-                </p>
-
-                <div className="mt-auto pt-6 border-t border-white/5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-white font-bold text-sm">
-                      {(testimonial.userName || "S")
-                        .split(" ")
-                        .map((n: string) => n[0])
-                        .join("")}
-                    </div>
-                    <div>
-                        <Link 
-                          href={`/profile/${testimonial.userId}`}
-                          className="text-white font-medium text-sm flex items-center gap-1.5 hover:text-purple-400 transition-colors"
-                        >
-                          {testimonial.userName}
-                          {(testimonial.userRole === 'admin' || testimonial.userRole === 'instructor') && <VerifiedBadge size={12} />}
-                        </Link>
-                      <div className="text-slate-500 text-xs text-balance">
-                        {testimonial.userBio}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <Link 
-                    href={`/courses/${testimonial.courseSlug}`}
-                    className="flex items-center gap-2 group/link"
-                  >
-                    <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Lulusan:</div>
-                    <div className="text-[11px] text-purple-400 font-bold group-hover/link:text-cyan-400 transition-colors underline decoration-purple-400/30 underline-offset-4">
-                      {testimonial.courseTitle}
-                    </div>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+          <TestimonialWall testimonials={testimonials} />
         </div>
       </section>
 

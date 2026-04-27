@@ -113,7 +113,7 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
   if (variant === "banner") {
     return (
       <div 
-        className="relative overflow-hidden rounded-[2.5rem] border border-white/10 group transition-all duration-500 hover:border-purple-500/30"
+        className="relative overflow-hidden rounded-3xl border border-white/10 group transition-all duration-500 hover:border-purple-500/30"
         style={{ 
           background: promotion.bgColor || 'linear-gradient(135deg, rgba(88, 28, 135, 0.1) 0%, rgba(15, 23, 42, 0.4) 100%)' 
         }}
@@ -121,9 +121,9 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
         <div className="absolute inset-0 bg-grid-white/[0.02] bg-[center_top_-1px]" />
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-purple-500/10 blur-[100px] rounded-full group-hover:bg-purple-500/20 transition-all duration-700" />
         
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-8 md:p-12">
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 p-6 md:p-8">
           {promotion.videoUrl ? (
-            <div className="relative w-full md:w-64 aspect-video md:aspect-square rounded-2xl overflow-hidden border border-white/5 shadow-2xl bg-black">
+            <div className="relative w-full md:w-48 aspect-video md:aspect-square rounded-xl overflow-hidden border border-white/5 shadow-2xl bg-black">
               <video
                 src={promotion.videoUrl}
                 poster={promotion.imageUrl}
@@ -135,7 +135,7 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
               />
             </div>
           ) : promotion.imageUrl && (
-            <div className="relative w-full md:w-64 aspect-video md:aspect-square rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+            <div className="relative w-full md:w-48 aspect-video md:aspect-square rounded-xl overflow-hidden border border-white/5 shadow-2xl">
               <Image 
                 src={promotion.imageUrl} 
                 alt={promotion.title} 
@@ -160,11 +160,11 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
               )}
             </div>
             
-            <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
+            <h2 className="text-2xl md:text-3xl font-black text-white leading-tight">
               {promotion.title}
             </h2>
             
-            <p className="text-slate-400 text-sm md:text-lg leading-relaxed max-w-xl">
+            <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-xl">
               {promotion.description}
             </p>
             

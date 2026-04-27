@@ -10,7 +10,7 @@ import { getCourseBySlug } from "@/lib/courses";
 import { getCourseAssessments } from "@/lib/assessments";
 import { getLevelLabel } from "@/lib/enrollment";
 import { addReview } from "@/lib/reviews";
-import { Clock, CheckCircle, XCircle, BookOpen, Download, Award, FileText, Brain, Target, AlertTriangle, CreditCard, RefreshCcw, Loader2, ChevronRight, Star, Send } from "lucide-react";
+import { Clock, CheckCircle, XCircle, BookOpen, Download, Award, FileText, Brain, Target, AlertTriangle, CreditCard, RefreshCcw, Loader2, ChevronRight, Star, Send, GraduationCap, Edit, Eye, Plus } from "lucide-react";
 import CertificateGenerator from "@/app/components/CertificateGenerator";
 import PaymentModal from "@/app/components/PaymentModal";
 import { getInstructors } from "@/lib/courses";
@@ -25,8 +25,9 @@ import WaitingVerificationCard from "./WaitingVerificationCard";
 import type { Quiz, Assignment } from "@/lib/assessments";
 
 export default function MyCoursesPage() {
-  const { user } = useAuth();
+  const { user, isAdmin, isInstructor } = useAuth();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [instructorCourses, setInstructorCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -67,6 +68,20 @@ export default function MyCoursesPage() {
         setLoading(true);
         const data = await getUserEnrollments(user.id);
         setEnrollments(data);
+        
+        // Fetch instructor courses if admin/instructor
+        if (isAdmin || isInstructor) {
+           try {
+             const { getInstructorCourses, ensureInstructorProfile } = await import("@/lib/instructor");
+             if (isAdmin) {
+               await ensureInstructorProfile(user.id, user.fullName);
+             }
+             const iCourses = await getInstructorCourses(user.id);
+             setInstructorCourses(iCourses || []);
+           } catch (e) {
+             console.error("Failed to load instructor courses:", e);
+           }
+        }
         
         const activeEnr = data.find((e) => e.status === "active");
         if (activeEnr) {
@@ -117,6 +132,39 @@ export default function MyCoursesPage() {
         </div>
       </div>
     );
+  }
+
+  // If completely empty (no enrollments and no instructor courses), show empty state
+  if (!loading && enrollments.length === 0 && instructorCourses.length === 0) {
+     return (
+        <div className="max-w-5xl animate-fade-in">
+           <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Kursus <span className="gradient-text">Saya</span></h1>
+              <p className="text-slate-400 text-sm mt-1">Kelola dan lacak progress belajar Anda</p>
+           </div>
+           
+           <div className="mt-8 card p-12 flex flex-col items-center justify-center text-center border-white/5 bg-white/[0.02]">
+              <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 text-slate-600">
+                 <BookOpen size={40} />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Belum Ada Kursus</h2>
+              <p className="text-slate-400 max-w-md mx-auto mb-8 text-sm">
+                 Anda belum mengikuti kursus apapun. Jelajahi katalog kami dan mulai perjalanan belajar Anda hari ini.
+              </p>
+              
+              <div className="flex items-center gap-4">
+                 <Link href="/dashboard/courses" className="btn-primary !px-8 text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                    Jelajahi Kursus
+                 </Link>
+                 {(isAdmin || isInstructor) && (
+                    <Link href="/dashboard/admin/courses/new" className="btn-secondary !px-8 text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                       <Plus size={16} /> Buat Kursus
+                    </Link>
+                 )}
+              </div>
+           </div>
+        </div>
+     )
   }
 
   const active = enrollments.find((e) => e.status === "active");
@@ -250,6 +298,51 @@ export default function MyCoursesPage() {
           setActiveQuiz={setActiveQuiz}
           setActiveAssignment={setActiveAssignment}
         />
+      )}
+
+      {/* Instructor Courses */}
+      {(isAdmin || isInstructor) && instructorCourses.length > 0 && (
+         <div className="space-y-4">
+            <div className="flex items-center justify-between">
+               <h2 className="text-lg font-black text-white flex items-center gap-3"><GraduationCap size={20} className="text-purple-400" /> KURSUS YANG ANDA BUAT</h2>
+               <Link href="/dashboard/admin/courses" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white bg-white/5 px-4 py-2 rounded-lg transition-all flex items-center gap-2">
+                  Lihat Semua <ChevronRight size={14} />
+               </Link>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+               {instructorCourses.slice(0, 3).map((course) => (
+                  <div key={course.id} className="card p-5 border-white/5 hover:border-purple-500/30 transition-all group flex flex-col justify-between">
+                     <div>
+                        <div className="aspect-video w-full rounded-xl overflow-hidden mb-4 relative bg-white/5">
+                           {course.thumbnail_url ? (
+                              <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                           ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-600"><BookOpen size={32} /></div>
+                           )}
+                           <div className="absolute top-3 right-3 flex flex-col gap-2">
+                              <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest backdrop-blur-md border ${course.is_published ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
+                                 {course.is_published ? "PUBLISHED" : "DRAFT"}
+                              </span>
+                           </div>
+                        </div>
+                        <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 leading-tight">{course.title}</h3>
+                        <div className="flex items-center justify-between mb-4">
+                           <p className="text-xs text-slate-400 font-medium">{course.total_students || 0} Siswa</p>
+                           <p className="text-xs text-slate-400 font-medium">Rp {(course.price || 0).toLocaleString('id-ID')}</p>
+                        </div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
+                        <Link href={`/courses/${course.slug}`} className="btn-secondary !py-2.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                           <Eye size={14} /> Lihat
+                        </Link>
+                        <Link href={`/dashboard/admin/courses/${course.id}/edit`} className="btn-primary !py-2.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                           <Edit size={14} /> Edit
+                        </Link>
+                     </div>
+                  </div>
+               ))}
+            </div>
+         </div>
       )}
 
       {/* Waiting Verification */}

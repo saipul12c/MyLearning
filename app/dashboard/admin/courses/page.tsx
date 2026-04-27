@@ -27,11 +27,20 @@ export default function AdminCoursesPage() {
     totalRevenue: 0
   });
 
+  const [viewMode, setViewMode] = useState<'all' | 'mine'>(isAdmin ? 'all' : 'mine');
+
   useEffect(() => {
     if (user) {
       initialFetch();
     }
   }, [user, isAdmin, isInstructor]);
+
+  // Refetch courses when viewMode changes
+  useEffect(() => {
+    if (user) {
+      fetchCourses();
+    }
+  }, [viewMode]);
 
   async function initialFetch() {
     setLoading(true);
@@ -57,12 +66,16 @@ export default function AdminCoursesPage() {
       let data: Course[] = [];
       let profile = null;
 
-      if (isInstructor && !isAdmin) {
-        const { getInstructorCourses, getInstructorProfile } = await import("@/lib/instructor");
-        [data, profile] = await Promise.all([
-          getInstructorCourses(user.id),
-          getInstructorProfile(user.id)
-        ]);
+      if ((isInstructor && !isAdmin) || (isAdmin && viewMode === 'mine')) {
+        const { getInstructorCourses, getInstructorProfile, ensureInstructorProfile } = await import("@/lib/instructor");
+        
+        if (isAdmin) {
+          profile = await ensureInstructorProfile(user.id, user.fullName);
+        } else {
+          profile = await getInstructorProfile(user.id);
+        }
+
+        data = await getInstructorCourses(user.id);
       } else {
         const { getAllCoursesAdmin } = await import("@/lib/courses");
         data = await getAllCoursesAdmin();
@@ -185,9 +198,29 @@ export default function AdminCoursesPage() {
       <div className="space-y-6 relative z-10">
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
           <h2 className="text-sm font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
-            <div className="w-8 h-[1px] bg-slate-800" /> Kurikulum Saya
+            <div className="w-8 h-[1px] bg-slate-800" /> {isAdmin && viewMode === 'all' ? 'Seluruh Kurikulum' : 'Kurikulum Saya'}
           </h2>
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    viewMode === 'all' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  Semua
+                </button>
+                <button
+                  onClick={() => setViewMode('mine')}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    viewMode === 'mine' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  Milik Saya
+                </button>
+              </div>
+            )}
             <div className="relative w-full sm:max-w-[200px]">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={14} />
               <input

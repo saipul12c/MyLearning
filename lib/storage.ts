@@ -16,6 +16,12 @@ export async function uploadAvatar(file: File): Promise<{ url: string | null; er
   return uploadToBucket(file, "avatars", `${user.id}/user-avatars`);
 }
 
+export async function uploadQrisImage(file: File): Promise<{ url: string | null; error: any }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: "Authentication required" };
+  return uploadToBucket(file, "avatars", `${user.id}/qris`);
+}
+
 export async function uploadChatFile(file: File): Promise<{ url: string | null; error: any }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { url: null, error: "Authentication required" };

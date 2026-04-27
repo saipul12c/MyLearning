@@ -41,7 +41,7 @@ export async function getAdminCourseById(id: string) {
     .select(`
       id, title, slug, description, short_description, thumbnail_url, 
       price, discount_price, admin_discount_price, category_id, instructor_id, level, language, 
-      duration_hours, total_lessons, is_published, is_featured, 
+      duration_hours, total_lessons, is_published, is_featured, preview_video_url,
       learning_points, requirements,
       lessons:lessons(id, title, duration_minutes, is_free_preview, video_url, description, order_index, content_type)
     `)
@@ -446,7 +446,86 @@ export async function searchCourses(query: string): Promise<Course[]> {
     return [];
   }
 
-  return data.map(mapDbToCourse);
+  return (data || []).map(mapDbToCourse);
+}
+
+/**
+ * Fetches personalized course recommendations based on user interests
+ */
+export async function getRecommendedCourses(userId: string, categoryIds: string[], limit: number = 4): Promise<Course[]> {
+  try {
+    // 1. Get user's current enrollment IDs to exclude them
+    const { data: enrollments } = await supabase
+      .from("enrollments")
+      .select("course_id")
+      .eq("user_id", userId);
+    
+    const excludedIds = (enrollments || []).map(e => e.course_id);
+
+    // 2. Build query
+    let query = supabase
+      .from("courses")
+      .select(`
+        id, title, slug, short_description, thumbnail_url, 
+        price, discount_price, admin_discount_price, level, language, duration_hours, 
+        total_lessons, rating, total_reviews, total_students,
+        is_published, is_featured, created_at, updated_at, tags,
+        categories!inner(id, name, slug),
+        instructors(name, slug, avatar_url, website_url, linkedin_url),
+        vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
+      `)
+      .eq("is_published", true);
+
+    if (excludedIds.length > 0) {
+      query = query.not("id", "in", `(${excludedIds.join(',')})`);
+    }
+
+    if (categoryIds.length > 0) {
+      query = query.in("categories.id", categoryIds);
+    }
+
+    const { data, error } = await query
+      .order("rating", { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    let results = (data || []).map(mapDbToCourse);
+
+    // 3. Fallback: If not enough results, fetch featured courses
+    if (results.length < limit) {
+      const alreadyHaveIds = [...excludedIds, ...results.map(r => r.id)];
+      
+      let fallbackQuery = supabase
+        .from("courses")
+        .select(`
+          id, title, slug, short_description, thumbnail_url, 
+          price, discount_price, admin_discount_price, level, language, duration_hours, 
+          total_lessons, rating, total_reviews, total_students,
+          is_published, is_featured, created_at, updated_at, tags,
+          categories(id, name, slug),
+          instructors(name, slug, avatar_url, website_url, linkedin_url),
+          vouchers:vouchers(id, code, discount_type, discount_value, is_active, start_date, expiry_date, target_user_id)
+        `)
+        .eq("is_published", true)
+        .eq("is_featured", true);
+
+      if (alreadyHaveIds.length > 0) {
+        fallbackQuery = fallbackQuery.not("id", "in", `(${alreadyHaveIds.join(',')})`);
+      }
+
+      const { data: featured } = await fallbackQuery.limit(limit - results.length);
+      
+      if (featured) {
+        results = [...results, ...(featured || []).map(mapDbToCourse)];
+      }
+    }
+
+    return results;
+  } catch (err) {
+    console.error("Error in getRecommendedCourses:", err);
+    return [];
+  }
 }
 
 /**

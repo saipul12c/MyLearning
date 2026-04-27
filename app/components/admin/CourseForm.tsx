@@ -12,7 +12,7 @@ import {
    getCategories, getInstructors, upsertCourse, getAdminCourseById,
    upsertLesson, deleteLesson, updateLessonsOrder
 } from "@/lib/courses";
-import { getInstructorProfile } from "@/lib/instructor";
+import { getInstructorProfile, ensureInstructorProfile } from "@/lib/instructor";
 import { useAuth } from "../AuthContext";
 import {
    getCourseAssessments, upsertAssessment, deleteAssessment,
@@ -38,6 +38,7 @@ interface CourseFormData {
    description: string;
    detailedDescription: string;
    thumbnail: string;
+   previewVideoUrl: string;
    price: number;
    discountPrice: number;
    adminDiscountPrice: number;
@@ -103,6 +104,7 @@ export default function CourseForm({ courseId }: Props) {
       description: "",
       detailedDescription: "",
       thumbnail: "",
+      previewVideoUrl: "",
       price: 0,
       discountPrice: 0,
       adminDiscountPrice: 0,
@@ -141,16 +143,28 @@ export default function CourseForm({ courseId }: Props) {
          try {
             const [cats, insts] = await Promise.all([getCategories(), getInstructors()]);
 
-            setCategories(cats.map(c => ({ id: c.id, name: c.name })) || []);
-            setInstructors(insts.map(i => ({ id: i.id, name: i.name })) || []);
+            const fetchedInstructors = insts.map(i => ({ id: i.id, name: i.name }));
 
-            // If instructor, auto-set their profile ID
-            if (isInstructor && user && !courseId) {
-               const profile = await getInstructorProfile(user.id);
+            // If instructor or admin, auto-set their profile ID
+            if (user && !courseId) {
+               let profile: any = null;
+               if (isAdmin) {
+                 profile = await ensureInstructorProfile(user.id, user.fullName);
+                 // Make sure it's in the list
+                 if (profile && !fetchedInstructors.find(i => i.id === profile.id)) {
+                   fetchedInstructors.push({ id: profile.id, name: profile.name });
+                 }
+               } else if (isInstructor) {
+                 profile = await getInstructorProfile(user.id);
+               }
+               
                if (profile) {
                   setFormData(prev => ({ ...prev, instructorIdDb: profile.id }));
                }
             }
+
+            setCategories(cats.map(c => ({ id: c.id, name: c.name })) || []);
+            setInstructors(fetchedInstructors || []);
 
             if (courseId) {
                const course = await getAdminCourseById(courseId);
@@ -162,6 +176,7 @@ export default function CourseForm({ courseId }: Props) {
                      description: course.short_description || "",
                      detailedDescription: course.description || "",
                      thumbnail: course.thumbnail_url || "",
+                     previewVideoUrl: course.preview_video_url || "",
                      price: course.price || 0,
                      discountPrice: course.discount_price || 0,
                      adminDiscountPrice: course.admin_discount_price || 0,
@@ -626,6 +641,21 @@ export default function CourseForm({ courseId }: Props) {
                   </div>
                   {formData.thumbnail && <img src={formData.thumbnail} className="w-full h-48 object-cover rounded-xl border border-white/10" />}
                </div>
+
+                {/* Preview Video URL Card */}
+                <div className="card p-8 space-y-6">
+                   <h2 className="text-lg font-bold text-white flex items-center gap-2"><Play size={20} className="text-purple-400" /> Preview Video</h2>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">URL Video Preview</label>
+                      <input 
+                         className="input w-full" 
+                         value={formData.previewVideoUrl} 
+                         onChange={e => setFormData({ ...formData, previewVideoUrl: e.target.value })} 
+                         placeholder="https://youtube.com/watch?v=... atau URL video lainnya" 
+                      />
+                      <p className="text-[9px] text-slate-500 px-1 font-medium italic">Video yang ditampilkan sebagai preview gratis di halaman detail kursus. Kosongkan jika tidak ada.</p>
+                   </div>
+                </div>
 
                <div className="card p-8 space-y-6">
                   <h2 className="text-lg font-bold text-white">Konten Deskripsi</h2>

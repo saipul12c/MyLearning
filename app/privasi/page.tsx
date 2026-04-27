@@ -4,7 +4,8 @@ import {
   Shield, Lock, Eye, Share2, Cookie, UserCheck, 
   Database, Smartphone, RefreshCw, MessageCircle, 
   Link2, Baby, History, Scale, ShieldCheck, 
-  ArrowRight, Info, AlertCircle, TrendingUp 
+  ArrowRight, Info, AlertCircle, TrendingUp,
+  Globe, Bell, AlertTriangle
 } from "lucide-react";
 import NativeAdCard from "@/app/components/NativeAdCard";
 
@@ -19,9 +20,11 @@ const sections = [
   { id: "pembagian", title: "Pembagian Informasi", icon: Share2, color: "text-indigo-400", bg: "bg-indigo-500/10", border: "border-indigo-500/20" },
   { id: "keamanan", title: "Protokol Keamanan", icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
   { id: "cookie", title: "Cookie & Tracking", icon: Cookie, color: "text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/20" },
+  { id: "anak", title: "Privasi Anak", icon: Baby, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/20" },
   { id: "hak", title: "Hak Privasi Anda", icon: UserCheck, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
   { id: "penyimpanan", title: "Retensi Data", icon: Smartphone, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/20" },
   { id: "hukum", title: "Kepatuhan UU PDP", icon: Scale, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" },
+  { id: "pembaruan", title: "Pembaruan Kebijakan", icon: Bell, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
   { id: "kontak", title: "Hubungi Legal", icon: MessageCircle, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
 ];
 
@@ -195,7 +198,7 @@ export default async function PrivacyPage() {
                       <h3 className="text-xl font-bold text-white">Pembagian Data</h3>
                     </div>
                     <p className="text-sm text-slate-500 leading-relaxed">
-                      Data hanya dibagikan ke penyedia pembayaran (Payment Gateway) dan instruktur resmi untuk keperluan verifikasi belajar. Kami <span className="text-red-400 font-bold">TIDAK PERNAH</span> menjual data Anda ke pihak iklan luar.
+                      Data hanya dibagikan ke penyedia pembayaran (Payment Gateway) dan instruktur resmi untuk keperluan verifikasi belajar. Kami <span className="text-red-400 font-bold">TIDAK PERNAH</span> menjual data Anda ke pihak iklan luar. Mitra pihak ketiga kami seperti layanan cloud dan analitik tunduk pada perjanjian kerahasiaan ketat yang mematuhi regulasi privasi.
                     </p>
                   </div>
                 </div>
@@ -224,6 +227,14 @@ export default async function PrivacyPage() {
                              <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Enkripsi Transit</div>
                              <p className="text-xs">Setiap interaksi antara browser Anda dan server kami dilindungi oleh sertifikat SSL EV modern.</p>
                            </div>
+                           <div className="space-y-2">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={12}/> Notifikasi Kebocoran</div>
+                             <p className="text-xs">Komitmen notifikasi maksimal 3x24 jam kepada Anda dan otoritas berwenang jika terjadi insiden data breach.</p>
+                           </div>
+                           <div className="space-y-2">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1"><Globe size={12}/> Transfer Lintas Negara</div>
+                             <p className="text-xs">Infrastruktur cloud kami menjamin setiap transfer data antar negara memenuhi standar perlindungan setara UU PDP.</p>
+                           </div>
                         </div>
                       </div>
                     </div>
@@ -251,6 +262,28 @@ export default async function PrivacyPage() {
                     </div>
                     <p className="text-xs text-slate-500 leading-relaxed">
                       Akun yang tidak aktif selama 5 tahun akan diarsip dan dihapus secara permanen. Anda dapat meminta penghapusan akun instan melalui hub bantuan.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4.5 Privasi Anak & Tautan Pihak Ketiga */}
+                <div className="grid md:grid-cols-2 gap-8 items-start">
+                  <div id="anak" className="scroll-mt-28 card p-6 border-teal-500/10 bg-teal-500/[0.02]">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Baby size={24} className="text-teal-400" />
+                      <h3 className="text-lg font-bold text-white">Privasi Anak di Bawah Umur</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                      Layanan dirancang untuk pengguna 13+ tahun. Jika Anda berusia di bawah batas usia persetujuan legal (18 tahun di Indonesia), Anda wajib memiliki izin dari orang tua atau wali sah.
+                    </p>
+                  </div>
+                  <div className="scroll-mt-28 card p-6 border-slate-500/10 bg-slate-500/[0.02]">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Link2 size={24} className="text-slate-400" />
+                      <h3 className="text-lg font-bold text-white">Tautan Pihak Ketiga</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Kursus kami mungkin memuat tautan ke sumber eksternal. Kami tidak bertanggung jawab atas praktik privasi situs tersebut dan menyarankan Anda meninjau kebijakan mereka.
                     </p>
                   </div>
                 </div>
@@ -306,6 +339,21 @@ export default async function PrivacyPage() {
                         </div>
                      </div>
                   </div>
+                </div>
+
+                {/* 6.5 Pembaruan Kebijakan */}
+                <div id="pembaruan" className="scroll-mt-28">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                      <Bell size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-white tracking-tight">Pembaruan Kebijakan</h3>
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
+                    Kami dapat merevisi Kebijakan Privasi ini secara berkala untuk mencerminkan perubahan pada undang-undang atau layanan kami. Perubahan material yang berdampak signifikan pada hak Anda akan diumumkan melalui email atau notifikasi banner di platform selambat-lambatnya 14 hari sebelum diberlakukan.
+                  </p>
                 </div>
 
                 {/* Interstitial Inline Ad */}

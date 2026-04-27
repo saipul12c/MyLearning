@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 export interface Voucher {
   id: string;
   code: string;
+  description?: string;
   discountType: 'fixed' | 'percentage';
   discountValue: number;
   instructorId?: string;
@@ -72,41 +73,48 @@ export async function incrementVoucherUsage(pVoucherId: string, pUserId: string,
 }
 
 export async function getVouchersForInstructor(userId: string): Promise<Voucher[]> {
-   // First get instructor profile
-   const { data: inst } = await supabase.from("instructors").select("id").eq("user_id", userId).single();
-   if (!inst) return [];
-
-   const { data, error } = await supabase
-    .from("vouchers")
-    .select("*")
-    .eq("instructor_id", inst.id)
-    .order("created_at", { ascending: false });
-    
-   if (error) return [];
-   return data.map(mapDbToVoucher);
+   try {
+     const { data, error } = await supabase.rpc('get_vouchers_instructor');
+     if (error) throw error;
+     return (data || []).map(mapDbToVoucher);
+   } catch (err) {
+     console.error('Error fetching instructor vouchers:', err);
+     return [];
+   }
 }
 
 export async function getAllVouchersAdmin(): Promise<Voucher[]> {
-    const { data, error } = await supabase
-     .from("vouchers")
-     .select("*, instructors(name)")
-     .order("created_at", { ascending: false });
-     
-    if (error) return [];
-    return data.map(v => ({
-       ...mapDbToVoucher(v),
-       instructorName: v.instructors?.name
-    }));
+    try {
+      const { data, error } = await supabase.rpc('get_all_vouchers_admin');
+      if (error) throw error;
+      return (data || []).map((v: any) => ({
+        ...mapDbToVoucher(v),
+        instructorName: v.instructor_name
+      }));
+    } catch (err) {
+      console.error('Error fetching admin vouchers:', err);
+      return [];
+    }
 }
 
 export async function deleteVoucher(id: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase.from("vouchers").delete().eq("id", id);
-  return { success: !error, error: error?.message };
+  try {
+    const { data, error } = await supabase.rpc('delete_voucher_admin', { p_voucher_id: id });
+    if (error) throw error;
+    return { success: data?.success ?? true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 export async function toggleVoucherStatus(id: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase.from("vouchers").update({ is_active: isActive }).eq("id", id);
-  return { success: !error, error: error?.message };
+  try {
+    const { data, error } = await supabase.rpc('toggle_voucher_admin', { p_voucher_id: id, p_is_active: isActive });
+    if (error) throw error;
+    return { success: data?.success ?? true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 export async function createVoucher(voucherData: any): Promise<{ success: boolean; data?: Voucher; error?: string }> {
@@ -125,14 +133,41 @@ export async function createVoucher(voucherData: any): Promise<{ success: boolea
        }
     }
 
-    const { data, error } = await supabase
-      .from("vouchers")
-      .insert(voucherData)
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('create_voucher_admin', {
+      p_data: voucherData
+    });
   
     if (error) return { success: false, error: error.message };
-    return { success: true, data: mapDbToVoucher(data) };
+    if (!data?.success) return { success: false, error: data?.error || 'Gagal membuat voucher' };
+    return { success: true, data: mapDbToVoucher(data.data) };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateVoucher(id: string, voucherData: any): Promise<{ success: boolean; data?: Voucher; error?: string }> {
+  try {
+    if (voucherData.course_id && voucherData.instructor_id) {
+       const { data: course, error: cErr } = await supabase
+        .from("courses")
+        .select("instructor_id")
+        .eq("id", voucherData.course_id)
+        .single();
+        
+       if (cErr || !course) return { success: false, error: "Kursus tidak ditemukan." };
+       if (course.instructor_id !== voucherData.instructor_id) {
+          return { success: false, error: "Anda tidak memiliki izin untuk mengupdate voucher untuk kursus ini." };
+       }
+    }
+
+    const { data, error } = await supabase.rpc('update_voucher_admin', {
+      p_voucher_id: id,
+      p_data: voucherData
+    });
+  
+    if (error) return { success: false, error: error.message };
+    if (!data?.success) return { success: false, error: data?.error || 'Gagal mengupdate voucher' };
+    return { success: true, data: mapDbToVoucher(data.data) };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -186,6 +221,7 @@ function mapDbToVoucher(v: any): Voucher {
   return {
     id: v.id,
     code: v.code,
+    description: v.description,
     discountType: v.discount_type,
     discountValue: v.discount_value,
     instructorId: v.instructor_id,

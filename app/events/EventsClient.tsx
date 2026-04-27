@@ -143,6 +143,7 @@ export default function EventsGalleryClient({
                     <option value="Webinar" className="bg-[#0c0c14]">Webinar</option>
                     <option value="Workshop" className="bg-[#0c0c14]">Workshop</option>
                     <option value="Competition" className="bg-[#0c0c14]">Competition</option>
+                    <option value="Challenge" className="bg-[#0c0c14]">Challenge</option>
                     <option value="Talkshow" className="bg-[#0c0c14]">Talkshow</option>
                   </select>
                </div>
@@ -201,10 +202,10 @@ export default function EventsGalleryClient({
 
           {/* Bottom Ad Placement */}
           {!loading && filteredEvents.length > 0 && (
-            <div className="mt-20">
+            <div className="mt-20 max-w-5xl mx-auto">
               <NativeAdCard 
                 location="all" 
-                variant="featured" 
+                variant="inline" 
                 initialPromo={initialFeaturedPromo}
               />
             </div>

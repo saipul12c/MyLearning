@@ -143,7 +143,15 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return null;
 
-  return await fetchUserProfile(session.user.id, session.user.email!, session.user.created_at);
+  const user = await fetchUserProfile(session.user.id, session.user.email!, session.user.created_at);
+
+  // ✅ FIX: Check ban status on session restore — force logout banned users
+  if (user.isBanned) {
+    await logout();
+    return null;
+  }
+
+  return user;
 }
 
 async function fetchUserProfile(userId: string, email: string, createdAt: string): Promise<User> {

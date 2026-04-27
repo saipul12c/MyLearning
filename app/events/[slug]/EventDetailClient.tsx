@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/AuthContext";
-import { getEventBySlug, registerForEvent, checkIfRegistered, PlatformEvent } from "@/lib/events";
+import { getEventBySlug, registerForEvent, checkIfRegistered, checkRegistrationRateLimit, PlatformEvent } from "@/lib/events";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import NativeAdCard from "../../components/NativeAdCard";
@@ -147,6 +147,14 @@ export default function EventDetailClient({
     setMessage(null);
 
     try {
+      // ✅ FIX: Check rate limit before allowing registration
+      const rateCheck = await checkRegistrationRateLimit(user.id, event.id);
+      if (!rateCheck.allowed) {
+        setMessage({ type: 'error', text: rateCheck.message || 'Terlalu banyak percobaan. Silakan tunggu beberapa menit.' });
+        setSubmitting(false);
+        return;
+      }
+
       const result = await registerForEvent(event.id, user.id);
       setIsRegistered(true);
       setRegistrationStatus(result.status || 'registered');
@@ -357,6 +365,35 @@ export default function EventDetailClient({
                 <div className="glass p-8 md:p-12 rounded-[3rem] border-white/5 overflow-hidden relative animate-fade-in-up delay-400">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 blur-[80px] -mr-32 -mt-32" />
                   <SpeakerSection speakers={event.speakerInfo} />
+                </div>
+              )}
+
+              {/* Prizes Section (Challenge/Competition) */}
+              {event.prizes && event.prizes.length > 0 && (
+                <div className="glass p-8 md:p-12 rounded-[3rem] border-amber-500/20 overflow-hidden relative animate-fade-in-up delay-450 bg-amber-500/5">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] -mr-32 -mt-32" />
+                  <div className="relative z-10 space-y-8">
+                    <div className="flex items-center gap-5">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20">
+                        <Sparkles size={28} />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black tracking-tight text-white">Prize Pool & Hadiah</h2>
+                        <p className="text-amber-500/80 text-sm font-medium uppercase tracking-widest mt-1">Total Hadiah Tersedia</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {event.prizes.map((prize, idx) => (
+                        <div key={idx} className="p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-amber-500/10 transition-colors">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-lg mb-4">
+                            #{prize.rank}
+                          </div>
+                          <p className="font-bold text-white text-lg">{prize.reward}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -161,21 +161,21 @@ export default function NativeAdCard({ location, categoryId, className = "", var
         >
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5 group-hover:opacity-100 opacity-30 transition-opacity duration-500" />
           
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-10 p-10 md:p-14">
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-8 md:p-10">
             <div className="flex-1 space-y-5 min-w-0 text-center md:text-left">
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">
                 <Sparkles size={12} />
                 {promo.badgeText || "OFFICIAL PARTNER"}
               </div>
-              <h3 className="text-white font-black text-3xl md:text-5xl leading-tight transition-all duration-300">
+              <h3 className="text-white font-black text-2xl md:text-4xl leading-tight transition-all duration-300">
                  {promo.title}
               </h3>
-              <p className="text-slate-400 text-sm md:text-lg line-clamp-2 leading-relaxed max-w-2xl">
+              <p className="text-slate-400 text-sm md:text-base line-clamp-2 leading-relaxed max-w-2xl">
                  {promo.description}
               </p>
               
-              <div className="pt-4 flex justify-center md:justify-start">
-                 <div className="btn-primary !px-10 !py-4 flex items-center gap-3 group/btn shadow-xl shadow-purple-500/20 text-xs font-black tracking-widest uppercase rounded-2xl">
+              <div className="pt-2 flex justify-center md:justify-start">
+                 <div className="btn-primary !px-6 !py-3 flex items-center gap-3 group/btn shadow-xl shadow-purple-500/20 text-[10px] md:text-xs font-black tracking-widest uppercase rounded-2xl">
                     Jelajahi Sekarang
                     {promo.isExternal ? <ExternalLink size={16} /> : <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />}
                  </div>
@@ -184,7 +184,7 @@ export default function NativeAdCard({ location, categoryId, className = "", var
 
 
             {promo.videoUrl ? (
-              <div className="relative w-full md:w-[450px] aspect-video rounded-3xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+              <div className="relative w-full md:w-[360px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
                 <video
                   src={promo.videoUrl}
                   poster={promo.imageUrl}
@@ -196,7 +196,7 @@ export default function NativeAdCard({ location, categoryId, className = "", var
                 />
               </div>
             ) : promo.imageUrl && (
-              <div className="relative w-full md:w-[450px] aspect-video rounded-3xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+              <div className="relative w-full md:w-[360px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
                 <Image
                   src={promo.imageUrl}
                   alt={promo.title}

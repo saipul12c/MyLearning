@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS public.vouchers (
   is_featured BOOLEAN DEFAULT false
 );
 
+ALTER TABLE public.vouchers ADD COLUMN IF NOT EXISTS description TEXT;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
 CREATE INDEX IF NOT EXISTS idx_vouchers_course_id ON vouchers(course_id);
@@ -273,3 +275,288 @@ GRANT EXECUTE ON FUNCTION redeem_voucher_by_id TO authenticated, service_role;
  $$ LANGUAGE plpgsql SECURITY DEFINER;
  
  GRANT EXECUTE ON FUNCTION get_vouchers_for_user_v2 TO authenticated, service_role;
+
+-- 6. Admin: Get ALL vouchers (bypasses RLS)
+DO $$ 
+DECLARE _rec RECORD;
+BEGIN
+    FOR _rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'get_all_vouchers_admin' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _rec.function_sig;
+    END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION get_all_vouchers_admin()
+RETURNS JSONB AS $$
+DECLARE
+    _result JSONB;
+    _caller_role TEXT;
+BEGIN
+    -- Safety: check caller role from user_profiles as fallback
+    SELECT role INTO _caller_role FROM user_profiles WHERE user_id = auth.uid();
+    IF _caller_role != 'admin' THEN
+        RETURN '[]'::jsonb;
+    END IF;
+
+    SELECT jsonb_agg(row_to_json(sub))
+    INTO _result
+    FROM (
+        SELECT 
+            v.*,
+            i.name as instructor_name
+        FROM vouchers v
+        LEFT JOIN instructors i ON v.instructor_id = i.id
+        ORDER BY v.created_at DESC
+    ) sub;
+
+    RETURN COALESCE(_result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION get_all_vouchers_admin TO authenticated, service_role;
+
+-- 7. Admin/Instructor: Create voucher (bypasses RLS)
+DO $$ 
+DECLARE _rec RECORD;
+BEGIN
+    FOR _rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'create_voucher_admin' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _rec.function_sig;
+    END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION create_voucher_admin(p_data JSONB)
+RETURNS JSONB AS $$
+DECLARE
+    _caller_role TEXT;
+    _new_voucher RECORD;
+BEGIN
+    SELECT role INTO _caller_role FROM user_profiles WHERE user_id = auth.uid();
+    IF _caller_role NOT IN ('admin', 'instructor') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized');
+    END IF;
+
+    INSERT INTO vouchers (
+        code, description, discount_type, discount_value, min_purchase, max_discount,
+        usage_limit, course_id, instructor_id, is_active, expiry_date,
+        category_slug, start_date, target_user_id, is_featured
+    ) VALUES (
+        p_data->>'code',
+        p_data->>'description',
+        COALESCE(p_data->>'discount_type', 'percentage'),
+        COALESCE((p_data->>'discount_value')::numeric, 0),
+        COALESCE((p_data->>'min_purchase')::numeric, 0),
+        COALESCE((p_data->>'max_discount')::numeric, 0),
+        COALESCE((p_data->>'usage_limit')::integer, 0),
+        NULLIF(p_data->>'course_id', '')::uuid,
+        NULLIF(p_data->>'instructor_id', '')::uuid,
+        COALESCE((p_data->>'is_active')::boolean, true),
+        NULLIF(p_data->>'expiry_date', '')::timestamptz,
+        NULLIF(p_data->>'category_slug', ''),
+        COALESCE(NULLIF(p_data->>'start_date', '')::timestamptz, NOW()),
+        NULLIF(p_data->>'target_user_id', '')::uuid,
+        COALESCE((p_data->>'is_featured')::boolean, false)
+    )
+    RETURNING * INTO _new_voucher;
+
+    RETURN jsonb_build_object('success', true, 'data', row_to_json(_new_voucher));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION create_voucher_admin TO authenticated, service_role;
+
+-- 8. Admin/Instructor: Delete voucher (bypasses RLS)
+DO $$ 
+DECLARE _rec RECORD;
+BEGIN
+    FOR _rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'delete_voucher_admin' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _rec.function_sig;
+    END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION delete_voucher_admin(p_voucher_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    _caller_role TEXT;
+BEGIN
+    SELECT role INTO _caller_role FROM user_profiles WHERE user_id = auth.uid();
+    IF _caller_role NOT IN ('admin', 'instructor') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized');
+    END IF;
+
+    IF _caller_role = 'instructor' THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM vouchers v
+            JOIN instructors i ON v.instructor_id = i.id
+            WHERE v.id = p_voucher_id AND i.user_id = auth.uid()
+        ) THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Not your voucher');
+        END IF;
+    END IF;
+
+    DELETE FROM vouchers WHERE id = p_voucher_id;
+
+    RETURN jsonb_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION delete_voucher_admin TO authenticated, service_role;
+
+-- 9. Admin/Instructor: Toggle voucher status (bypasses RLS)
+DO $$ 
+DECLARE _rec RECORD;
+BEGIN
+    FOR _rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'toggle_voucher_admin' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _rec.function_sig;
+    END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION toggle_voucher_admin(p_voucher_id UUID, p_is_active BOOLEAN)
+RETURNS JSONB AS $$
+DECLARE
+    _caller_role TEXT;
+BEGIN
+    SELECT role INTO _caller_role FROM user_profiles WHERE user_id = auth.uid();
+    IF _caller_role NOT IN ('admin', 'instructor') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized');
+    END IF;
+
+    IF _caller_role = 'instructor' THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM vouchers v
+            JOIN instructors i ON v.instructor_id = i.id
+            WHERE v.id = p_voucher_id AND i.user_id = auth.uid()
+        ) THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Not your voucher');
+        END IF;
+    END IF;
+
+    UPDATE vouchers SET is_active = p_is_active, updated_at = NOW() WHERE id = p_voucher_id;
+
+    RETURN jsonb_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION toggle_voucher_admin TO authenticated, service_role;
+
+-- 10. Instructor: Get own vouchers (bypasses RLS)
+DO $$ 
+DECLARE _rec RECORD;
+BEGIN
+    FOR _rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'get_vouchers_instructor' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _rec.function_sig;
+    END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION get_vouchers_instructor()
+RETURNS JSONB AS $$
+DECLARE
+    _result JSONB;
+    _caller_role TEXT;
+BEGIN
+    SELECT role INTO _caller_role FROM user_profiles WHERE user_id = auth.uid();
+    IF _caller_role != 'instructor' THEN
+        RETURN '[]'::jsonb;
+    END IF;
+
+    SELECT jsonb_agg(row_to_json(sub))
+    INTO _result
+    FROM (
+        SELECT 
+            v.*,
+            i.name as instructor_name
+        FROM vouchers v
+        JOIN instructors i ON v.instructor_id = i.id
+        WHERE i.user_id = auth.uid()
+        ORDER BY v.created_at DESC
+    ) sub;
+
+    RETURN COALESCE(_result, '[]'::jsonb);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION get_vouchers_instructor TO authenticated, service_role;
+
+-- 11. Admin/Instructor: Update voucher (bypasses RLS)
+DO $$ 
+DECLARE _rec RECORD;
+BEGIN
+    FOR _rec IN 
+        SELECT oid::regprocedure as function_sig
+        FROM pg_proc 
+        WHERE proname = 'update_voucher_admin' 
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || _rec.function_sig;
+    END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION update_voucher_admin(p_voucher_id UUID, p_data JSONB)
+RETURNS JSONB AS $$
+DECLARE
+    _caller_role TEXT;
+    _updated_voucher RECORD;
+BEGIN
+    SELECT role INTO _caller_role FROM user_profiles WHERE user_id = auth.uid();
+    IF _caller_role NOT IN ('admin', 'instructor') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized');
+    END IF;
+
+    IF _caller_role = 'instructor' THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM vouchers v
+            JOIN instructors i ON v.instructor_id = i.id
+            WHERE v.id = p_voucher_id AND i.user_id = auth.uid()
+        ) THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Not your voucher');
+        END IF;
+    END IF;
+
+    UPDATE vouchers SET
+        code = COALESCE(p_data->>'code', code),
+        description = p_data->>'description',
+        discount_type = COALESCE(p_data->>'discount_type', discount_type),
+        discount_value = COALESCE((p_data->>'discount_value')::numeric, discount_value),
+        min_purchase = COALESCE((p_data->>'min_purchase')::numeric, min_purchase),
+        max_discount = COALESCE((p_data->>'max_discount')::numeric, max_discount),
+        usage_limit = COALESCE((p_data->>'usage_limit')::integer, usage_limit),
+        course_id = NULLIF(p_data->>'course_id', '')::uuid,
+        instructor_id = NULLIF(p_data->>'instructor_id', '')::uuid,
+        is_active = COALESCE((p_data->>'is_active')::boolean, is_active),
+        expiry_date = NULLIF(p_data->>'expiry_date', '')::timestamptz,
+        category_slug = NULLIF(p_data->>'category_slug', ''),
+        start_date = COALESCE(NULLIF(p_data->>'start_date', '')::timestamptz, start_date),
+        target_user_id = NULLIF(p_data->>'target_user_id', '')::uuid,
+        is_featured = COALESCE((p_data->>'is_featured')::boolean, is_featured),
+        updated_at = NOW()
+    WHERE id = p_voucher_id
+    RETURNING * INTO _updated_voucher;
+
+    RETURN jsonb_build_object('success', true, 'data', row_to_json(_updated_voucher));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION update_voucher_admin TO authenticated, service_role;

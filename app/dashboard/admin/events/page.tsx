@@ -18,7 +18,7 @@ export default function AdminEventsPage() {
   const [events, setEvents] = useState<PlatformEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PlatformEvent | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
@@ -52,7 +52,11 @@ export default function AdminEventsPage() {
     maxSlots: 100,
     tags: [] as string[],
     speakerInfo: [] as any[],
+    prizes: [] as any[],
+    sponsors: [] as any[],
   });
+
+  const isChallenge = formData.category === 'Challenge' || formData.category === 'Competition';
 
   useEffect(() => {
     if (isAdmin) {
@@ -103,6 +107,8 @@ export default function AdminEventsPage() {
         maxSlots: event.maxSlots || 100,
         tags: event.tags || [],
         speakerInfo: event.speakerInfo || [],
+        prizes: event.prizes || [],
+        sponsors: event.sponsors || [],
       });
     } else {
       setEditingEvent(null);
@@ -128,9 +134,11 @@ export default function AdminEventsPage() {
         maxSlots: 100,
         tags: [],
         speakerInfo: [],
+        prizes: [],
+        sponsors: [],
       });
     }
-    setIsModalOpen(true);
+    setIsFormOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,7 +151,7 @@ export default function AdminEventsPage() {
       } else {
         await createEvent({ ...formData, createdBy: user.id });
       }
-      setIsModalOpen(false);
+      setIsFormOpen(false);
       setCurrentPage(1); // Reset to first page after creating new event
       fetchEvents();
     } catch (error) {
@@ -189,8 +197,10 @@ export default function AdminEventsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      {!isFormOpen ? (
+        <>
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4">
             <span>Admin</span>
@@ -412,21 +422,26 @@ export default function AdminEventsPage() {
           </div>
         </div>
       )}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#0c0c14] border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-scale-in">
-            <div className="p-8 border-b border-white/5 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-black text-white">{editingEvent ? 'Edit' : 'Tambah'} <span className="gradient-text">Event</span></h2>
-                <p className="text-sm text-slate-500 mt-1">Lengkapi informasi detail acara di bawah ini.</p>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 rounded-2xl bg-white/5 text-slate-500 hover:text-white transition-colors">
-                <XCircle size={24} />
-              </button>
-            </div>
+      </>
+      ) : null}
 
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+      {isFormOpen && (
+        <div className="animate-fade-in space-y-6">
+          <div className="flex items-center gap-4 mb-2">
+            <button 
+              onClick={() => setIsFormOpen(false)} 
+              className="p-3 rounded-2xl bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-black text-white">{editingEvent ? 'Edit' : 'Tambah'} <span className="gradient-text">Event</span></h2>
+              <p className="text-sm text-slate-500 mt-1">Lengkapi informasi detail acara di bawah ini.</p>
+            </div>
+          </div>
+
+          <div className="bg-[#0c0c14] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
+            <div className="p-8">
               <div className="mb-8 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: formData.themeColor }} />
@@ -480,7 +495,7 @@ export default function AdminEventsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Deskripsi Lengkap</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{isChallenge ? 'Instruksi Tantangan & Panduan Lengkap (Markdown)' : 'Deskripsi Lengkap (Markdown/Text)'}</label>
                     <textarea 
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -502,7 +517,7 @@ export default function AdminEventsPage() {
                   {/* Speaker Management Section */}
                   <div className="p-6 rounded-[2.5rem] bg-white/2 border border-white/5 space-y-6">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Manajemen Pembicara</h4>
+                      <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">{isChallenge ? 'Manajemen Juri / Mentor' : 'Manajemen Pembicara'}</h4>
                       <button 
                         type="button" 
                         onClick={() => setFormData({ ...formData, speakerInfo: [...formData.speakerInfo, { name: "", role: "", bio: "", avatarUrl: "" }] })}
@@ -530,7 +545,7 @@ export default function AdminEventsPage() {
                           <div className="grid grid-cols-2 gap-3">
                             <input 
                               type="text" 
-                              placeholder="Nama Pembicara" 
+                              placeholder={isChallenge ? "Nama Juri / Mentor" : "Nama Pembicara"} 
                               value={speaker.name}
                               onChange={(e) => {
                                 const newList = [...formData.speakerInfo];
@@ -565,10 +580,63 @@ export default function AdminEventsPage() {
                         </div>
                       ))}
                       {formData.speakerInfo.length === 0 && (
-                        <p className="text-[10px] text-center text-slate-600 font-bold uppercase tracking-widest py-4">Belum ada pembicara ditambahkan.</p>
+                        <p className="text-[10px] text-center text-slate-600 font-bold uppercase tracking-widest py-4">Belum ada {isChallenge ? 'juri/mentor' : 'pembicara'} ditambahkan.</p>
                       )}
                     </div>
                   </div>
+
+                  {/* Prizes Management Section (Only for Challenge/Competition) */}
+                  {isChallenge && (
+                    <div className="p-6 rounded-[2.5rem] bg-amber-500/5 border border-amber-500/20 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black uppercase tracking-[0.2em] text-amber-400">Manajemen Hadiah (Prize Pool)</h4>
+                        <button 
+                          type="button" 
+                          onClick={() => setFormData({ ...formData, prizes: [...formData.prizes, { rank: formData.prizes.length + 1, reward: "" }] })}
+                          className="p-2 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all border border-amber-500/20"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        {formData.prizes.map((prize, idx) => (
+                          <div key={idx} className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 relative group">
+                            <div className="flex-1 flex items-center gap-3">
+                              <span className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs">
+                                #{prize.rank}
+                              </span>
+                              <input 
+                                type="text" 
+                                placeholder="Cth: Rp 5.000.000 + Sertifikat" 
+                                value={prize.reward}
+                                onChange={(e) => {
+                                  const newList = [...formData.prizes];
+                                  newList[idx].reward = e.target.value;
+                                  setFormData({ ...formData, prizes: newList });
+                                }}
+                                className="input !py-2 !text-xs !bg-transparent !border-none !px-0 flex-1 focus:!ring-0"
+                              />
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                const newList = [...formData.prizes];
+                                newList.splice(idx, 1);
+                                setFormData({ ...formData, prizes: newList });
+                              }}
+                              className="p-2 rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        {formData.prizes.length === 0 && (
+                          <p className="text-[10px] text-center text-amber-500/50 font-bold uppercase tracking-widest py-2">Belum ada hadiah ditambahkan.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Settings Column */}
@@ -616,6 +684,7 @@ export default function AdminEventsPage() {
                           <option value="Webinar">Webinar</option>
                           <option value="Workshop">Workshop</option>
                           <option value="Competition">Competition</option>
+                          <option value="Challenge">Challenge</option>
                           <option value="Talkshow">Talkshow</option>
                         </select>
                       </div>
@@ -666,12 +735,12 @@ export default function AdminEventsPage() {
                    </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Link Pendaftaran / Meeting (Opsional)</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{isChallenge ? 'Link Panduan / Grup (Opsional)' : 'Link Pendaftaran / Meeting (Opsional)'}</label>
                     <input 
                       type="url" 
                       value={formData.registrationLink}
                       onChange={(e) => setFormData({ ...formData, registrationLink: e.target.value })}
-                      placeholder="https://zoom.us/..."
+                      placeholder={isChallenge ? "https://discord.gg/... atau Link Notion" : "https://zoom.us/..."}
                       className="input !bg-white/5 !border-white/10"
                     />
                   </div>
@@ -699,12 +768,12 @@ export default function AdminEventsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Link Rekaman (Setelah Selesai)</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{isChallenge ? 'Link Pengumpulan Tugas / Submission (Opsional)' : 'Link Rekaman (Setelah Selesai)'}</label>
                     <input 
                       type="text" 
                       value={formData.recordingUrl}
                       onChange={(e) => setFormData({ ...formData, recordingUrl: e.target.value })}
-                      placeholder="Link YouTube/GDrive Rekaman"
+                      placeholder={isChallenge ? "Link Form Pengumpulan / Google Form" : "Link YouTube/GDrive Rekaman"}
                       className="input !bg-white/5 !border-white/10"
                     />
                   </div>
@@ -733,10 +802,10 @@ export default function AdminEventsPage() {
               </form>
             </div>
 
-            <div className="p-8 border-t border-white/5 bg-white/[0.02] flex items-center justify-end gap-4">
+            <div className="p-8 border-t border-white/5 bg-white/[0.02] flex items-center justify-end gap-4 mt-8 rounded-b-[2.5rem]">
               <button 
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => setIsFormOpen(false)}
                 className="btn-secondary !bg-transparent hover:!bg-white/5"
               >
                 Batal

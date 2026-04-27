@@ -283,6 +283,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+
 -- ============================================
 -- 10. REVIEWS, CERTIFICATES, CONTACT
 -- ============================================
@@ -472,6 +474,26 @@ ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS speaker_info JSONB DEFAULT 
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS theme_color VARCHAR(50) DEFAULT '#7c3aed';
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS confirmed_registrations INTEGER DEFAULT 0;
 ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS waitlisted_count INTEGER DEFAULT 0;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS prizes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE platform_events ADD COLUMN IF NOT EXISTS sponsors JSONB DEFAULT '[]'::jsonb;
+
+-- 12b. EVENT SUBMISSIONS (FOR CHALLENGES/COMPETITIONS)
+-- ============================================
+CREATE TABLE IF NOT EXISTS event_submissions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id UUID NOT NULL REFERENCES platform_events(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+  team_name VARCHAR(100),
+  submission_url TEXT NOT NULL,
+  description TEXT,
+  status VARCHAR(50) DEFAULT 'submitted' CHECK (status IN ('submitted', 'graded', 'rejected')),
+  score INTEGER,
+  rank INTEGER,
+  feedback TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(event_id, user_id) -- One submission per user per event
+);
 
 -- Drop old constraint and recreate with 'waitlisted' status
 DO $$
@@ -650,3 +672,15 @@ CREATE POLICY "Anyone can insert ad events" ON ad_events
 DROP POLICY IF EXISTS "Admins can view ad events" ON ad_events;
 CREATE POLICY "Admins can view ad events" ON ad_events
   FOR SELECT USING (is_admin());
+
+
+-- Tambahkan kolom yang hilang ke tabel vouchers
+ALTER TABLE IF EXISTS public.vouchers 
+ADD COLUMN IF NOT EXISTS max_discount NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS category_slug TEXT,
+ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ DEFAULT NOW(),
+ADD COLUMN IF NOT EXISTS target_user_id UUID REFERENCES auth.users(id),
+ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
+
+-- Refresh cache PostgREST agar kolom baru terbaca oleh API
+NOTIFY pgrst, 'reload schema';

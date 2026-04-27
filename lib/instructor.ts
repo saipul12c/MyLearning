@@ -25,6 +25,33 @@ export const getInstructorProfile = cache(async (userId: string) => {
   return data;
 });
 
+export async function ensureInstructorProfile(userId: string, fullName: string) {
+  const profile = await getInstructorProfile(userId);
+  if (profile) return profile;
+
+  // Generate a safe slug
+  const baseSlug = fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const slug = `${baseSlug}-${Math.floor(Math.random() * 1000)}`;
+
+  const { data, error } = await supabase
+    .from("instructors")
+    .insert({
+      user_id: userId,
+      name: fullName,
+      slug: slug,
+      bio: "Administrator & Instructor"
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("Error creating instructor profile:", error);
+    return null;
+  }
+
+  return data;
+}
+
 export async function getInstructorCourses(userId: string): Promise<Course[]> {
   // 1. Get the Instructor ID first
   const profile = await getInstructorProfile(userId);

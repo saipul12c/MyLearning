@@ -101,6 +101,7 @@ export default function PromotionManagement() {
   const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
   const [isImpressionDropdownOpen, setIsImpressionDropdownOpen] = useState(false);
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
+  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
 
   // Debounce search filter
   useEffect(() => {
@@ -187,6 +188,15 @@ export default function PromotionManagement() {
     e.preventDefault();
     if (!editingPromo) return;
 
+    if (!editingPromo.title?.trim()) {
+      alert("Judul Iklan wajib diisi.");
+      return;
+    }
+    if (!editingPromo.linkUrl?.trim()) {
+      alert("Link Tujuan wajib diisi.");
+      return;
+    }
+
     setProcessing(true);
     const res = await upsertPromotion(editingPromo);
     if (res.success) {
@@ -219,8 +229,12 @@ export default function PromotionManagement() {
     }
   };
 
-  const handleMaintenance = async () => {
-    if (!confirm("Jalankan maintenance? Ini akan:\n- Nonaktifkan iklan expired\n- Arsipkan iklan lama (>3 bulan)\n- Tolak draft/pending >7 hari")) return;
+  const handleMaintenance = () => {
+    setIsMaintenanceModalOpen(true);
+  };
+
+  const executeMaintenance = async () => {
+    setIsMaintenanceModalOpen(false);
     setMaintenanceRunning(true);
     const res = await runAdMaintenance();
     if (res.success) {
@@ -256,7 +270,7 @@ export default function PromotionManagement() {
         </div>
 
         <div className="card overflow-hidden border border-white/5 bg-white/[0.02]">
-          <form onSubmit={handleSave} className="flex flex-col">
+          <form onSubmit={handleSave} noValidate className="flex flex-col">
             <div className="p-6 md:p-8 space-y-8">
               <div className="grid grid-cols-1 gap-8">
                 {/* Title */}
@@ -752,6 +766,91 @@ export default function PromotionManagement() {
             </div>
           )}
         </>
+      )}
+
+      {/* Maintenance Confirmation Modal */}
+      {isMaintenanceModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#12121a] border border-white/10 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                  <Wrench size={20} />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Konfirmasi Maintenance</h3>
+                  <p className="text-slate-500 text-xs">Pembersihan Sistem Iklan Otomatis</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsMaintenanceModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Fitur maintenance ini dirancang untuk menjaga database iklan tetap ringan dan relevan. Berikut adalah tindakan yang akan dilakukan oleh sistem:
+              </p>
+              
+              <div className="space-y-3 mt-4">
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check size={12} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Nonaktifkan Iklan Kedaluwarsa</h4>
+                    <p className="text-xs text-slate-400 mt-1">Semua iklan yang tanggal berakhirnya sudah terlewat akan otomatis diubah statusnya menjadi <strong>Tidak Aktif</strong>. Mencegah iklan expired tetap tayang.</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check size={12} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Arsipkan Iklan Lama</h4>
+                    <p className="text-xs text-slate-400 mt-1">Iklan yang sudah tidak aktif dan berusia <strong>lebih dari 3 bulan</strong> akan dipindahkan ke arsip untuk mengurangi beban antarmuka utama.</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check size={12} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Tolak Draft/Pending</h4>
+                    <p className="text-xs text-slate-400 mt-1">Pengajuan iklan dengan status draft atau pending selama <strong>lebih dari 7 hari</strong> akan otomatis ditolak untuk merapikan antrean.</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mt-6 flex gap-3">
+                <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                <p className="text-xs text-amber-500/90 leading-relaxed">
+                  Apakah Anda yakin ingin menjalankan pembersihan ini? <strong>Proses ini berjalan otomatis satu kali (one-off) dan akan berhenti sendiri setelah selesai.</strong> Tidak dapat dibatalkan saat sedang berlangsung.
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-white/[0.02] border-t border-white/5 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsMaintenanceModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={executeMaintenance}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 text-black transition-colors flex items-center gap-2"
+              >
+                <Wrench size={16} /> Jalankan Maintenance
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

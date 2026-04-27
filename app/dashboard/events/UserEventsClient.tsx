@@ -8,6 +8,8 @@ import {
   updateRegistrationProof,
   validateFile,
   FILE_UPLOAD_CONFIG,
+  getEventCertificate,
+  listUserCertificates,
 } from "@/lib/events";
 import { supabase } from "@/lib/supabase";
 import {
@@ -58,7 +60,21 @@ export default function UserEventsClient({
   const fetchRegistrations = async () => {
     setLoading(true);
     const data = await getMyRegistrations(user!.id);
-    setRegistrations(data);
+    
+    // ✅ FIX: Fetch event certificates for attended registrations that lack a certificate_url
+    const enriched = await Promise.all(
+      data.map(async (reg: any) => {
+        if (reg.status === 'attended' && !reg.certificate_url) {
+          const cert = await getEventCertificate(user!.id, reg.event_id);
+          if (cert) {
+            return { ...reg, certificate_url: cert.certificate_url, certificate_number: cert.certificate_number };
+          }
+        }
+        return reg;
+      })
+    );
+    
+    setRegistrations(enriched);
     setLoading(false);
   };
 
@@ -171,7 +187,7 @@ export default function UserEventsClient({
           <Calendar className="mx-auto text-slate-700 mb-4" size={48} />
           <h3 className="text-xl font-bold text-white mb-2">Belum Ada Event</h3>
           <p className="text-slate-400 mb-6">Anda belum mendaftar ke event apa pun.</p>
-          <a href="/events" className="btn-primary">Cari Event Sekarang</a>
+          <Link href="/events" className="btn-primary">Cari Event Sekarang</Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">

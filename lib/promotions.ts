@@ -279,7 +279,7 @@ export async function trackImpression(promoId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     
     const { error } = await supabase.rpc("increment_ad_impressions", { 
-      promo_id: promoId, 
+      p_promo_id: promoId, 
       p_user_id: user?.id 
     });
 

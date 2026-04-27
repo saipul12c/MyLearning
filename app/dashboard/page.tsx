@@ -5,15 +5,19 @@ import { useAuth } from "@/app/components/AuthContext";
 import { getActiveEnrollment, getUserEnrollments, getAllEnrollmentsAdmin, getRemainingDays, getContactMessages, getContactMessageStats } from "@/lib/enrollment";
 import { getActivePromotions, type Promotion } from "@/lib/promotions";
 import { getAllRegisteredUsers, getUserCount, type SafeUser } from "@/lib/auth";
-import { getCourses, getCourseCount } from "@/lib/courses";
+import { getCourses, getCourseCount, getRecommendedCourses } from "@/lib/courses";
+import { getTopInterests } from "@/lib/interests";
 import { getLevelLabel, type Enrollment } from "@/lib/enrollment";
 import Link from "next/link";
-import { BookOpen, Users, Award, Clock, TrendingUp, AlertTriangle, ArrowRight, CheckCircle, XCircle, MessageSquare, Loader2, Megaphone } from "lucide-react";
+import { BookOpen, Users, Award, Clock, TrendingUp, AlertTriangle, ArrowRight, CheckCircle, XCircle, MessageSquare, Loader2, Megaphone, Sparkles, ClipboardCheck } from "lucide-react";
 import Skeleton, { SkeletonCircle } from "../components/ui/Skeleton";
 import InstructorDashboard from "../components/InstructorDashboard";
 import ErrorState from "../components/ui/ErrorState";
 import SignatureManager from "../components/SignatureManager";
 import PromotionCard from "../components/PromotionCard";
+import CourseCard from "@/app/components/CourseCard";
+import GamificationCard from "../components/dashboard/GamificationCard";
+import { updateStreak } from "@/lib/gamification";
 
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
@@ -37,22 +41,26 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
   const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
   const [courseCount, setCourseCount] = useState(0);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [active, all, count, promos] = await Promise.all([
+      updateStreak(userId);
+      const [active, all, count, promos, recommended] = await Promise.all([
         getActiveEnrollment(userId),
         getUserEnrollments(userId),
         getCourseCount(),
-        getActivePromotions("dashboard_card")
+        getActivePromotions("dashboard_card"),
+        getRecommendedCourses(userId, getTopInterests(3))
       ]);
       setActiveEnrollment(active);
       setAllEnrollments(all);
       setCourseCount(count);
       setPromotions(promos);
+      setRecommendations(recommended);
     } catch (err: any) {
       console.error("Dashboard error:", err);
       setError("Gagal memuat data dashboard. Silakan coba lagi nanti.");
@@ -103,12 +111,19 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
   const remaining = activeEnrollment ? getRemainingDays(activeEnrollment) : 0;
 
   const initials = userName
-    .split(" ")
-    .map((n) => n[0])
-    .join("");
+    ? userName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .substring(0, 2)
+        .toUpperCase()
+    : "??";
 
   return (
-    <div className="max-w-5xl space-y-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-8">
       {/* Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-400 p-0.5 shadow-xl shadow-purple-500/10">
@@ -224,7 +239,37 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
           </div>
         </div>
       )}
+
+      {/* Course Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-4 bg-cyan-500 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 Rekomendasi <span className="text-cyan-400">Untuk Anda</span>
+                 <Sparkles size={14} className="text-cyan-400 animate-pulse" />
+              </h2>
+            </div>
+            <Link href="/dashboard/courses" className="text-[10px] font-black text-slate-500 hover:text-white transition-colors uppercase tracking-[0.2em]">
+               Lihat Semua
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-6">
+            {recommendations.map((course) => (
+              <CourseCard key={course.id} course={course} variant="compact" />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+
+    {/* Sidebar Content */}
+    <div className="lg:col-span-1 space-y-8">
+      <GamificationCard userId={userId} />
+    </div>
+  </div>
+</div>
   );
 }
 
@@ -319,6 +364,10 @@ function AdminDashboard({ userId }: { userId: string }) {
           <p className="text-slate-400 text-sm mt-1">Overview & Real-time Platform Statistics</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Link href="/dashboard/admin/grading" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-emerald-500/30">
+            <ClipboardCheck size={14} className="group-hover:scale-110 transition-transform text-emerald-400" />
+            Antrian Penilaian
+          </Link>
           <Link href="/dashboard/admin/ad-requests" className="btn-secondary text-xs !py-2.5 px-4 flex items-center gap-2 font-bold group border-purple-500/30">
             <Megaphone size={14} className="group-hover:scale-110 transition-transform text-purple-400" />
             Antrian Iklan

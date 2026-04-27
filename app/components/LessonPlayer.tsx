@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronRight, ChevronLeft, CheckCircle, PlayCircle, BookOpen, Clock, ArrowRight, Brain, FileQuestion, Lock, Loader2 } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, CheckCircle, PlayCircle, BookOpen, Clock, ArrowRight, Brain, FileQuestion, Lock, Loader2, StickyNote } from "lucide-react";
 import { type Lesson } from "@/lib/data";
 import DiscussionSection from "./DiscussionSection";
+import LessonNotes from "./LessonNotes";
 import NativeAdCard from "./NativeAdCard";
+import { useAuth } from "./AuthContext";
 
 interface LessonPlayerProps {
   courseTitle: string;
@@ -30,11 +32,16 @@ export default function LessonPlayer({
   onNavigate,
   onSubmitAssignment,
 }: LessonPlayerProps) {
+  const { user } = useAuth();
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "assignment">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "assignment" | "notes">("content");
   const [assignmentAnswers, setAssignmentAnswers] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentTimestamp, setCurrentTimestamp] = useState(0);
+
+  // Reference for the video player to handle seeking
+  const playerRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     const found = lessons.find((l) => l.id === currentLessonId) || lessons[0];
@@ -225,6 +232,7 @@ export default function LessonPlayer({
               className="absolute inset-0 w-full h-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
+              ref={playerRef}
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-500">
@@ -234,20 +242,21 @@ export default function LessonPlayer({
           )}
         </div>
 
-        {/* Tab Switcher (Only if assignment exists) */}
-        {currentAssignment && (
-           <div className="flex px-8 border-b border-white/5 bg-slate-900/30">
-              <button 
-                onClick={() => setActiveTab("content")}
-                className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 ${
-                   activeTab === 'content' ? 'border-purple-500 text-white' : 'border-transparent text-slate-500 hover:text-white'
-                }`}
-              >
-                 <BookOpen size={14} /> Materi Pelajaran
-              </button>
+        {/* Tab Switcher */}
+        <div className="flex px-8 border-b border-white/5 bg-slate-900/30 overflow-x-auto no-scrollbar">
+           <button 
+             onClick={() => setActiveTab("content")}
+             className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 whitespace-nowrap ${
+                activeTab === 'content' ? 'border-purple-500 text-white' : 'border-transparent text-slate-500 hover:text-white'
+             }`}
+           >
+              <BookOpen size={14} /> Materi Pelajaran
+           </button>
+           
+           {currentAssignment && (
               <button 
                 onClick={() => setActiveTab("assignment")}
-                className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 relative ${
+                className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 relative whitespace-nowrap ${
                    activeTab === 'assignment' ? 'border-cyan-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
               >
@@ -259,8 +268,17 @@ export default function LessonPlayer({
                    <CheckCircle size={12} className="text-emerald-500" />
                  )}
               </button>
-           </div>
-        )}
+           )}
+
+           <button 
+            onClick={() => setActiveTab("notes")}
+            className={`flex items-center gap-2 px-6 py-4 text-xs font-bold transition-all border-b-2 whitespace-nowrap ${
+               activeTab === 'notes' ? 'border-cyan-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+             <StickyNote size={14} /> Catatan Saya
+          </button>
+        </div>
 
         {/* Content Area */}
         <div className="max-w-4xl mx-auto w-full p-8 md:p-12">
@@ -309,7 +327,7 @@ export default function LessonPlayer({
                   )}
                </div>
             </div>
-          ) : (
+          ) : activeTab === "assignment" ? (
             <div className="animate-in slide-in-from-right-8 duration-500 space-y-8">
                <div className="flex items-center justify-between mb-8 pb-8 border-b border-white/5">
                   <div>
@@ -367,6 +385,26 @@ export default function LessonPlayer({
                      </button>
                   </div>
                )}
+            </div>
+          ) : (
+            <div className="animate-in fade-in duration-500">
+               <div className="mb-8 pb-8 border-b border-white/5">
+                 <h2 className="text-3xl font-bold text-white mb-2">Catatan Materi</h2>
+                 <p className="text-sm text-slate-500">Kumpulan catatan pribadi Anda untuk sesi ini.</p>
+               </div>
+               
+               <LessonNotes 
+                userId={user?.id || ""} 
+                lessonId={activeLesson.id} 
+                currentTimestamp={currentTimestamp}
+                onSeek={(seconds) => {
+                  if (playerRef.current && activeLesson.videoUrl) {
+                    const src = activeLesson.videoUrl;
+                    const cleanSrc = src.includes('?') ? src.split('?')[0] : src;
+                    playerRef.current.src = `${cleanSrc}?start=${seconds}&autoplay=1`;
+                  }
+                }}
+               />
             </div>
           )}
         </div>

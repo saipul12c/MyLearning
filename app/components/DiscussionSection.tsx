@@ -112,7 +112,7 @@ export default function DiscussionSection({ lessonId }: DiscussionSectionProps) 
       ) : (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center mb-12">
           <p className="text-slate-400 text-sm">
-            Silakan <a href="/login" className="text-purple-400 font-bold hover:underline">Masuk</a> untuk ikut berdiskusi.
+            Silakan <Link href="/login" className="text-purple-400 font-bold hover:underline">Masuk</Link> untuk ikut berdiskusi.
           </p>
         </div>
       )}
