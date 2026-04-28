@@ -22,6 +22,10 @@ export default function DiscussionSection({ lessonId }: DiscussionSectionProps) 
 
   useEffect(() => {
     fetchDiscussions();
+    
+    // ✅ Polling every 10 seconds for real-time-like experience
+    const interval = setInterval(fetchDiscussions, 10000);
+    return () => clearInterval(interval);
   }, [lessonId]);
 
   const fetchDiscussions = async () => {

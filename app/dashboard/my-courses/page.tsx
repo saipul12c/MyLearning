@@ -618,16 +618,32 @@ export default function MyCoursesPage() {
           <h2 className="text-lg font-black text-white flex items-center gap-3"><XCircle size={20} className="text-red-400" /> MASA BELAJAR HABIS</h2>
           <div className="grid gap-4">
             {expired.map((enr) => (
-              <div key={enr.id} className="card p-6 border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-red-500"><XCircle size={24} /></div>
-                  <div>
-                    <h3 className="text-white font-bold text-lg">{enr.courseTitle}</h3>
-                    <p className="text-xs text-slate-500 font-medium">Expired pada: {enr.expiredAt ? new Date(enr.expiredAt).toLocaleDateString("id-ID") : "-"}</p>
+              <div key={enr.id} className="card p-6 border-white/5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-red-500"><XCircle size={24} /></div>
+                    <div>
+                      <h3 className="text-white font-bold text-lg">{enr.courseTitle}</h3>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {enr.progress === 0 
+                          ? "Pendaftaran expired (Melewati batas waktu pembayaran 3 hari)" 
+                          : `Masa belajar habis (Expired pada: ${enr.expiredAt ? new Date(enr.expiredAt).toLocaleDateString("id-ID") : "-"})`
+                        }
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                   <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">No Certificate</p>
+                  <button 
+                    onClick={async () => {
+                      if (confirm("Hapus pendaftaran ini untuk mendaftar ulang?")) {
+                        const { error } = await supabase.from("enrollments").delete().eq("id", enr.id);
+                        if (!error) forceRefresh();
+                        else alert("Error: " + error.message);
+                      }
+                    }}
+                    className="btn-secondary !px-6 !py-2 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-white/10"
+                  >
+                    <RefreshCcw size={14} /> DAFTAR ULANG
+                  </button>
                 </div>
               </div>
             ))}

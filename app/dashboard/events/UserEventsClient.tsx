@@ -25,13 +25,16 @@ import {
   AlertTriangle,
   ExternalLink,
   Sparkles,
+  RefreshCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import TicketCard from "@/app/components/events/TicketCard";
-import { X, Ticket } from "lucide-react";
+import { X, Ticket, Trophy } from "lucide-react";
 import NativeAdCard from "@/app/components/NativeAdCard";
+import CertificateGenerator from "@/app/components/events/CertificateGenerator";
+import { getEventSubmissions, getUserSubmission } from "@/lib/events";
 
 import { type Promotion } from "@/lib/promotions";
 
@@ -50,6 +53,7 @@ export default function UserEventsClient({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [submissions, setSubmissions] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (user) {
@@ -59,18 +63,27 @@ export default function UserEventsClient({
 
   const fetchRegistrations = async () => {
     setLoading(true);
+    
     const data = await getMyRegistrations(user!.id);
     
-    // ✅ FIX: Fetch event certificates for attended registrations that lack a certificate_url
+    // ✅ FIX: Fetch event certificates and submissions
     const enriched = await Promise.all(
       data.map(async (reg: any) => {
+        let submission: any = null;
+        if (reg.event?.category === 'Challenge' || reg.event?.category === 'Bug Bounty') {
+           submission = await getUserSubmission(reg.event_id, user!.id);
+           if (submission) {
+              setSubmissions(prev => ({ ...prev, [reg.id]: submission }));
+           }
+        }
+
         if (reg.status === 'attended' && !reg.certificate_url) {
           const cert = await getEventCertificate(user!.id, reg.event_id);
           if (cert) {
-            return { ...reg, certificate_url: cert.certificate_url, certificate_number: cert.certificate_number };
+            return { ...reg, certificate_url: cert.certificate_url, certificate_number: cert.certificate_number, submission };
           }
         }
-        return reg;
+        return { ...reg, submission };
       })
     );
     
@@ -260,19 +273,20 @@ export default function UserEventsClient({
                    ) : null}
 
                   {/* ✅ Sertifikat untuk peserta yang hadir */}
-                  {reg.status === 'attended' && reg.certificate_url && !isCancelled && (
+                  {reg.status === 'attended' && reg.certificate_number && !isCancelled && (
                     <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex flex-col items-center justify-center text-center">
                       <Award className="text-purple-400 mb-2" size={24} />
                       <p className="text-sm text-purple-300 font-medium">Sertifikat Tersedia</p>
                       <p className="text-[10px] text-slate-500 mt-1">Anda berhak mendapatkan sertifikat kehadiran event ini.</p>
-                      <a
-                        href={reg.certificate_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-4 btn-primary !h-10 !px-6 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
-                      >
-                        <FileText size={14} /> Unduh Sertifikat
-                      </a>
+                      
+                      <div className="mt-4 w-full">
+                         <CertificateGenerator 
+                            userName={reg.profile?.full_name || user?.fullName || "Peserta"}
+                            eventTitle={eventInfo.title}
+                            eventDate={format(new Date(eventInfo.event_date), "dd MMMM yyyy", { locale: id })}
+                            certificateNumber={reg.certificate_number}
+                         />
+                      </div>
                     </div>
                   )}
 
@@ -336,37 +350,95 @@ export default function UserEventsClient({
                      <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10 text-center">
                         <XCircle className="text-red-400 mx-auto mb-2" size={24} />
                         <p className="text-sm font-bold text-red-400">Registrasi Dibatalkan</p>
-                        <p className="text-xs text-slate-500">Pendaftaran Anda untuk event ini telah dibatalkan.</p>
+                        <p className="text-xs text-slate-500 mb-4">{reg.admin_notes || "Pendaftaran Anda untuk event ini telah dibatalkan."}</p>
+                        <button 
+                          onClick={async () => {
+                            if (confirm("Hapus registrasi ini agar Anda dapat mendaftar kembali?")) {
+                              const { error } = await supabase.from("event_registrations").delete().eq("id", reg.id);
+                              if (!error) fetchRegistrations();
+                              else setNotification({ type: 'error', text: error.message });
+                            }
+                          }}
+                          className="btn-secondary !h-9 !px-6 text-[10px] font-black uppercase tracking-widest mx-auto flex items-center gap-2"
+                        >
+                          <RefreshCcw size={14} /> Daftar Ulang
+                        </button>
                      </div>
                   )}
 
-                  {/* Submission untuk Bug Hunter */}
-                  {isBugHunter && !isCancelled && (
+                  {/* Submission untuk Challenge / Competition */}
+                  {(eventInfo.category === 'Challenge' || eventInfo.category === 'Bug Bounty') && !isCancelled && (
                      <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
-                        <div className="flex items-center gap-2 mb-2">
-                           <Award className="text-purple-400" size={18} />
-                           <p className="text-sm font-bold text-white">Laporan Bug (Bug Bounty)</p>
+                        <div className="flex items-center justify-between mb-4">
+                           <div className="flex items-center gap-2">
+                              <Award className="text-purple-400" size={18} />
+                              <p className="text-sm font-bold text-white">Submission Challenge</p>
+                           </div>
+                           {submissions[reg.id]?.rank && (
+                             <div className="flex items-center gap-1 bg-amber-500 text-black px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest animate-pulse">
+                                <Trophy size={10} /> Rank #{submissions[reg.id].rank}
+                             </div>
+                           )}
                         </div>
-                        {reg.submission_url ? (
-                           <div className="flex items-center justify-between mt-4 p-3 bg-white/5 rounded-xl">
-                             <span className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14}/> Laporan Terkirim</span>
-                             <span className="text-[10px] text-slate-500">Menunggu validasi admin</span>
+
+                        {submissions[reg.id] ? (
+                           <div className="space-y-4">
+                              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                                <div className="flex flex-col">
+                                   <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Status Penilaian</span>
+                                   <span className={`text-xs font-bold ${submissions[reg.id].status === 'graded' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                      {submissions[reg.id].status === 'graded' ? 'Sudah Dinilai' : 'Menunggu Penilaian'}
+                                   </span>
+                                </div>
+                                {submissions[reg.id].score !== null && (
+                                   <div className="text-right">
+                                      <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block">Skor</span>
+                                      <span className="text-lg font-black text-white">{submissions[reg.id].score}</span>
+                                   </div>
+                                )}
+                              </div>
+                              
+                              {submissions[reg.id].feedback && (
+                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                                   <p className="text-[9px] font-black tracking-widest uppercase text-purple-400 mb-1">Feedback Juri:</p>
+                                   <p className="text-xs text-slate-300 italic">"{submissions[reg.id].feedback}"</p>
+                                </div>
+                              )}
+
+                              <div className="flex gap-2">
+                                 <button 
+                                   className="flex-1 btn-secondary !h-9 !px-3 text-[9px] font-bold uppercase tracking-widest cursor-not-allowed opacity-50"
+                                   disabled
+                                 >
+                                    Terdaftar Sebagai: {submissions[reg.id].team_name || 'Solo'}
+                                 </button>
+                                 <a 
+                                   href={submissions[reg.id].submission_url} 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   className="btn-primary !h-9 !px-4 text-[9px] font-bold uppercase tracking-widest flex items-center gap-2"
+                                 >
+                                    <ExternalLink size={12} /> Lihat File
+                                 </a>
+                              </div>
                            </div>
                         ) : (
                           <>
-                            <p className="text-xs text-slate-400 mb-4">Unggah bukti temuan bug Anda dalam format PDF.</p>
+                            <p className="text-xs text-slate-400 mb-4">
+                               {eventInfo.category === 'Bug Bounty' ? 'Unggah laporan bug (PDF)' : 'Unggah hasil pekerjaan Anda (PDF/ZIP)'}.
+                            </p>
                             <label className="btn-primary w-full cursor-pointer flex items-center justify-center gap-2 relative">
-                              <FileText size={16} /> Submit Laporan
+                              <FileText size={16} /> Submit Pekerjaan
                               <input 
                                 type="file" 
-                                accept=".pdf"
+                                accept=".pdf,.zip"
                                 className="hidden" 
                                 onChange={(e) => handleFileUpload(reg.id, e, 'submission')} 
                                 disabled={uploading === reg.id}
                               />
                               {uploading === reg.id && <div className="absolute inset-0 bg-[#0c0c14]/80 flex flex-col items-center justify-center rounded-xl z-10"><Loader2 className="animate-spin text-white" size={20} /></div>}
                             </label>
-                            <p className="text-[10px] text-slate-500 mt-2 text-center">Max 10MB • Format: PDF</p>
+                            <p className="text-[10px] text-slate-500 mt-2 text-center">Max 10MB • Format: PDF, ZIP</p>
                           </>
                         )}
                         {reg.admin_notes && (

@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/app/components/AuthContext";
-import { getEventRegistrants, updateRegistration } from "@/lib/events";
 import { supabase } from "@/lib/supabase";
 import { 
   Calendar, Users, ArrowLeft, Loader2, CheckCircle, Clock, XCircle, 
-  Download, FileDown
+  Download, FileDown, Trophy, Star, Send
 } from "lucide-react";
+import { getEventRegistrants, updateRegistration, gradeSubmission, getEventSubmissions } from "@/lib/events";
 import Link from "next/link";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
@@ -29,6 +29,13 @@ export default function InstructorEventDetailPage() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [attendance, setAttendance] = useState("");
   const [updating, setUpdating] = useState(false);
+  
+  // Grading states
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [gradingSub, setGradingSub] = useState<any | null>(null);
+  const [score, setScore] = useState(0);
+  const [rank, setRank] = useState(0);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     if (isInstructor && eventId && user) {
@@ -54,6 +61,12 @@ export default function InstructorEventDetailPage() {
     
     const rData = await getEventRegistrants(eventId);
     setRegistrants(rData.data);
+
+    if (eData.category === 'Challenge' || eData.category === 'Bug Bounty') {
+       const sData = await getEventSubmissions(eventId);
+       setSubmissions(sData.data || []);
+    }
+
     setLoading(false);
   };
 
@@ -97,6 +110,35 @@ export default function InstructorEventDetailPage() {
       alert(`Gagal membuka ${label}. Pastikan file ada di storage.`);
     } finally {
       setDownloadingFile(null);
+    }
+  };
+
+  const openGradeModal = (sub: any) => {
+    setGradingSub(sub);
+    setScore(sub.score || 0);
+    setRank(sub.rank || 0);
+    setFeedback(sub.feedback || "");
+  };
+
+  const handleGrade = async () => {
+    if (!gradingSub) return;
+    setUpdating(true);
+    try {
+      const result = await gradeSubmission(gradingSub.id, {
+        score,
+        rank: rank > 0 ? rank : undefined,
+        feedback
+      });
+      if (result.success) {
+         setGradingSub(null);
+         fetchData();
+      } else {
+         alert(result.message);
+      }
+    } catch (error) {
+      alert("Gagal menilai submission.");
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -229,7 +271,22 @@ export default function InstructorEventDetailPage() {
                            )}
                        </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right flex justify-end gap-2">
+                        {(eventData?.category === 'Challenge' || eventData?.category === 'Bug Bounty') && (
+                           (() => {
+                              const sub = submissions.find(s => s.user_id === reg.user_id);
+                              return sub ? (
+                                <button 
+                                  onClick={() => openGradeModal(sub)} 
+                                  className={`btn-secondary !h-8 !px-4 text-[10px] flex items-center gap-2 ${sub.status === 'graded' ? '!bg-emerald-500/10 !text-emerald-400' : ''}`}
+                                >
+                                   <Star size={12} /> {sub.status === 'graded' ? `Nilai: ${sub.score}` : 'Beri Nilai'}
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-600 font-bold uppercase italic px-4">Belum Submit</span>
+                              );
+                           })()
+                        )}
                         <button onClick={() => openManageModal(reg)} className="btn-primary !h-8 !px-4 text-[10px]">Verifikasi</button>
                     </td>
                   </tr>
@@ -284,6 +341,75 @@ export default function InstructorEventDetailPage() {
                    <button onClick={() => setManageReg(null)} className="btn-secondary">Tutup</button>
                    <button onClick={handleUpdate} disabled={updating} className="btn-primary px-8">
                       {updating ? <Loader2 size={16} className="animate-spin" /> : 'Simpan Status'}
+                   </button>
+                </div>
+            </div>
+         </div>
+      )}
+
+      {gradingSub && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-[#0c0c14] border border-white/10 rounded-3xl w-full max-w-lg p-8 space-y-6 animate-scale-in-center">
+                <div className="flex items-center gap-4 border-b border-white/5 pb-4">
+                   <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                      <Star size={24} />
+                   </div>
+                   <div>
+                      <h3 className="text-xl font-bold">Penilaian Submission</h3>
+                      <p className="text-xs text-slate-500 uppercase tracking-widest font-black">{gradingSub.profile?.full_name}</p>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                   <div className="grid grid-cols-2 gap-4">
+                       <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Skor (0-100)</label>
+                          <input 
+                            type="number" 
+                            value={score} 
+                            onChange={(e) => setScore(Number(e.target.value))} 
+                            className="input w-full" 
+                            min="0" max="100"
+                          />
+                       </div>
+                       <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Peringkat (Optional)</label>
+                          <div className="relative">
+                             <input 
+                               type="number" 
+                               value={rank} 
+                               onChange={(e) => setRank(Number(e.target.value))} 
+                               className="input w-full pl-10" 
+                               placeholder="1, 2, 3..."
+                             />
+                             <Trophy size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
+                          </div>
+                       </div>
+                   </div>
+
+                   <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Feedback untuk Peserta</label>
+                      <textarea 
+                        value={feedback} 
+                        onChange={(e) => setFeedback(e.target.value)} 
+                        rows={4} 
+                        placeholder="Berikan masukan konstruktif..." 
+                        className="input w-full resize-none"
+                      ></textarea>
+                   </div>
+                   
+                   <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Link File Jawaban:</span>
+                      <a href={gradingSub.submission_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-cyan-400 flex items-center gap-1 hover:underline">
+                         <Download size={14} /> Buka Submission
+                      </a>
+                   </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-6 border-t border-white/5">
+                   <button onClick={() => setGradingSub(null)} className="btn-secondary">Batal</button>
+                   <button onClick={handleGrade} disabled={updating} className="btn-primary !h-12 px-8 flex items-center gap-2">
+                      {updating ? <Loader2 size={18} className="animate-spin" /> : <><Send size={18} /> Simpan Penilaian</>}
                    </button>
                 </div>
             </div>

@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "./components/AuthContext";
 import LayoutWrapper from "./components/LayoutWrapper";
 import ClientInitializer from "./components/ClientInitializer";
+import NotificationToast from "./components/NotificationToast";
 import { getPromotionsBatch } from "@/lib/promotions";
 
 // Disabling next/font/google due to build-time connection issues.
@@ -42,6 +43,7 @@ export default async function RootLayout({
     <html lang="id" className={`${inter.variable} antialiased`} data-scroll-behavior="smooth">
       <body className="min-h-screen flex flex-col">
         <AuthProvider>
+          <NotificationToast />
           <ClientInitializer />
           <LayoutWrapper 
             globalPromos={globalPromos} 

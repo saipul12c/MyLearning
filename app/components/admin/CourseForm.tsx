@@ -220,7 +220,13 @@ export default function CourseForm({ courseId }: Props) {
 
       if (res.success) {
          showNotification("Data kursus berhasil disimpan!", "success");
-         setTimeout(() => router.push("/dashboard/admin/courses"), 1500);
+         const newId = (res.data as any)?.id;
+         if (!courseId && newId) {
+            // New course created, redirect to edit page so user can add curriculum/assessments
+            setTimeout(() => router.push(`/dashboard/admin/courses/${newId}`), 1500);
+         } else {
+            setTimeout(() => router.push("/dashboard/admin/courses"), 1500);
+         }
       } else {
          showNotification("Gagal menyimpan: " + (res.error as any).message, "error");
       }
@@ -676,7 +682,14 @@ export default function CourseForm({ courseId }: Props) {
                <div className="card p-8 space-y-6">
                   <div className="flex items-center justify-between border-b border-white/5 pb-4">
                      <h2 className="text-xl font-bold text-white flex items-center gap-2"><Play size={20} className="text-purple-400" /> Materi Kursus</h2>
-                     <button type="button" onClick={() => openLessonModal()} disabled={!courseId} className="btn-primary !py-2 !px-4 text-xs">Tambah Materi</button>
+                      <button 
+                        type="button" 
+                        onClick={() => courseId ? openLessonModal() : handleSubmit(new Event('submit') as any)} 
+                        className="btn-primary !py-2 !px-4 text-xs flex items-center gap-2"
+                      >
+                        {!courseId && <Save size={14} />}
+                        {courseId ? "Tambah Materi" : "Simpan & Aktifkan Kurikulum"}
+                      </button>
                   </div>
                   <div className="space-y-4">
                      {formData.lessons.map((lesson, i) => (
@@ -697,7 +710,12 @@ export default function CourseForm({ courseId }: Props) {
                            </div>
                         </div>
                      ))}
-                     {!courseId && <p className="text-center text-slate-500 italic text-sm">Simpan kursus terlebih dahulu.</p>}
+                      {!courseId && (
+                        <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl text-center bg-white/[0.02]">
+                           <Save className="mx-auto text-slate-700 mb-2" size={32} />
+                           <p className="text-slate-500 text-sm italic">Simpan data dasar kursus terlebih dahulu untuk mulai menyusun kurikulum.</p>
+                        </div>
+                      )}
                   </div>
                </div>
             </div>
@@ -712,8 +730,16 @@ export default function CourseForm({ courseId }: Props) {
                      </div>
                      <div>
                         <h3 className="text-xl font-bold text-white">Kelola Asesmen</h3>
-                        <p className="text-slate-500 max-w-sm mx-auto">Simpan data dasar kursus terlebih dahulu sebelum dapat mengelola kuis, tugas, dan projek akhir.</p>
-                     </div>
+                        <p className="text-slate-500 max-w-sm mx-auto mb-6">Simpan data dasar kursus terlebih dahulu sebelum dapat mengelola kuis, tugas, dan projek akhir.</p>
+                        <button 
+                           type="button" 
+                           onClick={() => handleSubmit(new Event('submit') as any)}
+                           className="btn-primary flex items-center gap-2 mx-auto"
+                        >
+                           <Save size={18} />
+                           Simpan & Aktifkan Asesmen
+                        </button>
+                      </div>
                   </div>
                ) : (
                   <div className="space-y-8">
@@ -1239,11 +1265,11 @@ export default function CourseForm({ courseId }: Props) {
                               <div className="space-y-4">
                                  <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Judul Asesmen</label>
-                                    <input className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.title} onChange={e => assessmentModal.data = { ...assessmentModal.data, title: e.target.value }} placeholder="Contoh: Kuis Fondasi UI/UX" />
+                                    <input className="input-premium w-full !bg-white/5" value={assessmentModal.data?.title || ""} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, title: e.target.value } }))} placeholder="Contoh: Kuis Fondasi UI/UX" />
                                  </div>
                                  <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Deskripsi Singkat</label>
-                                    <textarea className="input-premium w-full h-24 !bg-white/5" defaultValue={assessmentModal.data?.description} onChange={e => assessmentModal.data = { ...assessmentModal.data, description: e.target.value }} placeholder="Berikan informasi singkat mengenai apa yang akan diuji." />
+                                    <textarea className="input-premium w-full h-24 !bg-white/5" value={assessmentModal.data?.description || ""} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, description: e.target.value } }))} placeholder="Berikan informasi singkat mengenai apa yang akan diuji." />
                                  </div>
                                  <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
@@ -1256,8 +1282,8 @@ export default function CourseForm({ courseId }: Props) {
                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 text-slate-500">Materi Terkait</label>
                                        <select
                                           className="input-premium w-full !bg-white/5 text-sm"
-                                          defaultValue={assessmentModal.data?.lesson_id || ""}
-                                          onChange={e => assessmentModal.data = { ...assessmentModal.data, lesson_id: e.target.value || null }}
+                                          value={assessmentModal.data?.lesson_id || ""}
+                                          onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, lesson_id: e.target.value || null } }))}
                                        >
                                           <option value="">-- Akhir Pembelajaran --</option>
                                           {formData.lessons.map(l => (
@@ -1269,7 +1295,7 @@ export default function CourseForm({ courseId }: Props) {
                                  <div className="space-y-1.5 pt-2">
                                     <label className="flex items-center gap-3 w-full p-4 rounded-2xl border border-white/5 bg-white/5 cursor-pointer hover:bg-white/10 transition-all group">
                                        <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${assessmentModal.data?.is_required !== false ? 'bg-purple-500 border-purple-500 shadow-lg shadow-purple-500/20' : 'border-white/20 group-hover:border-white/40'}`}>
-                                          <input type="checkbox" className="hidden" defaultChecked={assessmentModal.data?.is_required !== false} onChange={e => assessmentModal.data = { ...assessmentModal.data, is_required: e.target.checked }} />
+                                          <input type="checkbox" className="hidden" checked={assessmentModal.data?.is_required !== false} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, is_required: e.target.checked } }))} />
                                           {assessmentModal.data?.is_required !== false && <Check size={12} className="text-white" strokeWidth={4} />}
                                        </div>
                                        <div className="flex flex-col">
@@ -1287,31 +1313,31 @@ export default function CourseForm({ courseId }: Props) {
                                  <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-1.5">
                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 flex items-center gap-2"><Target size={12} /> Passing Score (%)</label>
-                                       <input type="number" className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.passing_score || 70} onChange={e => assessmentModal.data = { ...assessmentModal.data, passing_score: Number(e.target.value) }} />
+                                       <input type="number" className="input-premium w-full !bg-white/5" value={assessmentModal.data?.passing_score || 70} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, passing_score: Number(e.target.value) } }))} />
                                     </div>
                                     <div className="space-y-1.5">
                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 flex items-center gap-2"><Timer size={12} /> Waktu (Menit)</label>
-                                       <input type="number" className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.time_limit_minutes || 15} onChange={e => assessmentModal.data = { ...assessmentModal.data, time_limit_minutes: Number(e.target.value) }} />
+                                       <input type="number" className="input-premium w-full !bg-white/5" value={assessmentModal.data?.time_limit_minutes || 15} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, time_limit_minutes: Number(e.target.value) } }))} />
                                     </div>
                                     <div className="space-y-1.5">
                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Batas Percobaan</label>
-                                       <input type="number" className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.max_attempts || 0} onChange={e => assessmentModal.data = { ...assessmentModal.data, max_attempts: Number(e.target.value) }} />
+                                       <input type="number" className="input-premium w-full !bg-white/5" value={assessmentModal.data?.max_attempts || 0} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, max_attempts: Number(e.target.value) } }))} />
                                     </div>
                                  </div>
                               ) : (
                                  <div className="space-y-6">
                                     <div className="space-y-1.5">
                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Instruksi Pengerjaan</label>
-                                       <textarea className="input-premium w-full h-32 !bg-white/5" defaultValue={assessmentModal.data?.instructions} onChange={e => assessmentModal.data = { ...assessmentModal.data, instructions: e.target.value }} placeholder="Sebutkan langkah-langkah yang harus dilakukan siswa." />
+                                       <textarea className="input-premium w-full h-32 !bg-white/5" value={assessmentModal.data?.instructions || ""} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, instructions: e.target.value } }))} placeholder="Sebutkan langkah-langkah yang harus dilakukan siswa." />
                                     </div>
                                     <div className="space-y-1.5">
                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Kriteria Penilaian</label>
-                                       <textarea className="input-premium w-full h-32 !bg-white/5 font-mono text-xs" defaultValue={assessmentModal.data?.evaluation_criteria} onChange={e => assessmentModal.data = { ...assessmentModal.data, evaluation_criteria: e.target.value }} placeholder="- Kebersihan Kode: 30%&#10;- fungsionalitas: 70%" />
+                                       <textarea className="input-premium w-full h-32 !bg-white/5 font-mono text-xs" value={assessmentModal.data?.evaluation_criteria || ""} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, evaluation_criteria: e.target.value } }))} placeholder="- Kebersihan Kode: 30%&#10;- fungsionalitas: 70%" />
                                     </div>
                                     {assessmentModal.type === 'final_project' && (
                                        <div className="space-y-1.5">
                                           <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Estimasi Pengerjaan (Jam)</label>
-                                          <input type="number" className="input-premium w-full !bg-white/5" defaultValue={assessmentModal.data?.estimated_hours || 0} onChange={e => assessmentModal.data = { ...assessmentModal.data, estimated_hours: Number(e.target.value) }} />
+                                          <input type="number" className="input-premium w-full !bg-white/5" value={assessmentModal.data?.estimated_hours || 0} onChange={e => setAssessmentModal(prev => ({ ...prev, data: { ...prev.data, estimated_hours: Number(e.target.value) } }))} />
                                        </div>
                                     )}
                                  </div>
@@ -1355,7 +1381,7 @@ export default function CourseForm({ courseId }: Props) {
                      <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
                         <div className="space-y-1.5">
                            <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Teks Pertanyaan</label>
-                           <textarea className="input-premium w-full h-24 !bg-white/5" defaultValue={questionModal.data?.question_text} onChange={e => questionModal.data = { ...questionModal.data, question_text: e.target.value }} placeholder="Tuliskan pertanyaan Anda di sini..." />
+                           <textarea className="input-premium w-full h-24 !bg-white/5" value={questionModal.data?.question_text || ""} onChange={e => setQuestionModal(prev => ({ ...prev, data: { ...prev.data, question_text: e.target.value } }))} placeholder="Tuliskan pertanyaan Anda di sini..." />
                         </div>
 
                         <div className="space-y-4">
@@ -1388,13 +1414,11 @@ export default function CourseForm({ courseId }: Props) {
                                     <input
                                        className="flex-1 bg-transparent border-none text-white text-sm focus:ring-0 placeholder:text-slate-600 font-medium"
                                        placeholder={`Tuliskan opsi jawaban ${i + 1}...`}
-                                       defaultValue={questionModal.data?.options?.[i]}
+                                       value={questionModal.data?.options?.[i] || ""}
                                        onClick={(e) => e.stopPropagation()}
                                        onChange={e => {
                                           const opts = [...(questionModal.data?.options || ['', '', '', ''])];
                                           opts[i] = e.target.value;
-                                          // Note: Directly modifying questionModal.data here instead of setQuestionModal for responsiveness if handled elsewhere, 
-                                          // but for consistency with others:
                                           setQuestionModal(prev => ({
                                              ...prev,
                                              data: { ...prev.data, options: opts }
@@ -1413,17 +1437,17 @@ export default function CourseForm({ courseId }: Props) {
                         <div className="grid grid-cols-2 gap-6 pt-4">
                            <div className="space-y-1.5">
                               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 flex items-center gap-2">Penjelasan (Opsional)</label>
-                              <textarea className="input-premium w-full h-20 !bg-white/5 text-xs" defaultValue={questionModal.data?.explanation} onChange={e => questionModal.data = { ...questionModal.data, explanation: e.target.value }} placeholder="Mengapa jawaban ini benar?" />
+                              <textarea className="input-premium w-full h-20 !bg-white/5 text-xs" value={questionModal.data?.explanation || ""} onChange={e => setQuestionModal(prev => ({ ...prev, data: { ...prev.data, explanation: e.target.value } }))} placeholder="Mengapa jawaban ini benar?" />
                            </div>
                            <div className="space-y-1.5">
                               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1 flex items-center gap-2">Petunjuk / Hint</label>
-                              <textarea className="input-premium w-full h-20 !bg-white/5 text-xs" defaultValue={questionModal.data?.hint} onChange={e => questionModal.data = { ...questionModal.data, hint: e.target.value }} placeholder="Berikan petunjuk kecil jika siswa kesulitan." />
+                              <textarea className="input-premium w-full h-20 !bg-white/5 text-xs" value={questionModal.data?.hint || ""} onChange={e => setQuestionModal(prev => ({ ...prev, data: { ...prev.data, hint: e.target.value } }))} placeholder="Berikan petunjuk kecil jika siswa kesulitan." />
                            </div>
                         </div>
 
                         <div className="space-y-1.5">
                            <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Bobot Poin</label>
-                           <input type="number" className="input-premium w-1/3 !bg-white/5" defaultValue={questionModal.data?.points || 1} onChange={e => questionModal.data = { ...questionModal.data, points: Number(e.target.value) }} />
+                           <input type="number" className="input-premium w-1/3 !bg-white/5" value={questionModal.data?.points || 1} onChange={e => setQuestionModal(prev => ({ ...prev, data: { ...prev.data, points: Number(e.target.value) } }))} />
                         </div>
                      </div>
 

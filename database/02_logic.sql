@@ -424,6 +424,35 @@ BEGIN
 END;
 $$;
 
+-- Procedure to cleanup expired pending payments for courses and events (> 3 hari)
+CREATE OR REPLACE PROCEDURE cleanup_expired_pending_payments()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- 1. Bersihkan Enrollment Kursus (Status: expired)
+    UPDATE enrollments
+    SET 
+        payment_status = 'expired',
+        rejection_reason = 'Pendaftaran otomatis kedaluwarsa karena melewati batas waktu pembayaran (3 hari).',
+        updated_at = NOW()
+    WHERE payment_status = 'pending' 
+      AND created_at < NOW() - INTERVAL '3 days';
+    
+    -- 2. Bersihkan Registrasi Event (Status: rejected + cancelled)
+    UPDATE event_registrations
+    SET 
+        payment_status = 'rejected',
+        status = 'cancelled',
+        admin_notes = 'Otomatis dibatalkan sistem karena melewati batas waktu pembayaran (3 hari).',
+        updated_at = NOW()
+    WHERE payment_status = 'pending' 
+      AND created_at < NOW() - INTERVAL '3 days';
+
+    RAISE NOTICE 'Pembersihan pembayaran tertunda (>3 hari) telah selesai dilakukan.';
+END;
+$$;
+
+
 -- 5. VIEW: Popular Course Stats (Last 3 Months)
 -- Efficiently aggregates enrollment data in the database and is more stable than RPC
 CREATE OR REPLACE VIEW vw_popular_courses_master AS
@@ -589,9 +618,40 @@ BEGIN
     SET status = 'rejected', admin_notes = 'Otomatis ditolak sistem karena melewati batas waktu pembayaran (7 hari).'
     WHERE status IN ('draft', 'waiting_verification') AND created_at < NOW() - INTERVAL '7 days';
 
+    -- D. Cleanup expired enrollment payments
+    CALL cleanup_expired_pending_payments();
+
     RAISE NOTICE 'Pemeliharaan sistem iklan selesai.';
 END;
 $$;
+
+-- ============================================
+-- 13. BROADCAST SYSTEM LOGGING
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.broadcast_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID REFERENCES auth.users(id),
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL,
+    category TEXT,
+    target_role TEXT NOT NULL,
+    image_url TEXT,
+    link_url TEXT,
+    scheduled_for TIMESTAMPTZ,
+    sent_at TIMESTAMPTZ DEFAULT NOW(),
+    total_targets INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_broadcast_logs_sent_at ON public.broadcast_logs(sent_at DESC);
+
+-- Explicit grants for API access
+GRANT ALL ON public.broadcast_logs TO authenticated, service_role;
+GRANT SELECT ON public.broadcast_logs TO anon;
+
+-- Refresh cache PostgREST agar tabel baru terbaca oleh API
+NOTIFY pgrst, 'reload schema';
 
 -- Explicit grants for API access
 GRANT SELECT ON vw_popular_courses_master TO anon, authenticated, service_role;

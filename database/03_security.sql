@@ -55,13 +55,19 @@ CREATE POLICY "Admins can delete profiles" ON user_profiles FOR DELETE USING (is
 -- because it was recursive and already covered by the "Anyone can view" policy.
 
 -- 2. INSTRUCTORS Policies
-ALTER TABLE instructors ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view instructors" ON instructors;
 CREATE POLICY "Anyone can view instructors" ON instructors FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Instructors can update own data" ON instructors;
 CREATE POLICY "Instructors can update own data" ON instructors FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Admins can manage all instructors" ON instructors;
 CREATE POLICY "Admins can manage all instructors" ON instructors FOR ALL USING (is_admin());
+
+-- 2b. CATEGORIES Policies
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view categories" ON categories;
+CREATE POLICY "Anyone can view categories" ON categories FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage categories" ON categories;
+CREATE POLICY "Admins can manage categories" ON categories FOR ALL USING (is_admin());
 
 -- 3. COURSES Policies
 ALTER TABLE courses ENABLE ROW LEVEL SECURITY;

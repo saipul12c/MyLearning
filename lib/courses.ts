@@ -124,13 +124,24 @@ export async function getCategories(): Promise<Category[]> {
     return [];
   }
   
-  return data.map(c => ({
-    id: c.id,
-    name: c.name,
-    slug: c.slug,
-    icon: c.icon,
-    courseCount: (c.courses as any)?.[0]?.count || 0
-  }));
+  return (data || []).map(c => {
+    // Handle both array and object responses for count from different PostgREST versions
+    const courseCountRaw = (c as any).courses;
+    let count = 0;
+    if (Array.isArray(courseCountRaw) && courseCountRaw.length > 0) {
+      count = courseCountRaw[0].count;
+    } else if (courseCountRaw && typeof courseCountRaw === 'object') {
+      count = courseCountRaw.count || 0;
+    }
+
+    return {
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      icon: c.icon,
+      courseCount: count
+    };
+  });
 }
 
 export async function getInstructors(): Promise<Instructor[]> {

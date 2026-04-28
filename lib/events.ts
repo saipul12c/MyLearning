@@ -865,7 +865,7 @@ export async function getEventSubmissions(eventId: string, options?: { page?: nu
   }
 }
 
-export async function gradeEventSubmission(submissionId: string, updates: { score?: number, rank?: number, status?: string, feedback?: string }) {
+export async function gradeSubmission(submissionId: string, updates: { score?: number, rank?: number, status?: string, feedback?: string }) {
   try {
     const { data, error } = await supabase
       .from("event_submissions")

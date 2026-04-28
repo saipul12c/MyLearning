@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   Calendar, MapPin, Clock, Share2, ArrowLeft, ArrowRight, CheckCircle, 
-  AlertCircle, Loader2, Sparkles, Shield, UserCheck, Users,
+  AlertCircle, Loader2, Sparkles, Shield, UserCheck, Users, Trophy,
   Globe, Info, DollarSign, ExternalLink,XCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/AuthContext";
-import { getEventBySlug, registerForEvent, checkIfRegistered, checkRegistrationRateLimit, PlatformEvent } from "@/lib/events";
+import { getEventBySlug, registerForEvent, checkIfRegistered, checkRegistrationRateLimit, PlatformEvent, getEventSubmissions } from "@/lib/events";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import NativeAdCard from "../../components/NativeAdCard";
@@ -70,6 +70,7 @@ export default function EventDetailClient({
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [copying, setCopying] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
 
   // Track registration check to prevent race condition
   const registrationCheckRef = useRef<string | null>(null);
@@ -96,7 +97,14 @@ export default function EventDetailClient({
 
   useEffect(() => {
     checkRegistration();
-  }, [checkRegistration]);
+    
+    // Fetch leaderboard for challenges
+    if (event.category === 'Challenge' || event.category === 'Bug Bounty') {
+       getEventSubmissions(event.id, { limit: 10 }).then(res => {
+          setLeaderboard(res.data || []);
+       });
+    }
+  }, [checkRegistration, event.id, event.category]);
 
   // Track user interest in this category
   useEffect(() => {
@@ -397,15 +405,91 @@ export default function EventDetailClient({
                 </div>
               )}
 
+              {/* Sponsors Section */}
+              {event.sponsors && event.sponsors.length > 0 && (
+                <div className="glass p-8 md:p-12 rounded-[3rem] border-white/5 overflow-hidden relative animate-fade-in-up delay-475">
+                  <div className="absolute top-0 left-0 w-64 h-64 bg-cyan-500/5 blur-[80px] -ml-32 -mt-32" />
+                  <div className="relative z-10 space-y-8">
+                    <div className="flex items-center gap-5">
+                      <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-400 border border-white/10">
+                        <Users size={28} />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black tracking-tight text-white">Sponsor & Partner</h2>
+                        <p className="text-slate-500 text-sm font-medium uppercase tracking-widest mt-1">Mendukung Acara Ini</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 items-center">
+                      {event.sponsors.map((sponsor, idx) => (
+                        <div key={idx} className="group p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:border-white/20 transition-all flex items-center justify-center grayscale hover:grayscale-0">
+                          {sponsor.logoUrl ? (
+                            <img src={sponsor.logoUrl} alt={sponsor.name} className="max-h-12 w-auto object-contain transition-transform group-hover:scale-110" />
+                          ) : (
+                            <span className="text-slate-500 font-black text-xs uppercase tracking-widest text-center">{sponsor.name}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* In-content Ad Placement */}
-              <div className="animate-fade-in-up delay-500">
-                <NativeAdCard 
-                  location="event_detail_inline" 
-                  variant="inline" 
-                  className="rounded-[3rem] shadow-2xl shadow-purple-500/5 overflow-hidden border border-white/5"
-                  initialPromo={initialInlinePromo}
-                />
-              </div>
+              {initialInlinePromo && (
+                <div className="animate-fade-in-up delay-400">
+                  <NativeAdCard 
+                    location="event_detail_inline"
+                    variant="inline"
+                    className="rounded-[3rem] shadow-2xl shadow-purple-500/5 overflow-hidden border border-white/5"
+                    initialPromo={initialInlinePromo} 
+                  />
+                </div>
+              )}
+
+              {/* Leaderboard Section (Challenge Only) */}
+              {(event.category === 'Challenge' || event.category === 'Bug Bounty') && leaderboard.length > 0 && (
+                <div className="glass p-8 md:p-12 rounded-[3rem] border-white/5 overflow-hidden relative animate-fade-in-up delay-425">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[80px] -mr-32 -mt-32" />
+                  <div className="relative z-10 space-y-8">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                          <Trophy size={28} />
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-black tracking-tight text-white">Leaderboard Sementara</h2>
+                          <p className="text-slate-500 text-sm font-medium uppercase tracking-widest mt-1">Top 10 Peserta Terbaik</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {leaderboard.map((sub, idx) => (
+                        <div key={sub.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${
+                              idx === 0 ? 'bg-amber-500 text-black' : 
+                              idx === 1 ? 'bg-slate-300 text-black' :
+                              idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-slate-400'
+                            }`}>
+                              {idx + 1}
+                            </div>
+                            <div>
+                               <p className="text-sm font-bold text-white">{sub.profile?.full_name || 'Anonymous'}</p>
+                               <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">{sub.team_name || 'Solo Participant'}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-lg font-black text-emerald-400">{sub.score || 0}</p>
+                             <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Points</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Important Notes */}
               <div className="p-10 rounded-[3rem] bg-amber-500/5 border border-amber-500/10 flex flex-col md:flex-row items-start gap-8 animate-fade-in-up delay-600">

@@ -283,7 +283,39 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+-- Ensure notifications table is in real-time publication safely
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND schemaname = 'public' 
+    AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+  END IF;
+END $$;
+
+-- ============================================
+-- 9b. BROADCAST LOGS
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.broadcast_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID REFERENCES auth.users(id),
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL,
+    category TEXT,
+    target_role TEXT NOT NULL,
+    image_url TEXT,
+    link_url TEXT,
+    scheduled_for TIMESTAMPTZ,
+    sent_at TIMESTAMPTZ DEFAULT NOW(),
+    total_targets INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_broadcast_logs_sent_at ON public.broadcast_logs(sent_at DESC);
 
 -- ============================================
 -- 10. REVIEWS, CERTIFICATES, CONTACT
@@ -645,6 +677,7 @@ ON CONFLICT (id) DO NOTHING;
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- 14. AD EVENTS
