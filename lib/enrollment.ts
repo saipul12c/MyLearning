@@ -129,6 +129,8 @@ export function getLevelBg(level: string): string {
 
 // ---------- Enrollment Functions ----------
 
+import { getPublicSentinelConfigs } from "./sentinel/actions";
+
 export async function enrollCourse(
   userId: string,
   courseSlug: string,
@@ -142,6 +144,15 @@ export async function enrollCourse(
   discountAmount: number = 0
 ): Promise<{ success: boolean; enrollment?: Enrollment; error?: string }> {
   try {
+    // 0. Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.allow_new_enrollments === false) {
+      return { 
+        success: false, 
+        error: "Pendaftaran kursus baru saat ini sedang ditangguhkan oleh sistem." 
+      };
+    }
+
     // 1. Check for existing enrollment
     const { data: existing } = await supabase
       .from("enrollments")
@@ -731,10 +742,15 @@ export async function completeLesson(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // 0. Security Check
-    const { data: enrStatus } = await supabase.from("enrollments").select("payment_status").eq("id", enrollmentId).single();
-    const status = enrStatus?.payment_status;
-    if (status !== 'paid' && status !== 'active' && status !== 'completed') {
-        throw new Error("Akses ditolak. Silakan selesaikan pembayaran terlebih dahulu.");
+    const { data: profile } = await supabase.from("user_profiles").select("role").eq("user_id", userId).single();
+    const isAdminOrInstructor = profile?.role === 'admin' || profile?.role === 'instructor';
+
+    if (!isAdminOrInstructor) {
+        const { data: enrStatus } = await supabase.from("enrollments").select("payment_status").eq("id", enrollmentId).single();
+        const status = enrStatus?.payment_status;
+        if (status !== 'paid' && status !== 'active' && status !== 'completed') {
+            throw new Error("Akses ditolak. Silakan selesaikan pembayaran terlebih dahulu.");
+        }
     }
 
     const { error: progressError } = await supabase

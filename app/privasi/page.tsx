@@ -205,35 +205,48 @@ export default async function PrivacyPage() {
 
                 {/* 3. Keamanan Highlight */}
                 <div id="keamanan" className="scroll-mt-28">
-                  <div className="card p-10 bg-gradient-to-br from-emerald-500/10 via-[#0c0c14] to-transparent border-emerald-500/20 overflow-hidden relative">
-                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/5 blur-[80px] rounded-full" />
+                  <div className="card p-10 bg-gradient-to-br from-emerald-500/10 via-[#0c0c14] to-transparent border-emerald-500/20 overflow-hidden relative group">
+                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/5 blur-[80px] rounded-full group-hover:bg-emerald-500/10 transition-all duration-700" />
                     
                     <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-6">
-                        <Shield className="text-emerald-400" size={32} />
-                        <h2 className="text-3xl font-black text-white tracking-tight">Protokol Keamanan Data</h2>
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-[2rem] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.15)] group-hover:rotate-12 transition-transform duration-500">
+                            <Shield className="animate-pulse" size={32} />
+                          </div>
+                          <div>
+                            <h2 className="text-3xl font-black text-white tracking-tight">Sentinel Gatekeeper</h2>
+                            <p className="text-emerald-400/60 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Sistem Pertahanan Berlapis</p>
+                          </div>
+                        </div>
+                        <Link 
+                          href="/security" 
+                          className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-xl shadow-emerald-500/20"
+                        >
+                          Lihat Protokol Keamanan <ArrowRight size={14} />
+                        </Link>
                       </div>
                       
                       <div className="space-y-6 text-slate-400">
                         <p className="text-lg leading-relaxed">
-                          Keamanan bukanlah fitur, melainkan pondasi. Kami mengadopsi standar <span className="text-white font-bold italic">Military Grade Encryption</span> untuk memastikan data Anda tidak pernah jatuh ke tangan yang salah.
+                          Keamanan bukanlah fitur, melainkan pondasi. Kami menggunakan sistem <span className="text-white font-bold italic">Sentinel Gatekeeper</span> untuk memastikan data Anda tidak pernah jatuh ke tangan yang salah melalui enkripsi militer dan monitoring real-time.
                         </p>
                         <div className="grid sm:grid-cols-2 gap-6">
-                           <div className="space-y-2">
-                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Enkripsi Statis</div>
+                           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Enkripsi Statis</div>
                              <p className="text-xs">Semua data database dienkripsi menggunakan AES-256 yang mustahil ditembus brute-force.</p>
                            </div>
-                           <div className="space-y-2">
-                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Enkripsi Transit</div>
+                           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Enkripsi Transit</div>
                              <p className="text-xs">Setiap interaksi antara browser Anda dan server kami dilindungi oleh sertifikat SSL EV modern.</p>
                            </div>
-                           <div className="space-y-2">
-                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={12}/> Notifikasi Kebocoran</div>
-                             <p className="text-xs">Komitmen notifikasi maksimal 3x24 jam kepada Anda dan otoritas berwenang jika terjadi insiden data breach.</p>
+                           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1 mb-2"><AlertTriangle size={12}/> Notifikasi Kebocoran</div>
+                             <p className="text-xs">Komitmen notifikasi maksimal 3x24 jam kepada Anda jika terjadi insiden keamanan.</p>
                            </div>
-                           <div className="space-y-2">
-                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1"><Globe size={12}/> Transfer Lintas Negara</div>
-                             <p className="text-xs">Infrastruktur cloud kami menjamin setiap transfer data antar negara memenuhi standar perlindungan setara UU PDP.</p>
+                           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1 mb-2"><Globe size={12}/> Monitoring DDoS</div>
+                             <p className="text-xs">Sentinel secara aktif memfilter trafik mencurigakan untuk menjaga stabilitas platform.</p>
                            </div>
                         </div>
                       </div>

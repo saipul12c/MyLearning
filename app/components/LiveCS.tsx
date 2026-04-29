@@ -9,6 +9,7 @@ import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages 
 import { saveContactMessage, getUserEnrollments } from "@/lib/enrollment";
 import { uploadChatFile } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { getPublicSentinelConfigs } from "@/lib/sentinel/actions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -25,6 +26,7 @@ interface Message {
 export default function LiveCS() {
   const { user, isLoggedIn } = useAuth();
   const pathname = usePathname();
+  const [isEnabled, setIsEnabled] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -94,13 +96,22 @@ export default function LiveCS() {
     audioRef.current.play().catch(() => {}); // Ignore interaction errors
   };
 
+  // Sentinel Guard Check
+  useEffect(() => {
+    getPublicSentinelConfigs().then(configs => {
+      setIsEnabled(configs['live_chat_enabled'] !== false);
+    });
+  }, []);
+
   // Handle Persistence & Re-initialization
   useEffect(() => {
     const savedSessionId = localStorage.getItem("learning_chat_session");
-    if (savedSessionId) {
+    if (savedSessionId && isEnabled !== false) {
       resumeSession(savedSessionId);
     }
-  }, []);
+  }, [isEnabled]);
+
+  if (isEnabled === false) return null;
 
   const resumeSession = async (sessionId: string) => {
     setLoading(true);

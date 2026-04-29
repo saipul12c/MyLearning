@@ -4,6 +4,7 @@ import { AuthProvider } from "./components/AuthContext";
 import LayoutWrapper from "./components/LayoutWrapper";
 import ClientInitializer from "./components/ClientInitializer";
 import NotificationToast from "./components/NotificationToast";
+import SentinelGuard from "./components/SentinelGuard";
 import { getPromotionsBatch } from "@/lib/promotions";
 
 // Disabling next/font/google due to build-time connection issues.
@@ -45,13 +46,15 @@ export default async function RootLayout({
         <AuthProvider>
           <NotificationToast />
           <ClientInitializer />
-          <LayoutWrapper 
-            globalPromos={globalPromos} 
-            stickyPromo={stickyPromo} 
-            footerPromo={footerPromo}
-          >
-            {children}
-          </LayoutWrapper>
+          <SentinelGuard>
+            <LayoutWrapper 
+              globalPromos={globalPromos} 
+              stickyPromo={stickyPromo} 
+              footerPromo={footerPromo}
+            >
+              {children}
+            </LayoutWrapper>
+          </SentinelGuard>
         </AuthProvider>
       </body>
     </html>

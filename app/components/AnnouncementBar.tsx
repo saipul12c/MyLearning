@@ -65,7 +65,14 @@ export default function AnnouncementBar({ initialPromos = [] }: { initialPromos?
   if (!promo || !isVisible || promos.length === 0) return null;
 
   return (
-    <div className="relative z-[100] bg-gradient-to-r from-purple-900 via-indigo-900 to-cyan-900 border-b border-white/10 overflow-hidden animate-slide-down">
+    <div 
+      className="relative z-[100] border-b border-white/10 overflow-hidden animate-slide-down"
+      style={{ 
+        background: promo.bgColor 
+          ? `linear-gradient(to r, ${promo.bgColor}, ${promo.bgColor}CC)` 
+          : 'linear-gradient(to r, #581c87, #312e81, #164e63)' 
+      }}
+    >
       {/* Decorative pulse background */}
       <div className="absolute inset-0 bg-white/5 animate-pulse" />
       

@@ -24,7 +24,7 @@ interface Props {
 export default function CourseEnrollButton({ 
   courseId, courseSlug, courseTitle, totalLessons, level, price, instructorId, instructorQrisUrl 
 }: Props) {
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, isAdmin, isInstructor } = useAuth();
   const router = useRouter();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -49,7 +49,6 @@ export default function CourseEnrollButton({
   const anyActive = enrollments.find(e => e.status === "active");
 
   const isFree = price === 0;
-  // Instructor info is now passed via props from the dynamic course data
 
   if (!isLoggedIn) {
     return (
@@ -66,6 +65,15 @@ export default function CourseEnrollButton({
 
   if (loading) {
     return <div className="btn-secondary w-full !py-3.5 animate-pulse">Menyiapkan...</div>;
+  }
+
+  // Admin and Instructor bypass
+  if (isAdmin || isInstructor) {
+    return (
+      <Link href="/dashboard/my-courses" className="btn-primary w-full !py-3.5 text-base flex items-center justify-center gap-2">
+        Akses Manajemen <ArrowRight size={18} />
+      </Link>
+    );
   }
 
   if (currentEnr?.status === "active") {

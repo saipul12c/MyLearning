@@ -184,7 +184,7 @@ export default function NativeAdCard({ location, categoryId, className = "", var
 
 
             {promo.videoUrl ? (
-              <div className="relative w-full md:w-[360px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+              <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
                 <video
                   src={promo.videoUrl}
                   poster={promo.imageUrl}
@@ -196,7 +196,7 @@ export default function NativeAdCard({ location, categoryId, className = "", var
                 />
               </div>
             ) : promo.imageUrl && (
-              <div className="relative w-full md:w-[360px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+              <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
                 <Image
                   src={promo.imageUrl}
                   alt={promo.title}

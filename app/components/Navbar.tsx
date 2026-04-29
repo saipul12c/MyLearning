@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/about", label: "About" },
   { href: "/courses", label: "Kursus" },
   { href: "/events", label: "Event" },
+  { href: "/pring", label: "Upgrade ✨" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Kontak" },
 ];
@@ -73,7 +74,12 @@ export default function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => {
+          {navLinks
+            .filter(link => {
+              if (link.href === "/pring" && (isAdmin || isInstructor)) return false;
+              return true;
+            })
+            .map((link) => {
             const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
             return (
               <Link
@@ -141,6 +147,11 @@ export default function Navbar() {
                     <Link href="/dashboard/vouchers" className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">
                       <Ticket size={16} className="text-purple-400" /> Dompet Voucher
                     </Link>
+                    {isAdmin && (
+                      <Link href="/dashboard/admin/sentinel" className="flex items-center gap-3 px-4 py-2.5 text-sm text-blue-400 hover:text-blue-300 hover:bg-white/5 transition-colors">
+                        <Shield size={16} /> Sentinel Control
+                      </Link>
+                    )}
                   </div>
                   <div className="border-t border-white/5 py-1">
                     <button
@@ -182,7 +193,12 @@ export default function Navbar() {
       {/* Mobile Menu */}
       <div className={`md:hidden transition-all duration-300 overflow-hidden ${mobileOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}>
         <div className="px-4 pb-4 pt-2 glass-strong mt-2 mx-4 rounded-2xl">
-          {navLinks.map((link) => {
+          {navLinks
+            .filter(link => {
+              if (link.href === "/pring" && (isAdmin || isInstructor)) return false;
+              return true;
+            })
+            .map((link) => {
             const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
             return (
               <Link

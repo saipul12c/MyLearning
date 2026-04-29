@@ -629,28 +629,6 @@ Project ini dilindungi di bawah lisensi proprietary. Untuk informasi lebih lanju
 
 ---
 
-## 🎯 Roadmap
-
-### Q2 2026
-- [ ] Mobile app (iOS & Android)
-- [ ] Advanced AI-powered recommendations
-- [ ] Live marketplace untuk resource
-- [ ] Peer-to-peer tutoring platform
-
-### Q3 2026
-- [ ] Blockchain certificates
-- [ ] Advanced analytics dashboard
-- [ ] Corporate training packages
-- [ ] Multi-language support
-
-### Q4 2026
-- [ ] AI tutor assistant
-- [ ] Gamification features
-- [ ] API marketplace
-- [ ] White-label solutions
-
----
-
 ## 👥 Team
 
 MyLearning dikembangkan oleh tim dedicated yang passionate tentang education technology.

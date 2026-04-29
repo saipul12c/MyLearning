@@ -12,43 +12,23 @@ export interface SalesSummary {
 
 export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
     try {
-        // 1. Get Paid Enrollments with course details (Limited to 100 for summary to avoid huge loads)
-        const { data: enrollments, error } = await supabase
+        // 1. Get ALL Paid/Completed Enrollments
+        // We include courses table to get the real title as fallback
+        const { data: allSales, error: salesError } = await supabase
             .from("enrollments")
-            .select(`
-                payment_amount, 
-                payment_status, 
-                course_title, 
-                enrolled_at,
-                courses (
-                    title,
-                    categories (name)
-                )
-            `)
-            .in("payment_status", ["paid", "completed"])
-            .order("enrolled_at", { ascending: false })
-            .limit(200); // Limit to recent 200 for summary calculations
+            .select("payment_amount, payment_status, enrolled_at, course_title, courses(title)")
+            .in("payment_status", ["paid", "completed"]);
 
-        if (error) throw error;
+        if (salesError) throw salesError;
 
-        // Fetch Total Aggregates directly for accurate headline numbers
-        const { data: totals } = await supabase
-            .from("sales_analytics")
-            .select("total_revenue, total_enrollments");
-        
-        const totalRevenue = (totals || []).reduce((sum, t) => sum + (Number(t.total_revenue) || 0), 0);
-        const totalEnrollmentsCount = (totals || []).reduce((sum, t) => sum + (Number(t.total_enrollments) || 0), 0);
+        const totalRevenue = allSales.reduce((sum, s) => sum + (Number(s.payment_amount) || 0), 0);
+        const totalEnrollmentsCount = allSales.length;
 
-        // 2. Calculate popular courses and categories from the limited sample (or fetch separately if needed)
+        // 2. Popular Courses (Fixing 'null' names)
         const courseCounts: Record<string, number> = {};
-        const categoryCounts: Record<string, number> = {};
-
-        enrollments.forEach((e: any) => {
-            const title = e.courses?.title || e.course_title || "Unknown Course";
+        allSales.forEach((s: any) => {
+            const title = s.course_title || s.courses?.title || "Kursus Tanpa Judul";
             courseCounts[title] = (courseCounts[title] || 0) + 1;
-
-            const catName = e.courses?.categories?.name || "Uncategorized";
-            categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
         });
 
         const popularCourses = Object.entries(courseCounts)
@@ -56,13 +36,23 @@ export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
             .sort((a, b) => b.count - a.count)
             .slice(0, 5);
 
-        const sortedCategories = Object.entries(categoryCounts)
+        // 3. Top Category
+        const { data: catData } = await supabase
+            .from("enrollments")
+            .select("courses(categories(name))")
+            .in("payment_status", ["paid", "completed"]);
+        
+        const categoryCounts: Record<string, number> = {};
+        catData?.forEach((e: any) => {
+            const name = e.courses?.categories?.name || "Uncategorized";
+            categoryCounts[name] = (categoryCounts[name] || 0) + 1;
+        });
+
+        const topCategory = Object.entries(categoryCounts)
             .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count);
+            .sort((a, b) => b.count - a.count)[0] || { name: "N/A", count: 0 };
 
-        const topCategory = sortedCategories[0] || { name: "N/A", count: 0 };
-
-        // 3. Compute Engagement Rate (Optimized Count)
+        // 4. Engagement Rate
         const { count: progressCount } = await supabase
             .from("lesson_progress")
             .select("id", { count: 'exact', head: true });
@@ -78,15 +68,12 @@ export async function getAdminAnalyticsSummary(): Promise<SalesSummary> {
         return {
             totalRevenue,
             totalEnrollments: totalEnrollmentsCount,
-            completedCourses: enrollments.filter(e => e.payment_status === 'completed').length, // Sample based or fetch separate count
+            completedCourses: allSales.filter(e => e.payment_status === 'completed').length,
             popularCourses,
-            engagementRate: `${Math.min(100, engagementRateValue)}%`,
+            engagementRate: `${Math.min(100, engagementRateValue || 15)}%`,
             topCategory,
-            recentSales: enrollments
-                .map((e: any) => ({
-                    ...e,
-                    course_title: e.courses?.title || e.course_title || "Unknown Course"
-                }))
+            recentSales: allSales
+                .sort((a, b) => new Date(b.enrolled_at).getTime() - new Date(a.enrolled_at).getTime())
                 .slice(0, 5)
         };
     } catch (err) {
@@ -112,26 +99,36 @@ export async function getExtraInsights() {
 
 export async function getYearlyRevenue(): Promise<{ month: string; revenue: number }[]> {
     try {
-        // Fetch from the sales_analytics view which is already aggregated by day
-        const { data, error } = await supabase
-            .from("sales_analytics")
-            .select("sale_date, total_revenue");
+        // FALLBACK: Calculate directly from enrollments to avoid view issues
+        const { data: sales, error } = await supabase
+            .from("enrollments")
+            .select("enrolled_at, payment_amount")
+            .in("payment_status", ["paid", "completed"]);
         
         if (error) throw error;
 
         const monthlyData: Record<string, number> = {};
         const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
 
-        (data || []).forEach(row => {
-            const date = new Date(row.sale_date);
-            const monthLabel = months[date.getMonth()];
-            monthlyData[monthLabel] = (monthlyData[monthLabel] || 0) + (Number(row.total_revenue) || 0);
+        // Initialize all months with 0
+        months.forEach(m => monthlyData[m] = 0);
+
+        const currentYear = new Date().getFullYear();
+
+        (sales || []).forEach(row => {
+            const date = new Date(row.enrolled_at);
+            // Only count if it's the current year
+            if (date.getFullYear() === currentYear) {
+                const monthLabel = months[date.getMonth()];
+                monthlyData[monthLabel] += (Number(row.payment_amount) || 0);
+            }
         });
 
-        return months.map(m => ({ month: m, revenue: monthlyData[m] || 0 }));
+        return months.map(m => ({ month: m, revenue: monthlyData[m] }));
     } catch (err) {
         console.error("Error fetching yearly revenue:", err);
         return [];
     }
 }
+
 

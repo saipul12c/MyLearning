@@ -329,5 +329,77 @@ export const faqData: FAQCategory[] = [
           "Gunakan opsi 'Laporkan' yang tersedia pada setiap komentar. Tim moderasi kami akan meninjau laporan dan mengambil tindakan sesuai Kebijakan Komunitas MyLearning.",
       }
     ],
+  },
+  {
+    name: "Gamifikasi & Membership",
+    icon: "💎",
+    items: [
+      {
+        question: "Apa itu sistem Tier di MyLearning?",
+        answer:
+          "Sistem Tier adalah program membership berjenjang (Bronze hingga Legendary Hero) yang memberikan manfaat eksklusif kepada pengguna. Semakin tinggi Tier Anda, semakin banyak akses fitur premium, prioritas dukungan, hingga bimbingan langsung dari instruktur yang akan Anda dapatkan.",
+      },
+      {
+        question: "Bagaimana cara melakukan upgrade Tier?",
+        answer:
+          "Anda dapat mengunjungi halaman 'Upgrade ✨' di navbar utama. Pilih Tier yang sesuai dengan kebutuhan belajar Anda, lakukan pembayaran, dan sistem akan secara otomatis mengaktifkan status Tier baru Anda setelah pembayaran diverifikasi.",
+      },
+      {
+        question: "Apa itu Achievement dan bagaimana cara mendapatkannya?",
+        answer:
+          "Achievement adalah penghargaan digital atas pencapaian belajar Anda. Anda mendapatkannya dengan menyelesaikan event, kursus, kuis dengan nilai sempurna, atau menjaga streak belajar. Setiap achievement memberikan badge unik di profil Anda dan hadiah XP.",
+      },
+      {
+        question: "Apa kegunaan XP (Experience Points) dan Level?",
+        answer:
+          "XP digunakan untuk mengukur dedikasi belajar Anda. Semakin banyak XP yang Anda kumpulkan dari kuis dan achievement, semakin tinggi Level profil Anda. Level tinggi menunjukkan reputasi dan keahlian Anda di komunitas MyLearning.",
+      },
+      {
+        question: "Apakah Admin dan Instruktur memiliki Tier?",
+        answer:
+          "Tidak. Sistem Tier khusus dirancang untuk Role User (Siswa). Role Admin dan Instruktur memiliki akses penuh ke seluruh fitur platform secara default untuk keperluan manajemen dan pengajaran.",
+      },
+      {
+        question: "Apakah Tier yang saya beli memiliki masa aktif?",
+        answer:
+          "Seluruh Tier di MyLearning bersifat 'Lifetime Access' (Sekali bayar untuk akses selamanya). Anda tidak perlu khawatir tentang biaya langganan bulanan atau tahunan setelah melakukan upgrade.",
+      },
+      {
+        question: "Bisakah saya melakukan refund atau downgrade Tier?",
+        answer:
+          "Pembelian Tier bersifat final karena manfaat digital (seperti badge dan akses materi) langsung diaktifkan di akun Anda. Namun, Anda tetap bisa melakukan upgrade ke tingkat yang lebih tinggi kapan saja.",
+      }
+    ],
+  },
+  {
+    name: "Sentinel Gatekeeper",
+    icon: "🛡️",
+    items: [
+      {
+        question: "Apa itu sistem Sentinel Gatekeeper?",
+        answer:
+          "Sentinel adalah sistem 'Control Plane' pusat yang mengawasi seluruh platform. Ia bertugas mengelola fitur baru, menjaga integritas database, dan memberikan perlindungan real-time terhadap ancaman keamanan. Sentinel memastikan website tetap stabil bahkan saat terjadi lonjakan trafik tinggi.",
+      },
+      {
+        question: "Mengapa saya kadang diarahkan ke halaman 'Security Check'?",
+        answer:
+          "Jika Sentinel mendeteksi aktivitas yang tidak biasa dari koneksi Anda, sistem akan meminta verifikasi keamanan singkat. Ini adalah prosedur standar untuk memastikan bahwa Anda adalah pengguna asli dan bukan program otomatis (bot) yang berbahaya.",
+      },
+      {
+        question: "Apa itu mode pemeliharaan (Maintenance) otomatis?",
+        answer:
+          "Dalam kondisi darurat atau pembaruan sistem besar, Sentinel dapat mengaktifkan mode pemeliharaan secara otomatis. Ini dilakukan untuk mencegah kerusakan data dan memastikan proses update berjalan lancar bagi seluruh pengguna.",
+      },
+      {
+        question: "Apa itu fitur 'Canary Release' di sistem Sentinel?",
+        answer:
+          "Canary Release adalah metode perilisan fitur secara bertahap. Sentinel akan merilis fitur baru ke sebagian kecil pengguna terlebih dahulu untuk dipantau stabilitasnya sebelum dibuka untuk seluruh komunitas MyLearning.",
+      },
+      {
+        question: "Bagaimana Sentinel menangani error pada fitur baru?",
+        answer:
+          "Sentinel memiliki fitur 'Kill-Switch'. Jika sebuah fitur baru melaporkan banyak error teknis, Sentinel akan otomatis menonaktifkan fitur tersebut secara instan untuk melindung akun Anda hingga tim pengembang kami selesai melakukan perbaikan.",
+      }
+    ],
   }
 ];

@@ -123,7 +123,7 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
         
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 p-6 md:p-8">
           {promotion.videoUrl ? (
-            <div className="relative w-full md:w-48 aspect-video md:aspect-square rounded-xl overflow-hidden border border-white/5 shadow-2xl bg-black">
+            <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black shrink-0">
               <video
                 src={promotion.videoUrl}
                 poster={promotion.imageUrl}
@@ -135,7 +135,7 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
               />
             </div>
           ) : promotion.imageUrl && (
-            <div className="relative w-full md:w-48 aspect-video md:aspect-square rounded-xl overflow-hidden border border-white/5 shadow-2xl">
+            <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0">
               <Image 
                 src={promotion.imageUrl} 
                 alt={promotion.title} 

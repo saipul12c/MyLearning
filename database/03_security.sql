@@ -171,9 +171,21 @@ ALTER TABLE assessment_definitions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view assessments" ON assessment_definitions;
 CREATE POLICY "Anyone can view assessments" ON assessment_definitions FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins can manage all assessment definitions" ON assessment_definitions;
+CREATE POLICY "Admins can manage all assessment definitions" ON assessment_definitions FOR ALL USING (is_admin());
+
+DROP POLICY IF EXISTS "Instructors can manage assessments for their courses" ON assessment_definitions;
+CREATE POLICY "Instructors can manage assessments for their courses" ON assessment_definitions FOR ALL USING (EXISTS (SELECT 1 FROM courses c JOIN instructors i ON c.instructor_id = i.id WHERE c.id = assessment_definitions.course_id AND i.user_id = auth.uid()));
+
 ALTER TABLE assessment_questions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enrolled students can view questions" ON assessment_questions;
 CREATE POLICY "Enrolled students can view questions" ON assessment_questions FOR SELECT USING (EXISTS (SELECT 1 FROM assessment_definitions ad JOIN enrollments e ON ad.course_id = e.course_id WHERE ad.id = assessment_questions.assessment_id AND e.user_id = auth.uid() AND e.payment_status IN ('paid', 'completed')) OR is_admin() OR is_instructor());
+
+DROP POLICY IF EXISTS "Admins can manage all assessment questions" ON assessment_questions;
+CREATE POLICY "Admins can manage all assessment questions" ON assessment_questions FOR ALL USING (is_admin());
+
+DROP POLICY IF EXISTS "Instructors can manage questions for their assessments" ON assessment_questions;
+CREATE POLICY "Instructors can manage questions for their assessments" ON assessment_questions FOR ALL USING (EXISTS (SELECT 1 FROM assessment_definitions ad JOIN courses c ON ad.course_id = c.id JOIN instructors i ON c.instructor_id = i.id WHERE ad.id = assessment_questions.assessment_id AND i.user_id = auth.uid()));
 
 -- 9.5 REVIEWS
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
