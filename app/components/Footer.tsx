@@ -125,7 +125,7 @@ export default function Footer({ initialPromo = null }: { initialPromo?: Promoti
               Ketentuan Layanan
             </Link>
             <Link
-              href="/privasi"
+              href="/security"
               className="text-slate-500 hover:text-white text-sm transition-colors"
             >
               Kebijakan Privasi

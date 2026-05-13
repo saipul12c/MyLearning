@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight } from "lucide-react";
+import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight, ShieldCheck, Zap } from "lucide-react";
 import Image from "next/image";
 import { TierPurchase, uploadTierPaymentProof } from "@/lib/tiers";
 import { formatPrice } from "@/lib/utils";
@@ -75,7 +75,6 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
     setIsUploading(true);
     setError(null);
 
-    // Upload using our tier-specific function
     const result = await uploadTierPaymentProof(purchase.id, preview);
     setIsUploading(false);
 
@@ -88,58 +87,77 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
 
   return (
     <div 
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-300"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-[#030307]/80 backdrop-blur-xl p-4 animate-in fade-in duration-500"
       onClick={onClose}
     >
+      {/* Decorative Orbs inside Modal Area */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
+
       <div 
-        className="bg-[#0f0f1a] rounded-2xl border border-white/10 max-w-2xl w-full max-h-[95vh] overflow-hidden flex flex-col shadow-2xl scale-in-center"
+        className="bg-[#0a0a14] rounded-[2.5rem] border border-white/10 max-w-3xl w-full max-h-[95vh] overflow-hidden flex flex-col shadow-[0_50px_100px_rgba(0,0,0,0.5)] scale-in-center relative"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Grainy Texture */}
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] pointer-events-none" />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
-          <div>
-            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-1 block">Upgrade Tier</span>
-            <h2 className="text-white font-bold text-lg leading-tight">{tierName}</h2>
+        <div className="flex items-center justify-between px-8 py-6 border-b border-white/5 bg-white/5 relative z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                <Zap size={24} className="text-white" />
+            </div>
+            <div>
+                <span className="text-[10px] font-black text-purple-400 uppercase tracking-[0.3em] mb-1 block">Tier Activation</span>
+                <h2 className="text-white font-black text-2xl tracking-tighter leading-tight">{tierName} Upgrade</h2>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-all">
-            <X size={20} />
+          <button onClick={onClose} className="p-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all">
+            <X size={24} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-6 md:p-8">
-          <div className="grid md:grid-cols-2 gap-8">
+        <div className="flex-1 overflow-auto p-8 md:p-10 relative z-10">
+          <div className="grid md:grid-cols-2 gap-10">
             {/* Left: Payment Info */}
-            <div className="space-y-6">
+            <div className="space-y-8">
               <div className="text-center md:text-left">
-                <h3 className="text-white font-bold mb-2 flex items-center gap-2">
-                  <QrCode size={18} className="text-purple-400" />
+                <h3 className="text-white font-black mb-4 flex items-center gap-3 tracking-tight">
+                  <div className="w-2 h-2 rounded-full bg-purple-500" />
                   Instruksi Pembayaran
                 </h3>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Total yang harus dibayar:</p>
-                    <p className="text-xl font-extrabold text-white">{formatPrice(price)}</p>
+                
+                <div className="bg-white/[0.03] border border-white/10 rounded-[2rem] p-6 mb-6 shadow-xl">
+                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2">Total Amount</p>
+                    <p className="text-4xl font-black text-white tracking-tighter">{formatPrice(price)}</p>
                 </div>
 
-                <p className="text-slate-400 text-[11px] leading-relaxed mb-4">
-                  Silakan scan QRIS di bawah dan transfer sesuai nominal di atas. Akun Anda akan diaktifkan secara otomatis setelah Admin memverifikasi bukti transfer Anda.
+                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-8">
+                  Silakan scan QRIS di bawah dan transfer sesuai nominal di atas. Akun Anda akan diaktifkan secara otomatis setelah sistem memverifikasi bukti transfer Anda.
                 </p>
 
-                <div className="bg-white p-3 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/10">
-                  <Image 
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=MyLearning-Tier-Payment" 
-                    alt="QRIS Payment" 
-                    width={200} 
-                    height={200} 
-                    className="rounded-lg"
-                  />
+                <div className="bg-white p-5 rounded-[2rem] flex flex-col items-center justify-center shadow-[0_20px_50px_rgba(255,255,255,0.05)] border border-white/10 group">
+                  <div className="relative overflow-hidden rounded-xl">
+                    <Image 
+                        src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=MyLearning-Tier-Payment" 
+                        alt="QRIS Payment" 
+                        width={240} 
+                        height={240} 
+                        className="rounded-lg group-hover:scale-105 transition-transform duration-700"
+                    />
+                    {/* QR Scanner Line Effect */}
+                    <div className="absolute top-0 left-0 w-full h-1 bg-purple-500/50 shadow-[0_0_15px_rgba(139,92,246,1)] animate-[scan_3s_linear_infinite]" />
+                  </div>
+                  <span className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <ShieldCheck size={12} className="text-emerald-500" /> Secure Payment Gateway
+                  </span>
                 </div>
               </div>
 
-              <div className="card !bg-blue-500/5 p-4 border-blue-500/20">
-                <div className="flex gap-3">
-                  <AlertCircle size={16} className="text-blue-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    Satu kali bayar untuk akses **Lifetime**. Admin kami biasanya memverifikasi dalam waktu 1-3 jam.
+              <div className="p-6 rounded-[2rem] bg-indigo-500/5 border border-indigo-500/10">
+                <div className="flex gap-4">
+                  <AlertCircle size={20} className="text-indigo-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                    Akses <span className="text-white font-bold">Lifetime</span> berlaku selamanya. Verifikasi manual biasanya memakan waktu <span className="text-indigo-300 font-bold">15-60 menit</span> di jam kerja.
                   </p>
                 </div>
               </div>
@@ -147,8 +165,8 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
 
             {/* Right: Upload Section */}
             <div className="flex flex-col">
-              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                <Upload size={18} className="text-cyan-400" />
+              <h3 className="text-white font-black mb-4 flex items-center gap-3 tracking-tight">
+                <div className="w-2 h-2 rounded-full bg-cyan-500" />
                 Upload Bukti Bayar
               </h3>
 
@@ -158,9 +176,9 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
                 onDragOver={handleDrag}
                 onDragLeave={handleDrag}
                 onDrop={handleDrop}
-                className={`flex-1 min-h-[250px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-6 transition-all cursor-pointer group relative ${
+                className={`flex-1 min-h-[320px] border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center p-8 transition-all cursor-pointer group relative overflow-hidden ${
                   preview 
-                    ? "border-cyan-500/50 bg-cyan-500/5" 
+                    ? "border-cyan-500/40 bg-cyan-500/5" 
                     : isDragging 
                       ? "border-cyan-400 bg-cyan-400/10 scale-[1.02]" 
                       : "border-white/10 hover:border-white/20 hover:bg-white/5"
@@ -176,32 +194,38 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
 
                 {preview ? (
                   <div className="relative w-full h-full flex flex-col items-center">
-                    <div className="relative w-full aspect-[4/3] mb-3">
+                    <div className="relative w-full aspect-[4/3] mb-6">
                       <Image 
                         src={preview} 
                         alt="Preview" 
                         fill 
-                        className="object-contain rounded-lg"
+                        className="object-contain rounded-2xl shadow-2xl"
                       />
                     </div>
-                    <div className="flex items-center gap-2 text-cyan-400 font-bold text-[10px] uppercase">
-                        <CheckCircle2 size={12} /> Bukti Terpilih
+                    <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-black text-[11px] uppercase tracking-widest">
+                        <CheckCircle2 size={14} /> Bukti Pembayaran Terpilih
                     </div>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
+                        className="mt-4 text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors underline underline-offset-4"
+                    >
+                        Ganti File
+                    </button>
                   </div>
                 ) : (
                   <>
-                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                      <Upload size={24} className="text-slate-500 group-hover:text-cyan-400 transition-colors" />
+                    <div className="w-20 h-20 rounded-[2rem] bg-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
+                      <Upload size={32} className="text-slate-500 group-hover:text-cyan-400 transition-colors" />
                     </div>
-                    <p className="text-white text-sm font-medium mb-1">Klik atau seret file</p>
-                    <p className="text-slate-500 text-xs">JPG, PNG (Maks 2MB)</p>
+                    <p className="text-white text-lg font-black tracking-tight mb-2">Pilih File Bukti</p>
+                    <p className="text-slate-500 text-xs font-medium">Klik atau seret gambar (Maks 2MB)</p>
                   </>
                 )}
               </div>
 
               {error && (
-                <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-red-400 text-[11px]">
-                  <AlertCircle size={14} />
+                <div className="mt-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400 text-xs font-medium animate-shake">
+                  <AlertCircle size={18} />
                   {error}
                 </div>
               )}
@@ -209,22 +233,39 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
               <button
                 onClick={handleUpload}
                 disabled={!file || isUploading}
-                className="btn-primary w-full mt-6 flex items-center justify-center gap-2 !py-4 font-bold shadow-xl shadow-purple-500/20 disabled:opacity-50"
+                className="group/btn relative w-full mt-8 py-6 bg-white text-slate-950 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-[0_20px_50px_rgba(255,255,255,0.1)] hover:scale-105 active:scale-95 transition-all duration-500 disabled:opacity-50 disabled:grayscale overflow-hidden"
               >
-                {isUploading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" /> Mengunggah...
-                  </>
-                ) : (
-                  <>
-                    Kirim Bukti Pembayaran <ArrowRight size={18} />
-                  </>
-                )}
+                <div className="relative z-10 flex items-center justify-center gap-3">
+                    {isUploading ? (
+                        <>
+                            <Loader2 size={20} className="animate-spin" /> Sedang Mengirim...
+                        </>
+                    ) : (
+                        <>
+                            Kirim Bukti Pembayaran <ArrowRight size={20} className="group-hover/btn:translate-x-1 transition-transform" />
+                        </>
+                    )}
+                </div>
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .animate-shake { animation: shake 0.3s ease-in-out; }
+      `}</style>
     </div>
   );
 }

@@ -31,6 +31,8 @@ export interface User {
   banReason?: string;
   enrollmentCount?: number;
   tierId?: string;
+  xp?: number;
+  level?: number;
 }
 
 export const BAN_REASONS = [
@@ -217,6 +219,8 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
     specialization: profile.specialization || "",
     experience: profile.experience || "",
     tierId: profile.tier_id || "",
+    xp: profile.xp || 0,
+    level: profile.level || 1,
   };
 }
 
@@ -253,6 +257,8 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     specialization: profile.specialization || "",
     experience: profile.experience || "",
     tierId: profile.tier_id || "",
+    xp: profile.xp || 0,
+    level: profile.level || 1,
   };
 }
 
@@ -306,6 +312,8 @@ export async function updateProfile(
         specialization: data.specialization || "",
         experience: data.experience || "",
         tierId: data.tier_id || "",
+        xp: data.xp || 0,
+        level: data.level || 1,
       }
     };
   } catch (error: any) {

@@ -1,13 +1,13 @@
 "use client";
 
-import { 
-  ShieldCheck, 
-  Lock, 
-  Zap, 
-  Eye, 
-  ShieldAlert, 
-  ChevronRight, 
-  Activity, 
+import {
+  ShieldCheck,
+  Lock,
+  Zap,
+  Eye,
+  ShieldAlert,
+  ChevronRight,
+  Activity,
   Server,
   Globe,
   RefreshCcw,
@@ -48,10 +48,10 @@ export default function SecurityReleasePage() {
             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
             System Status: Active
           </div>
-          
+
           {user ? (
-            <Link 
-              href={user.role === 'admin' ? "/dashboard/admin/sentinel" : "/dashboard"} 
+            <Link
+              href={user.role === 'admin' ? "/dashboard/admin/sentinel" : "/dashboard"}
               className="flex items-center gap-2 text-sm font-bold text-indigo-400 hover:text-indigo-300 transition-colors group"
             >
               <LayoutDashboard size={16} className="group-hover:rotate-12 transition-transform" />
@@ -79,7 +79,7 @@ export default function SecurityReleasePage() {
           <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-12 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
             Sentinel Gatekeeper adalah sistem keamanan berlapis yang dirancang untuk menjaga integritas platform dan privasi data Anda dari segala ancaman siber.
           </p>
-          
+
           <div className="flex flex-col md:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-500">
             <Link href="/register" className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-2xl shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95">
               Mulai Belajar Sekarang
@@ -184,21 +184,6 @@ export default function SecurityReleasePage() {
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="relative z-10 py-12 border-t border-white/5">
-        <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
-          <div>© 2026 MyLearning. All rights reserved.</div>
-          <div className="flex gap-8">
-            <Link href="/terms" className="hover:text-white transition-colors">Syarat & Ketentuan</Link>
-            <Link href="/privasi" className="hover:text-white transition-colors">Kebijakan Privasi</Link>
-          </div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={14} className="text-indigo-500/50" />
-            SECURED BY SENTINEL CORE
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

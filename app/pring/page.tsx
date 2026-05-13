@@ -6,8 +6,13 @@ import { supabase } from "@/lib/supabase";
 import { getPublicSentinelConfigs } from "@/lib/sentinel/actions";
 
 export const metadata: Metadata = {
-    title: "Tiers & Achievements",
-    description: "Upgrade tier belajar Anda dan raih prestasi di MyLearning.",
+    title: "Pricing & Membership | MyLearning Premium",
+    description: "Invest in your future with MyLearning Premium. Choose the perfect tier and unlock exclusive courses, AI features, and industry-recognized certificates.",
+    openGraph: {
+        title: "MyLearning Premium - Invest in Your Future",
+        description: "One-time investment for lifetime access to the most advanced learning ecosystem.",
+        images: ["/og-pricing.png"],
+    }
 };
 
 export default async function PringPage() {
