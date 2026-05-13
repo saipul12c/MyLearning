@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getPublicSentinelConfigs } from "./sentinel/actions";
 
 export interface UserGamification {
   xp: number;
@@ -26,6 +27,10 @@ export interface UserBadge extends Badge {
  * Update user streak. Should be called when user performs an active learning action.
  */
 export async function updateStreak(userId: string) {
+  // Sentinel Gatekeeper Check
+  const sentinel = await getPublicSentinelConfigs();
+  if (sentinel.gamification_system === false) return false;
+
   const { error } = await supabase.rpc('update_user_streak', { p_user_id: userId });
   if (error) console.error('Error updating streak:', error);
   return !error;

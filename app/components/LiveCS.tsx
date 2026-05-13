@@ -27,6 +27,7 @@ export default function LiveCS() {
   const { user, isLoggedIn } = useAuth();
   const pathname = usePathname();
   const [isEnabled, setIsEnabled] = useState<boolean | null>(null);
+  const [isAiEnabled, setIsAiEnabled] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -100,6 +101,7 @@ export default function LiveCS() {
   useEffect(() => {
     getPublicSentinelConfigs().then(configs => {
       setIsEnabled(configs['live_chat_enabled'] !== false);
+      setIsAiEnabled(configs['ai_tutor_beta'] !== false);
     });
   }, []);
 
@@ -256,8 +258,11 @@ export default function LiveCS() {
     if (mode === "ai") {
       setLoading(true);
       
-      // Check for agent request intent
-      if (detectAgentRequest(userMsg)) {
+      // Check for agent request intent OR AI tutor is disabled
+      if (detectAgentRequest(userMsg) || !isAiEnabled) {
+        if (!isAiEnabled) {
+          setMessages(prev => [...prev, { role: "model", content: "Fitur AI Tutor sedang tidak aktif. Menghubungkan Anda ke agen...", timestamp: new Date() }]);
+        }
         await handleContactAgent();
         return;
       }

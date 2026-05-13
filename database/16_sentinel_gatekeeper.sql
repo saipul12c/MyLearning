@@ -52,5 +52,10 @@ VALUES
 ('code_fingerprint', '""', 'Hash of the current source code manifest', 'system', FALSE, 100, '{}'),
 ('ddos_protection_enabled', 'false', 'Aktifkan sistem filtrasi trafik otomatis', 'security', TRUE, 100, '{}'),
 ('ddos_protection_level', '"low"', 'Level proteksi: low (soft), medium (rate-limit), high (challenge)', 'security', TRUE, 100, '{}'),
-('ddos_rate_limit', '100', 'Maksimal request per menit per IP (hanya efektif di level medium/high)', 'security', TRUE, 100, '{}')
+('ddos_rate_limit', '100', 'Maksimal request per menit per IP (hanya efektif di level medium/high)', 'security', TRUE, 100, '{}'),
+('live_chat_enabled', 'true', 'Aktifkan fitur bantuan chat langsung dengan CS', 'feature', TRUE, 100, '{}'),
+('certificate_generation', 'true', 'Izinkan sistem membuat sertifikat kursus otomatis', 'feature', TRUE, 100, '{}'),
+('gamification_system', 'true', 'Aktifkan sistem poin, badges, dan leaderboard', 'feature', TRUE, 100, '{}'),
+('discussions_enabled', 'true', 'Aktifkan forum diskusi di setiap materi kursus', 'feature', TRUE, 100, '{}'),
+('voucher_system_enabled', 'true', 'Aktifkan penggunaan kode promo dan voucher', 'feature', TRUE, 100, '{}')
 ON CONFLICT (key) DO NOTHING;

@@ -3,6 +3,7 @@
 // ============================================
 
 import { supabase } from "./supabase";
+import { getPublicSentinelConfigs, reportFeatureError } from "./sentinel/actions";
 
 export type UserRole = "admin" | "instructor" | "user";
 
@@ -60,6 +61,12 @@ export async function register(
   password: string
 ): Promise<{ success: boolean; user?: SafeUser; error?: string }> {
   try {
+    // 0. Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.module_auth_enabled === false) {
+      return { success: false, error: "Pendaftaran akun baru sedang ditangguhkan oleh sistem." };
+    }
+
     // 1. Supabase Auth Sign Up
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -104,6 +111,8 @@ export async function register(
       }
     };
   } catch (error: any) {
+    // Report error to Sentinel Auto-Kill Switch (non-blocking)
+    reportFeatureError('module_auth_enabled').catch(() => {});
     return { success: false, error: error.message };
   }
 }
@@ -113,6 +122,12 @@ export async function login(
   password: string
 ): Promise<{ success: boolean; user?: SafeUser; error?: string }> {
   try {
+    // 0. Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.module_auth_enabled === false) {
+      return { success: false, error: "Sistem login sedang dalam pemeliharaan." };
+    }
+
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -132,6 +147,8 @@ export async function login(
 
     return { success: true, user };
   } catch (error: any) {
+    // Report error to Sentinel Auto-Kill Switch (non-blocking)
+    reportFeatureError('module_auth_enabled').catch(() => {});
     return { success: false, error: error.message };
   }
 }

@@ -33,8 +33,9 @@ export default function SecurityCheckPage() {
     }, 80);
 
     const redirectTimer = setTimeout(() => {
-      // Set the verification cookie (30 minutes = 1800 seconds)
-      document.cookie = "sentinel_verified=true; path=/; max-age=1800; SameSite=Strict";
+      // Set the verification cookie with a crypto-random token (30 minutes = 1800 seconds)
+      const token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      document.cookie = "sentinel_verified=" + token + "; path=/; max-age=1800; SameSite=Strict; Secure";
       router.refresh();
       // Go back to the original intended URL or home
       const searchParams = new URLSearchParams(window.location.search);
@@ -97,7 +98,7 @@ export default function SecurityCheckPage() {
         <div className="pt-12 flex flex-col items-center gap-4">
           <div className="h-px w-12 bg-slate-800" />
           <p className="text-[10px] text-slate-600 font-mono tracking-tighter">
-            DDoS PROTECTION BY SENTINEL v1.3.0
+            DDoS PROTECTION BY SENTINEL v1.5.0
           </p>
         </div>
       </div>

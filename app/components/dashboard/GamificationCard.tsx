@@ -11,6 +11,7 @@ import {
   getRarityColor
 } from "@/lib/gamification";
 import Link from "next/link";
+import { getPublicSentinelConfigs } from "@/lib/sentinel/actions";
 
 interface GamificationCardProps {
   userId: string;
@@ -23,6 +24,13 @@ export default function GamificationCard({ userId }: GamificationCardProps) {
 
   useEffect(() => {
     async function fetchData() {
+      // Sentinel Gatekeeper Check
+      const sentinel = await getPublicSentinelConfigs();
+      if (sentinel.module_achievements_enabled === false) {
+        setLoading(false);
+        return; // Don't show gamification card
+      }
+
       const [s, b] = await Promise.all([
         getUserGamification(userId),
         getUserBadges(userId)

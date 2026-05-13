@@ -29,7 +29,9 @@ import {
   scheduleRelease,
   cleanupOrphanedFeatures,
   acquireLock,
-  resetErrorCount
+  releaseLock,
+  resetErrorCount,
+  updateErrorThreshold
 } from "@/lib/sentinel/actions";
 import { SentinelConfig } from "@/lib/sentinel/types";
 import { SYSTEM_MANIFEST } from "@/lib/sentinel/manifest";
@@ -158,6 +160,20 @@ export default function SentinelGatekeeperPage() {
     }
   }
 
+  async function handleUnlock(key: string) {
+    if (!user?.id || updating) return;
+    try {
+      setUpdating(key + '_unlock');
+      await releaseLock(key, user.id);
+      loadConfigs();
+      showToast("Kunci berhasil dilepas");
+    } catch (error: any) {
+      showToast(error.message, "error");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
   async function handleResetErrors(key: string) {
     if (!user?.id || updating) return;
     try {
@@ -165,6 +181,22 @@ export default function SentinelGatekeeperPage() {
       await resetErrorCount(key, user.id);
       loadConfigs();
       showToast("Error counter berhasil direset");
+    } catch (error: any) {
+      showToast(error.message, "error");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  async function handleUpdateThreshold(key: string, threshold: number) {
+    if (!user?.id || updating) return;
+    try {
+      setUpdating(key + '_threshold');
+      await updateErrorThreshold(key, threshold, user.id);
+      setConfigs(prev => prev.map(c => 
+        c.key === key ? { ...c, error_threshold: threshold, updated_at: new Date().toISOString() } : c
+      ));
+      showToast(`Error threshold ${key} diatur ke ${threshold}`);
     } catch (error: any) {
       showToast(error.message, "error");
     } finally {
@@ -337,7 +369,18 @@ export default function SentinelGatekeeperPage() {
               {syncData.orphanedFeatures.length > 0 && (
                 <button 
                   className="px-6 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-slate-400 font-bold text-sm hover:bg-red-500/10 hover:text-red-400 transition-all"
-                  onClick={() => confirm("Cleanup legacy features?") && cleanupOrphanedFeatures(syncData.orphanedFeatures).then(loadConfigs)}
+                  onClick={async () => {
+                    if (!confirm("Cleanup legacy features?")) return;
+                    try {
+                      const result = await cleanupOrphanedFeatures(syncData.orphanedFeatures);
+                      if (result.protected.length > 0) {
+                        showToast(`${result.deleted.length} dihapus, ${result.protected.length} dilindungi (is_protected).`);
+                      } else {
+                        showToast(`${result.deleted.length} fitur legacy berhasil dihapus.`);
+                      }
+                      loadConfigs();
+                    } catch (e: any) { showToast(e.message, 'error'); }
+                  }}
                 >
                   Cleanup
                 </button>

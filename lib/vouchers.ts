@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getPublicSentinelConfigs } from "./sentinel/actions";
 
 export interface Voucher {
   id: string;
@@ -30,6 +31,12 @@ export async function validateVoucher(
   userId?: string
 ): Promise<{ success: boolean; discountAmount?: number; voucher?: Voucher; error?: string }> {
   try {
+    // Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.voucher_system_enabled === false) {
+      return { success: false, error: "Sistem voucher sedang dalam pemeliharaan." };
+    }
+
     const { data, error } = await supabase.rpc("validate_voucher_optimized", {
       p_code: code,
       p_course_id: courseId,

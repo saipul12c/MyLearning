@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { createNotification } from "./notifications";
+import { getPublicSentinelConfigs } from "./sentinel/actions";
 
 export interface Discussion {
   id: string;
@@ -63,6 +64,12 @@ export async function postDiscussion(payload: {
   parentId?: string;
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
+    // Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.discussions_enabled === false) {
+      return { success: false, error: "Forum diskusi sedang dalam pemeliharaan." };
+    }
+
     const { data, error } = await supabase
       .from("discussions")
       .insert({

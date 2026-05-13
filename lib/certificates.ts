@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getPublicSentinelConfigs } from "./sentinel/actions";
 
 export interface CertificateDetails {
   id: string;
@@ -70,6 +71,12 @@ export async function requestCertificateRevision(
   reason: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.certificate_generation === false) {
+      return { success: false, error: "Fitur sertifikat sedang dalam pemeliharaan." };
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Anda harus login untuk mengajukan perbaikan.");
 

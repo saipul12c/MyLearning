@@ -73,6 +73,40 @@ export function checkFeatureAccess(
 }
 
 /**
+ * Server-side helper: Check if a feature is enabled for a specific user.
+ * Wraps checkFeatureAccess with automatic config fetching.
+ * Use this in server lib modules instead of simple boolean checks
+ * when you need canary rollout, dependency, or kill-switch awareness.
+ */
+export async function isFeatureEnabled(
+  key: string, 
+  user?: { id?: string; role?: string }
+): Promise<boolean> {
+  const { data: config } = await supabase
+    .from('sentinel_configs')
+    .select('*')
+    .eq('key', key)
+    .single();
+
+  if (!config) return true; // Fail-open: if config not found, allow
+
+  // Build allConfigs map for dependency checking
+  let allConfigs: Record<string, any> | undefined;
+  if (config.dependencies && config.dependencies.length > 0) {
+    const { data: deps } = await supabase
+      .from('sentinel_configs')
+      .select('key, value')
+      .in('key', config.dependencies);
+    if (deps) {
+      allConfigs = {};
+      deps.forEach(d => { allConfigs![d.key] = d.value; });
+    }
+  }
+
+  return checkFeatureAccess(config as SentinelConfig, user, undefined, allConfigs);
+}
+
+/**
  * Fetches all public sentinel configurations.
  * Optimized for frontend/middleware usage.
  * Automatically applies scheduled changes if release_at has passed.
@@ -90,15 +124,34 @@ export async function getPublicSentinelConfigs(): Promise<SentinelState> {
     return {};
   }
 
-  return (data || []).reduce((acc, curr) => {
-    // If there's a scheduled release that has passed, use the pending_value
+  const result: SentinelState = {};
+  const releasesToApply: { key: string; value: any }[] = [];
+
+  for (const curr of (data || [])) {
     if (curr.release_at && curr.release_at <= now && curr.pending_value !== null) {
-      acc[curr.key] = curr.pending_value;
+      result[curr.key] = curr.pending_value;
+      releasesToApply.push({ key: curr.key, value: curr.pending_value });
     } else {
-      acc[curr.key] = curr.value;
+      result[curr.key] = curr.value;
     }
-    return acc;
-  }, {} as SentinelState);
+  }
+
+  // Auto-commit scheduled releases that have passed (fire-and-forget)
+  for (const release of releasesToApply) {
+    Promise.resolve(
+      supabase
+        .from('sentinel_configs')
+        .update({ 
+          value: release.value, 
+          pending_value: null, 
+          release_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('key', release.key)
+    ).catch((err: any) => console.error('Failed to auto-apply release for', release.key, err));
+  }
+
+  return result;
 }
 
 /**
@@ -158,18 +211,37 @@ export async function syncManifestWithDatabase(): Promise<{
 
 /**
  * Removes configurations from the database that are no longer in the code.
+ * Respects the is_protected flag to prevent accidental deletion of critical configs.
  */
-export async function cleanupOrphanedFeatures(keys: string[]): Promise<void> {
-  if (keys.length === 0) return;
-  
-  const { error } = await supabase
-    .from('sentinel_configs')
-    .delete()
-    .in('key', keys);
+export async function cleanupOrphanedFeatures(keys: string[]): Promise<{ deleted: string[]; protected: string[] }> {
+  if (keys.length === 0) return { deleted: [], protected: [] };
 
-  if (error) {
-    throw new Error(`Failed to cleanup features: ${error.message}`);
+  // 1. Check which keys are protected
+  const { data: protectedConfigs } = await supabase
+    .from('sentinel_configs')
+    .select('key')
+    .in('key', keys)
+    .eq('is_protected', true);
+
+  const protectedKeys = new Set((protectedConfigs || []).map(c => c.key));
+  const deletableKeys = keys.filter(k => !protectedKeys.has(k));
+
+  // 2. Only delete non-protected keys
+  if (deletableKeys.length > 0) {
+    const { error } = await supabase
+      .from('sentinel_configs')
+      .delete()
+      .in('key', deletableKeys);
+
+    if (error) {
+      throw new Error(`Failed to cleanup features: ${error.message}`);
+    }
   }
+
+  return { 
+    deleted: deletableKeys, 
+    protected: Array.from(protectedKeys) 
+  };
 }
 
 /**
@@ -295,16 +367,18 @@ export async function updateSentinelConfig(
  * Prevents other admins from editing for 5 minutes.
  */
 export async function acquireLock(key: string, userId: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('sentinel_configs')
     .update({ 
       locked_by: userId,
       locked_at: new Date().toISOString()
     })
     .eq('key', key)
-    .or(`locked_by.eq.${userId},locked_by.is.null,locked_at.lt.${new Date(Date.now() - 300000).toISOString()}`);
+    .or(`locked_by.eq.${userId},locked_by.is.null,locked_at.lt.${new Date(Date.now() - 300000).toISOString()}`)
+    .select('key');
 
   if (error) throw new Error("Gagal mengunci konfigurasi. Mungkin sudah dikunci admin lain.");
+  if (!data || data.length === 0) throw new Error("Konfigurasi sedang dikunci oleh admin lain. Coba lagi dalam 5 menit.");
 }
 
 /**
@@ -312,16 +386,17 @@ export async function acquireLock(key: string, userId: string): Promise<void> {
  * Reports an error for a feature. Automatically disables if threshold is reached.
  */
 export async function reportFeatureError(key: string): Promise<void> {
-  // Use RPC for atomic increment if possible, or simple fetch-then-update
+  // Fetch current state including metadata for safe merge
   const { data: config } = await supabase
     .from('sentinel_configs')
-    .select('value, current_errors, error_threshold')
+    .select('value, current_errors, error_threshold, metadata')
     .eq('key', key)
     .single();
 
   if (!config || !config.error_threshold) return;
 
-  const newErrors = (config.current_errors || 0) + 1;
+  const prevErrors = config.current_errors || 0;
+  const newErrors = prevErrors + 1;
   const updateData: any = {
     current_errors: newErrors,
     last_error_at: new Date().toISOString()
@@ -330,16 +405,21 @@ export async function reportFeatureError(key: string): Promise<void> {
   // If threshold reached, kill the feature
   if (newErrors >= config.error_threshold && config.value === true) {
     updateData.value = false;
+    // Merge with existing metadata instead of overwriting
+    const existingMeta = (typeof config.metadata === 'object' && config.metadata) ? config.metadata : {};
     updateData.metadata = { 
+      ...existingMeta,
       auto_disabled: true, 
       reason: `Error threshold (${config.error_threshold}) exceeded.` 
     };
   }
 
+  // Optimistic locking: only update if current_errors hasn't changed (mitigates race condition)
   await supabase
     .from('sentinel_configs')
     .update(updateData)
-    .eq('key', key);
+    .eq('key', key)
+    .eq('current_errors', prevErrors);
 }
 
 /**
@@ -355,4 +435,46 @@ export async function resetErrorCount(key: string, userId: string): Promise<void
       updated_at: new Date().toISOString()
     })
     .eq('key', key);
+}
+
+/**
+ * RELEASE LOCK (Item 6)
+ * Explicitly releases a lock without saving changes.
+ */
+export async function releaseLock(key: string, userId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('sentinel_configs')
+    .update({ 
+      locked_by: null, 
+      locked_at: null 
+    })
+    .eq('key', key)
+    .eq('locked_by', userId) // Only the lock holder can release
+    .select('key');
+
+  if (error) throw new Error("Gagal melepas kunci konfigurasi.");
+  if (!data || data.length === 0) throw new Error("Anda bukan pemilik kunci ini.");
+}
+
+/**
+ * UPDATE ERROR THRESHOLD (Item 3)
+ * Allows admin to configure the auto-kill threshold from the dashboard.
+ */
+export async function updateErrorThreshold(
+  key: string, 
+  threshold: number, 
+  userId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('sentinel_configs')
+    .update({ 
+      error_threshold: Math.max(0, Math.floor(threshold)),
+      updated_by: userId,
+      updated_at: new Date().toISOString()
+    })
+    .eq('key', key);
+
+  if (error) {
+    throw new Error(`Failed to update error threshold: ${error.message}`);
+  }
 }

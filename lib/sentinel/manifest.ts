@@ -140,6 +140,43 @@ export const SYSTEM_MANIFEST = {
       isPublic: false,
       impact: 'critical',
       devNotes: 'Mempengaruhi performa database RLS.'
+    },
+    {
+      key: 'ai_tutor_beta',
+      category: 'feature',
+      description: 'Aktifkan fitur tutor AI berbasis Gemini 1.5 Pro.',
+      proposedValue: false,
+      isPublic: true,
+      impact: 'medium',
+      devNotes: 'Tergantung pada module_auth_enabled.',
+      dependencies: ['module_auth_enabled']
+    },
+    {
+      key: 'ddos_protection_enabled',
+      category: 'security',
+      description: 'Aktifkan sistem filtrasi trafik otomatis.',
+      proposedValue: false,
+      isPublic: true,
+      impact: 'high',
+      devNotes: 'Mempengaruhi middleware dan performa response time.'
+    },
+    {
+      key: 'ddos_protection_level',
+      category: 'security',
+      description: 'Level proteksi: low (soft), medium (rate-limit), high (challenge).',
+      proposedValue: 'low',
+      isPublic: true,
+      impact: 'high',
+      devNotes: 'Level high menampilkan halaman verifikasi ke semua visitor.'
+    },
+    {
+      key: 'ddos_rate_limit',
+      category: 'security',
+      description: 'Maksimal request per menit per IP.',
+      proposedValue: 100,
+      isPublic: true,
+      impact: 'medium',
+      devNotes: 'Hanya efektif di level medium/high.'
     }
   ] as FeatureManifest[]
 };

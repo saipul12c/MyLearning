@@ -129,7 +129,7 @@ export function getLevelBg(level: string): string {
 
 // ---------- Enrollment Functions ----------
 
-import { getPublicSentinelConfigs } from "./sentinel/actions";
+import { getPublicSentinelConfigs, reportFeatureError } from "./sentinel/actions";
 
 export async function enrollCourse(
   userId: string,
@@ -287,6 +287,12 @@ export async function uploadPaymentProof(
   proofUrl: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.module_payment_enabled === false) {
+      return { success: false, error: "Sistem pembayaran sedang dalam pemeliharaan." };
+    }
+
     const { error } = await supabase
       .from("enrollments")
       .update({
@@ -311,6 +317,8 @@ export async function uploadPaymentProof(
 
     return { success: true };
   } catch (error: any) {
+    // Report error to Sentinel Auto-Kill Switch (non-blocking)
+    reportFeatureError('module_payment_enabled').catch(() => {});
     return { success: false, error: error.message };
   }
 }

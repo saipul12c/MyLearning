@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getPublicSentinelConfigs } from "./sentinel/actions";
 
 /**
  * Service to handle file uploads to Supabase Storage
@@ -98,6 +99,12 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 async function uploadToBucket(file: File, bucket: string, folder: string): Promise<{ url: string | null; error: any }> {
   try {
+    // 0. Sentinel Gatekeeper Check
+    const sentinel = await getPublicSentinelConfigs();
+    if (sentinel.module_upload_enabled === false) {
+      return { url: null, error: new Error("Fitur upload sedang dalam pemeliharaan.") };
+    }
+
     // 1. Validate file size
     if (file.size > MAX_IMAGE_SIZE) {
       return { url: null, error: new Error("File terlalu besar. Maksimal 10 MB.") };
