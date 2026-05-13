@@ -8,13 +8,20 @@ import {
     FileText, Wind, Flag, MessageSquare, Award, Gem, 
     Crown, Brain, Star, Rocket, Shield, Lock, ArrowRight,
     Clock, AlertCircle, Loader2, Sparkles, ChevronRight,
-    Trophy, Coins, TrendingUp
+    Trophy, Coins, TrendingUp, LayoutDashboard, MessageCircle,
+    Bookmark, Globe, ShieldCheck, Download, Video, UserPlus,
+    HelpCircle, Users2, FileUser, Route, Code2, Briefcase,
+    Box, Layers, Radar, RefreshCw, Moon, Heart
 } from "lucide-react";
+
+
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import TierPaymentModal from "@/app/components/TierPaymentModal";
 import Image from "next/image";
 import { formatPrice } from "@/lib/utils";
+import { FEATURES_MANIFEST, FeatureDefinition } from "@/lib/features";
+
 
 interface Props {
     tiers: Tier[];
@@ -24,8 +31,14 @@ interface Props {
 const ICON_MAP: Record<string, any> = {
     Zap, Target, CheckCircle, Calendar, Layout, Flame, 
     FileText, Wind, Flag, MessageSquare, Award, Gem, 
-    Crown, Brain, Star, Rocket, Shield
+    Crown, Brain, Star, Rocket, Shield, Trophy, Sparkles,
+    TrendingUp, Coins, LayoutDashboard, MessageCircle,
+    Bookmark, Globe, ShieldCheck, Download, Video, UserPlus,
+    HelpCircle, Users2, FileUser, Route, Code2, Briefcase,
+    Box, Layers, Radar, RefreshCw, Moon, Heart
 };
+
+
 
 export default function PringClient({ tiers, achievements }: Props) {
     const { user, isLoggedIn } = useAuth();
@@ -262,6 +275,89 @@ export default function PringClient({ tiers, achievements }: Props) {
                     </div>
                 </section>
 
+                {/* --- FEATURE UNIVERSE (UNLOCK SYSTEM) --- */}
+                <section className="px-4 py-32 relative overflow-hidden bg-white/[0.01]">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="text-center mb-20">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 mb-4 animate-fade-in">
+                                <Sparkles size={14} className="text-indigo-400" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300">Feature Universe</span>
+                            </div>
+                            <h2 className="text-5xl md:text-7xl font-black tracking-tighter mb-6 animate-slide-up">Audit Fitur <span className="text-indigo-400">&</span> Akses</h2>
+                            <p className="text-slate-400 text-lg max-w-2xl mx-auto font-medium animate-slide-up delay-100">
+                                Pastikan semua fitur bawaan (Default) aktif dan buka fitur Premium melalui upgrade tier.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                            {/* Category: Default (Free) */}
+                            <div className="p-1 rounded-[3rem] bg-gradient-to-b from-emerald-500/20 to-transparent">
+                                <div className="h-full p-8 md:p-10 rounded-[2.9rem] bg-[#08080c] border border-white/5">
+                                    <div className="flex items-center gap-4 mb-10">
+                                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                                            <CheckCircle size={24} className="text-emerald-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black tracking-tight">Default Pack</h3>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tersedia Untuk Semua</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {FEATURES_MANIFEST.filter(f => f.category === 'free').map((feat) => (
+                                            <FeatureItem key={feat.key} feat={feat} unlocked={true} />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Category: Premium (Paid) */}
+                            <div className="p-1 rounded-[3rem] bg-gradient-to-b from-purple-500/20 to-transparent">
+                                <div className="h-full p-8 md:p-10 rounded-[2.9rem] bg-[#08080c] border border-white/5">
+                                    <div className="flex items-center gap-4 mb-10">
+                                        <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 shadow-[0_0_20px_rgba(168,85,247,0.1)]">
+                                            <Zap size={24} className="text-purple-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black tracking-tight">Premium Pack</h3>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Upgrade Ke Bronze+</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {FEATURES_MANIFEST.filter(f => f.category === 'paid').map((feat) => {
+                                            const isUnlocked = user?.tierId ? true : false;
+                                            return <FeatureItem key={feat.key} feat={feat} unlocked={isUnlocked} />;
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Category: Elite (Special) */}
+                            <div className="p-1 rounded-[3rem] bg-gradient-to-b from-amber-500/20 to-transparent">
+                                <div className="h-full p-8 md:p-10 rounded-[2.9rem] bg-[#08080c] border border-white/5">
+                                    <div className="flex items-center gap-4 mb-10">
+                                        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                                            <Crown size={24} className="text-amber-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black tracking-tight">Elite Pack</h3>
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Upgrade Ke Platinum+</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {FEATURES_MANIFEST.filter(f => f.category === 'special').map((feat) => {
+                                            const userTier = tiers.find(t => t.id === user?.tierId);
+                                            const isUnlocked = !!(userTier && userTier.price >= 750000);
+                                            return <FeatureItem key={feat.key} feat={feat} unlocked={isUnlocked} />;
+                                        })}
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
                 {/* --- ACHIEVEMENTS VAULT --- */}
                 <section className="px-4 py-32 bg-gradient-to-b from-transparent via-purple-900/5 to-transparent relative overflow-hidden">
                     {/* Decorative Elements */}
@@ -409,3 +505,41 @@ export default function PringClient({ tiers, achievements }: Props) {
         </div>
     );
 }
+
+function FeatureItem({ feat, unlocked }: { feat: FeatureDefinition, unlocked: boolean }) {
+    const Icon = ICON_MAP[feat.icon_name] || Star;
+    
+    return (
+        <div className={`group/feat relative p-4 rounded-2xl border transition-all duration-500 ${
+            unlocked 
+            ? "bg-white/[0.03] border-white/10 hover:bg-white/[0.05]" 
+            : "bg-black/20 border-white/5 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all"
+        }`}>
+            <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-500 ${
+                    unlocked 
+                    ? "bg-white/5 border-white/10 text-white" 
+                    : "bg-white/5 border-white/5 text-slate-600"
+                }`}>
+                    <Icon size={20} strokeWidth={1.5} />
+                </div>
+                <div className="flex-1">
+                    <h4 className="text-xs font-black tracking-tight mb-0.5">{feat.name}</h4>
+                    <p className="text-[10px] text-slate-500 font-medium leading-tight">{feat.description}</p>
+                </div>
+                <div>
+                    {unlocked ? (
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                            <CheckCircle size={12} className="text-emerald-500" />
+                        </div>
+                    ) : (
+                        <div className="w-6 h-6 rounded-full bg-slate-900 flex items-center justify-center border border-white/10">
+                            <Lock size={10} className="text-slate-700" />
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+

@@ -204,7 +204,16 @@ function UserDashboard({ userId, userName }: { userId: string; userName: string 
       )}
 
       {/* Quick Actions */}
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Link href="/dashboard/explore-features" className="card p-6 group flex items-center gap-4 hover:border-amber-500/30 transition-all border-amber-500/10">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform group-hover:bg-amber-500/20">
+            <Sparkles size={24} className="text-amber-400" />
+          </div>
+          <div>
+            <h3 className="text-white font-bold text-base group-hover:text-amber-300 transition-colors">30 Fitur Unggulan</h3>
+            <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Eksplorasi Universe</p>
+          </div>
+        </Link>
         <Link href="/dashboard/courses" className="card p-6 group flex items-center gap-4 hover:border-purple-500/30 transition-all">
           <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center group-hover:scale-110 transition-transform group-hover:bg-purple-500/20">
             <BookOpen size={24} className="text-purple-400" />

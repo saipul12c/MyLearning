@@ -7,7 +7,7 @@ import { useAuth } from "@/app/components/AuthContext";
 import {
   BookOpen, LayoutDashboard, Library, BookMarked, User, LogOut, Bell,
   Users, GraduationCap, MessageSquare, Settings, Shield, Menu, X, ChevronLeft,
-  Phone, Ticket, Megaphone, History, Calendar, Mail
+  Sparkles, Phone, Ticket, Megaphone, History, Calendar, Mail
 } from "lucide-react";
 import ErrorBoundary from "@/app/components/ui/ErrorBoundary";
 import ConfirmationModal from "@/app/components/ConfirmationModal";
@@ -17,6 +17,7 @@ const userMenuGroups = [
     title: "Menu Utama",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard/explore-features", label: "Eksplorasi Fitur", icon: Sparkles },
       { href: "/dashboard/courses", label: "Jelajahi Kursus", icon: Library },
       { href: "/dashboard/my-courses", label: "Kursus Saya", icon: BookMarked },
       { href: "/dashboard/events", label: "Event Terdaftar", icon: Calendar },
