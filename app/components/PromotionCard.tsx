@@ -110,6 +110,8 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
     );
   };
   
+  // ==================== BANNER VARIANT ====================
+  // Like a billboard/leaderboard ad — image fills its slot completely
   if (variant === "banner") {
     return (
       <div 
@@ -121,9 +123,10 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
         <div className="absolute inset-0 bg-grid-white/[0.02] bg-[center_top_-1px]" />
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-purple-500/10 blur-[100px] rounded-full group-hover:bg-purple-500/20 transition-all duration-700" />
         
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 p-6 md:p-8">
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-6 md:p-10">
+          {/* Ad Creative — fixed height, image fills completely like real ads */}
           {promotion.videoUrl ? (
-            <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black shrink-0">
+            <div className="relative w-full md:w-2/5 max-w-[420px] h-[200px] md:h-[236px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black shrink-0">
               <video
                 src={promotion.videoUrl}
                 poster={promotion.imageUrl}
@@ -135,13 +138,14 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
               />
             </div>
           ) : promotion.imageUrl && (
-            <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0">
+            <div className="relative w-full md:w-2/5 max-w-[420px] h-[200px] md:h-[236px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0">
               <Image 
                 src={promotion.imageUrl} 
                 alt={promotion.title} 
                 fill 
+                sizes="(max-width: 768px) 100vw, 420px"
                 priority={priorityLabel}
-                className="object-cover group-hover:scale-110 transition-transform duration-700"
+                className="object-cover group-hover:scale-[1.02] transition-transform duration-700"
               />
             </div>
           )}
@@ -194,6 +198,8 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
     );
   }
 
+  // ==================== CARD VARIANT ====================
+  // Like a medium rectangle ad (300x250 style) — image fills top section
   if (variant === "card") {
     return (
       <a 
@@ -203,7 +209,8 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
         rel={isExternal ? "noopener noreferrer" : ""}
         className="card flex flex-col p-0 overflow-hidden group hover:border-purple-500/40 transition-all duration-500"
       >
-        <div className="relative h-32 w-full bg-[#0c0c14]">
+        {/* Ad image slot — fixed height, image fills completely */}
+        <div className="relative w-full h-[180px] bg-[#0c0c14] overflow-hidden">
           {promotion.videoUrl ? (
             <video
               src={promotion.videoUrl}
@@ -219,18 +226,19 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
               src={promotion.imageUrl} 
               alt={promotion.title} 
               fill 
-              className="object-cover group-hover:scale-105 transition-transform duration-500"
+              sizes="400px"
+              className="object-cover group-hover:scale-[1.02] transition-transform duration-500"
             />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 to-cyan-900/30 flex items-center justify-center">
                <Sparkles size={32} className="text-purple-400/30" />
             </div>
           )}
-          <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-[8px] font-black text-purple-400 uppercase tracking-widest">
+          <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-[8px] font-black text-purple-400 uppercase tracking-widest z-10">
             {promotion.badgeText || "PROMO"}
           </div>
           {isUrgent && (
-            <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-red-500/20 backdrop-blur-md border border-red-500/30 text-[8px] font-black text-red-400 uppercase tracking-widest animate-pulse flex items-center gap-1">
+            <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-red-500/20 backdrop-blur-md border border-red-500/30 text-[8px] font-black text-red-400 uppercase tracking-widest animate-pulse flex items-center gap-1 z-10">
               <Flame size={8} /> SEGERA
             </div>
           )}
@@ -260,7 +268,8 @@ export default function PromotionCard({ promotion, variant = "banner", isPreview
     );
   }
 
-  // Spotlight Variant (Sidebar)
+  // ==================== SPOTLIGHT VARIANT (Sidebar) ====================
+  // Like a sidebar widget ad — text-based, compact
   return (
     <div className="card p-5 border-cyan-500/10 hover:border-cyan-500/30 transition-all group overflow-hidden relative">
       <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-cyan-500/5 blur-2xl rounded-full" />

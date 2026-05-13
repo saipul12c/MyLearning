@@ -40,6 +40,7 @@ export default async function HomePage() {
   const fallbackTestimonials = [
     {
       id: "fb-1",
+      userId: "fb-1",
       userName: "Dimas Pratama",
       userBio: "Full-Stack Developer di Tokopedia",
       courseTitle: "Mastering React & Next.js",
@@ -49,6 +50,7 @@ export default async function HomePage() {
     },
     {
       id: "fb-2",
+      userId: "fb-2",
       userName: "Anisa Putri",
       userBio: "Data Analyst di GoTo",
       courseTitle: "Python for Data Science",
@@ -58,6 +60,7 @@ export default async function HomePage() {
     },
     {
       id: "fb-3",
+      userId: "fb-3",
       userName: "Raka Mahendra",
       userBio: "UI/UX Designer Freelance",
       courseTitle: "UI/UX Design Masterclass",
@@ -67,6 +70,7 @@ export default async function HomePage() {
     },
     {
       id: "fb-4",
+      userId: "fb-4",
       userName: "Siti Aminah",
       userBio: "Mobile Developer di Grab",
       courseTitle: "Flutter Mobile Development",
@@ -76,6 +80,7 @@ export default async function HomePage() {
     },
     {
       id: "fb-5",
+      userId: "fb-5",
       userName: "Budi Cahyono",
       userBio: "AI Engineer di Tech Indo",
       courseTitle: "Deep Learning AI",
@@ -85,6 +90,7 @@ export default async function HomePage() {
     },
     {
       id: "fb-6",
+      userId: "fb-6",
       userName: "Cindy Lestari",
       userBio: "DevOps Engineer di Startup Kita",
       courseTitle: "DevOps for Engineers",

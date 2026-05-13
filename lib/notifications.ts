@@ -4,7 +4,7 @@ export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 
 export interface Notification {
   id: string;
-  userId: string;
+  userId?: string; // Optional for global notifications
   title: string;
   message: string;
   type: NotificationType;
@@ -13,12 +13,20 @@ export interface Notification {
   createdAt: string;
 }
 
-export async function getUserNotifications(userId: string): Promise<Notification[]> {
+
+export async function getUserNotifications(userId: string, includeGlobal = true): Promise<Notification[]> {
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from("notifications")
-      .select("*")
-      .eq("user_id", userId)
+      .select("*");
+    
+    if (includeGlobal) {
+        query.or(`user_id.eq.${userId},user_id.is.null`);
+    } else {
+        query.eq("user_id", userId);
+    }
+
+    const { data, error } = await query
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -38,6 +46,32 @@ export async function getUserNotifications(userId: string): Promise<Notification
     return [];
   }
 }
+
+export async function getGlobalNotifications(): Promise<Notification[]> {
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .is("user_id", null)
+        .order("created_at", { ascending: false })
+        .limit(20);
+  
+      if (error) throw error;
+      return (data || []).map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        linkUrl: n.link_url,
+        isRead: false, // Global is always technically unread at fetch unless local storage says otherwise
+        createdAt: n.created_at
+      }));
+    } catch (err) {
+      console.error("Error fetching global notifications:", err);
+      return [];
+    }
+}
+
 
 export async function createNotification(payload: {
   userId: string;
@@ -132,3 +166,14 @@ export async function notifyAdmins(title: string, message: string, linkUrl?: str
         await supabase.from("notifications").insert(payloads);
     }
 }
+
+export async function createGlobalNotification(title: string, message: string, type: NotificationType = 'info', linkUrl?: string) {
+    const { data, error } = await supabase.rpc("broadcast_notification", {
+        p_title: title,
+        p_message: message,
+        p_type: type,
+        p_link_url: linkUrl
+    });
+    return { success: !error, data };
+}
+

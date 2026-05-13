@@ -163,6 +163,8 @@ CREATE POLICY "Users can manage own discussions" ON discussions FOR UPDATE USING
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users manage own notifications" ON notifications;
 CREATE POLICY "Users manage own notifications" ON notifications FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Public can view global notifications" ON notifications;
+CREATE POLICY "Public can view global notifications" ON notifications FOR SELECT USING (user_id IS NULL OR auth.uid() = user_id OR is_admin());
 DROP POLICY IF EXISTS "Admins can manage all notifications" ON notifications;
 CREATE POLICY "Admins can manage all notifications" ON notifications FOR ALL USING (is_admin());
 

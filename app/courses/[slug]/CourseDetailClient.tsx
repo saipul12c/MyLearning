@@ -280,6 +280,22 @@ export default function CourseDetailClient({ course }: CourseDetailClientProps) 
                       instructorQrisUrl={course.instructorQrisUrl}
                     />
 
+                    <button 
+                        onClick={() => {
+                            const event = new CustomEvent("trigger-live-cs", {
+                                detail: {
+                                    message: `Halo! Tertarik dengan kursus **${course.title}**? Ada yang ingin ditanyakan detail materinya?`,
+                                    context: { type: "course_landing", id: course.slug, metadata: { title: course.title, category: course.category } }
+                                }
+                            });
+                            window.dispatchEvent(event);
+                        }}
+                        className="w-full mt-3 py-3 rounded-xl border border-white/5 hover:border-purple-500/30 hover:bg-white/5 text-slate-400 hover:text-purple-400 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    >
+                        <Users size={14} /> Tanya Detail Materi
+                    </button>
+
+
                     <p className="text-center text-xs text-slate-500 mb-6 mt-3">Garansi uang kembali 30 hari</p>
 
                     <div className="space-y-3 text-sm">

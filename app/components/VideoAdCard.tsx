@@ -19,7 +19,6 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Impression tracking using IntersectionObserver
   useEffect(() => {
     if (!containerRef.current || hasTrackedImpression) return;
 
@@ -31,7 +30,6 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
           
           if (autoPlay && videoRef.current) {
             videoRef.current.play().catch(() => {
-              // Autoplay failed usually due to browser policy, handle gracefully
               setIsPlaying(false);
             });
             setIsPlaying(true);
@@ -48,7 +46,6 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
   }, [promotion.id, hasTrackedImpression, autoPlay]);
 
   const handleClick = (e: React.MouseEvent) => {
-    // If clicking on controls, don't trigger the ad click
     if ((e.target as HTMLElement).closest('.controls-layer')) {
       return;
     }
@@ -88,13 +85,13 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleClick}
     >
-      {/* Video Container */}
-      <div className="relative aspect-video w-full bg-[#0c0c14] overflow-hidden shrink-0">
+      {/* Ad Creative Slot - Fixed Height, Object Cover */}
+      <div className="relative w-full h-[220px] bg-[#0c0c14] overflow-hidden shrink-0">
         {promotion.videoUrl ? (
           <video
             ref={videoRef}
             src={promotion.videoUrl}
-            className={`w-full h-full object-cover transition-transform duration-700 ${isHovered ? 'scale-105' : 'scale-100'}`}
+            className={`w-full h-full object-cover relative z-10 transition-transform duration-700 ${isHovered ? 'scale-105' : 'scale-100'}`}
             muted={isMuted}
             loop
             playsInline
@@ -105,14 +102,15 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
             src={promotion.imageUrl}
             alt={promotion.title}
             fill
-            className={`object-cover transition-transform duration-700 ${isHovered ? 'scale-105' : 'scale-100'}`}
+            sizes="(max-width: 640px) 100vw, 400px"
+            className={`object-cover relative z-10 transition-transform duration-700 ${isHovered ? 'scale-105' : 'scale-100'}`}
           />
         )}
         
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10 z-20"></div>
         
         {/* Labels & Badges */}
-        <div className="absolute top-3 left-3 flex gap-2">
+        <div className="absolute top-3 left-3 flex gap-2 z-30">
            <span className="badge bg-purple-500 text-white border-none shadow-lg text-[9px] font-black uppercase tracking-widest px-2 py-1 flex items-center gap-1">
              <Sparkles size={10} /> Ad
            </span>
@@ -120,7 +118,7 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
         
         {/* Controls Layer */}
         {promotion.videoUrl && (
-          <div className={`absolute inset-0 controls-layer flex items-center justify-center transition-opacity duration-300 ${isHovered || !isPlaying ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`absolute inset-0 controls-layer flex items-center justify-center transition-opacity duration-300 ${isHovered || !isPlaying ? 'opacity-100' : 'opacity-0'} z-30`}>
             <button 
               onClick={togglePlay}
               className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:bg-white/20 hover:scale-110 transition-all"
@@ -158,7 +156,6 @@ export default function VideoAdCard({ promotion, className = "", autoPlay = true
         </div>
       </div>
       
-      {/* Animated Bottom Border Glow on Hover */}
       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-center"></div>
     </div>
   );

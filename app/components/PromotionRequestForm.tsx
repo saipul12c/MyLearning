@@ -282,7 +282,7 @@ export default function PromotionRequestForm({ course: initialCourse, mode, onCl
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 mb-1.5 block">Gambar Iklan</label>
-                    <div className="flex gap-2 mb-3">
+                    <div className="flex gap-2 mb-1">
                       <input
                         type="url"
                         value={customImage}
@@ -297,6 +297,10 @@ export default function PromotionRequestForm({ course: initialCourse, mode, onCl
                         </div>
                       </label>
                     </div>
+                    <p className="text-[9px] text-slate-500 ml-1 mt-1 leading-relaxed">
+                      Maksimal 5 MB. Rekomendasi rasio 16:9 (1280x720px).<br/>
+                      <span className="text-amber-500 font-medium">⚠️ Agar visual tidak terpotong di layar manapun, gunakan selalu format 16:9 dan letakkan teks/logo utama di area tengah (Safe Zone).</span>
+                    </p>
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 mb-1.5 block">Tautan Tujuan (URL)</label>

@@ -12,8 +12,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   }
 }
 
+import { getClientFingerprint } from "./utils";
+
 // Fallback to a safe-to-initialize state even if keys are missing
 export const supabase = createClient(
   supabaseUrl || "https://missing-keys.supabase.co", 
-  supabaseAnonKey || "missing-key"
+  supabaseAnonKey || "missing-key",
+  {
+    global: {
+      headers: {
+        'x-client-fingerprint': typeof window !== 'undefined' ? getClientFingerprint() : 'server'
+      }
+    }
+  }
 );

@@ -100,7 +100,7 @@ export default function NativeAdCard({ location, categoryId, className = "", var
       }
       if (variant === "featured") {
          return (
-           <div className={`rounded-[2rem] bg-white/[0.02] border border-white/5 aspect-[21/9] animate-shimmer-premium w-full flex-shrink-0 ${className}`} />
+           <div className={`rounded-[2rem] bg-white/[0.02] border border-white/5 h-[280px] animate-shimmer-premium w-full flex-shrink-0 ${className}`} />
          );
       }
       return (
@@ -112,6 +112,8 @@ export default function NativeAdCard({ location, categoryId, className = "", var
 
   if (!promo) return null;
 
+  // ==================== COMPACT VARIANT ====================
+  // Like a small text+thumbnail ad strip
   if (variant === "compact") {
     return (
       <div ref={containerRef} className={`group relative animate-fade-scale ${className}`}>
@@ -122,9 +124,10 @@ export default function NativeAdCard({ location, categoryId, className = "", var
           rel={promo.isExternal ? "noopener noreferrer" : ""}
           className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-purple-500/20 hover:bg-white/[0.04] transition-all duration-300"
         >
+          {/* Thumbnail — small fixed size, image fills completely */}
           {promo.imageUrl && (
-            <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/5">
-              <Image src={promo.imageUrl} alt={promo.title} fill className="object-cover" />
+            <div className="relative w-20 h-[45px] rounded-xl overflow-hidden shrink-0 border border-white/5">
+              <Image src={promo.imageUrl} alt={promo.title} fill sizes="80px" className="object-cover" />
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -149,6 +152,8 @@ export default function NativeAdCard({ location, categoryId, className = "", var
     );
   }
 
+  // ==================== FEATURED VARIANT ====================
+  // Like a billboard/hero ad — large creative + text side by side
   if (variant === "featured") {
     return (
       <div ref={containerRef} className={`group relative animate-fade-scale ${className}`}>
@@ -182,9 +187,9 @@ export default function NativeAdCard({ location, categoryId, className = "", var
               </div>
             </div>
 
-
+            {/* Ad Creative — fixed dimensions, image fills like a real ad */}
             {promo.videoUrl ? (
-              <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+              <div className="relative w-full md:w-1/2 max-w-[420px] h-[200px] md:h-[236px] rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl bg-black">
                 <video
                   src={promo.videoUrl}
                   poster={promo.imageUrl}
@@ -196,12 +201,13 @@ export default function NativeAdCard({ location, categoryId, className = "", var
                 />
               </div>
             ) : promo.imageUrl && (
-              <div className="relative w-full md:w-1/2 lg:w-[480px] aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl transition-transform duration-700">
+              <div className="relative w-full md:w-1/2 max-w-[420px] h-[200px] md:h-[236px] rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl">
                 <Image
                   src={promo.imageUrl}
                   alt={promo.title}
                   fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-700"
+                  sizes="(max-width: 768px) 100vw, 420px"
+                  className="object-cover group-hover:scale-[1.02] transition-transform duration-700"
                 />
               </div>
             )}
@@ -219,7 +225,8 @@ export default function NativeAdCard({ location, categoryId, className = "", var
     );
   }
 
-  // Inline variant — blends between page sections
+  // ==================== INLINE VARIANT ====================
+  // Like a native in-feed ad — thumbnail + text row
   return (
     <div ref={containerRef} className={`group relative animate-fade-scale ${className}`}>
       <a
@@ -233,8 +240,9 @@ export default function NativeAdCard({ location, categoryId, className = "", var
         <div className="absolute -top-20 -right-20 w-60 h-60 bg-purple-500/5 blur-[80px] rounded-full group-hover:bg-purple-500/10 transition-all duration-700 pointer-events-none" />
 
         <div className="relative z-10 flex flex-col sm:flex-row items-center gap-6 p-6 sm:p-8">
+          {/* Ad Thumbnail — fixed size, image fills completely */}
           {promo.videoUrl ? (
-            <div className="relative w-full sm:w-36 h-28 sm:h-24 rounded-xl overflow-hidden border border-white/5 shrink-0 shadow-lg bg-black">
+            <div className="relative w-full sm:w-40 h-[120px] sm:h-[90px] rounded-xl overflow-hidden border border-white/5 shrink-0 shadow-lg bg-black">
               <video
                 src={promo.videoUrl}
                 poster={promo.imageUrl}
@@ -246,12 +254,13 @@ export default function NativeAdCard({ location, categoryId, className = "", var
               />
             </div>
           ) : promo.imageUrl && (
-            <div className="relative w-full sm:w-36 h-28 sm:h-24 rounded-xl overflow-hidden border border-white/5 shrink-0 shadow-lg">
+            <div className="relative w-full sm:w-40 h-[120px] sm:h-[90px] rounded-xl overflow-hidden border border-white/5 shrink-0 shadow-lg">
               <Image
                 src={promo.imageUrl}
                 alt={promo.title}
                 fill
-                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                sizes="160px"
+                className="object-cover group-hover:scale-[1.02] transition-transform duration-500"
               />
             </div>
           )}

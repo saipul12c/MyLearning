@@ -9,13 +9,13 @@ import {
 } from "lucide-react";
 
 export default function NotificationToast() {
-  const { user } = useAuth();
+  const { user, isLoggedIn } = useAuth();
+  const [queue, setQueue] = useState<any[]>([]);
   const [activeToast, setActiveToast] = useState<any>(null);
 
   useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
+    // 1. Listen for USER specific notifications
+    const userChannel = user ? supabase
       .channel(`user-notifications-${user.id}`)
       .on(
         "postgres_changes",
@@ -26,18 +26,64 @@ export default function NotificationToast() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload: any) => {
-          setActiveToast(payload.new);
-          // Auto-hide after 12 seconds for more complex messages
-          const timer = setTimeout(() => setActiveToast(null), 12000);
-          return () => clearTimeout(timer);
+          addToQueue(payload.new);
+        }
+      )
+      .subscribe() : null;
+
+    // 2. Listen for GLOBAL/BROADCAST notifications (For both Guests & Users)
+    const globalChannel = supabase
+      .channel(`global-notifications`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=is.null`,
+        },
+        (payload: any) => {
+          addToQueue(payload.new);
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (userChannel) supabase.removeChannel(userChannel);
+      supabase.removeChannel(globalChannel);
     };
   }, [user]);
+
+  // Handle Queue Processing
+  useEffect(() => {
+    if (!activeToast && queue.length > 0) {
+      const next = queue[0];
+      setActiveToast(next);
+      setQueue(prev => prev.slice(1));
+      
+      // Play sound
+      playNotificationSound();
+
+      const timer = setTimeout(() => {
+        setActiveToast(null);
+      }, 8000); // 8 seconds per toast in queue
+
+      return () => clearTimeout(timer);
+    }
+  }, [queue, activeToast]);
+
+  const addToQueue = (notif: any) => {
+    setQueue(prev => [...prev, notif]);
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+    } catch (e) {}
+  };
+
 
   if (!activeToast) return null;
 
@@ -142,8 +188,9 @@ export default function NotificationToast() {
 
         {/* Dynamic Progress Bar */}
         <div className="absolute bottom-0 left-0 h-[3px] bg-white/5 w-full overflow-hidden">
-           <div className={`h-full bg-gradient-to-r from-transparent via-white/40 to-white/10 animate-shrink`} style={{ animationDuration: '12s' }} />
+           <div className={`h-full bg-gradient-to-r from-transparent via-white/40 to-white/10 animate-shrink`} style={{ animationDuration: '8s' }} />
         </div>
+
       </div>
 
       <style jsx>{`

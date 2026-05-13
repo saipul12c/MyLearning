@@ -144,10 +144,16 @@ export default function ReviewSection({ courseSlug, courseTitle }: ReviewSection
                     <User size={20} />
                   </div>
                   <div>
-                    <Link href={`/profile/${review.userId}`} className="text-white font-bold text-sm hover:text-purple-400 transition-colors flex items-center gap-1">
-                      {review.userName}
-                      {(review.userRole === 'admin' || review.userRole === 'instructor') && <VerifiedBadge size={12} />}
-                    </Link>
+                    {review.userId ? (
+                      <Link href={`/profile/${review.userId}`} className="text-white font-bold text-sm hover:text-purple-400 transition-colors flex items-center gap-1">
+                        {review.userName}
+                        {(review.userRole === 'admin' || review.userRole === 'instructor') && <VerifiedBadge size={12} />}
+                      </Link>
+                    ) : (
+                      <div className="text-white font-bold text-sm flex items-center gap-1">
+                        {review.userName}
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-500">{new Date(review.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
                   </div>
                 </div>

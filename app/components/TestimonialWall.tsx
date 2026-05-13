@@ -63,13 +63,19 @@ export default function TestimonialWall({ testimonials }: TestimonialWallProps) 
                </div>
             </div>
             <div className="min-w-0">
-              <Link 
-                href={`/profile/${t.userId}`}
-                className="text-white font-bold text-sm flex items-center gap-1.5 hover:text-purple-400 transition-colors"
-              >
-                {t.userName}
-                {(t.userRole === 'admin' || t.userRole === 'instructor') && <VerifiedBadge size={10} />}
-              </Link>
+              {t.userId ? (
+                <Link 
+                  href={`/profile/${t.userId}`}
+                  className="text-white font-bold text-sm flex items-center gap-1.5 hover:text-purple-400 transition-colors"
+                >
+                  {t.userName}
+                  {(t.userRole === 'admin' || t.userRole === 'instructor') && <VerifiedBadge size={10} />}
+                </Link>
+              ) : (
+                <div className="text-white font-bold text-sm flex items-center gap-1.5">
+                  {t.userName}
+                </div>
+              )}
               <div className="text-slate-400 text-[11px] font-medium truncate">{t.userBio}</div>
             </div>
           </div>

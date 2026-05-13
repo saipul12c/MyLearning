@@ -274,14 +274,16 @@ CREATE TABLE IF NOT EXISTS discussions (
 
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+  user_id UUID REFERENCES user_profiles(user_id) ON DELETE CASCADE, -- NULL means global notification
   title VARCHAR(200) NOT NULL,
   message TEXT NOT NULL,
   type VARCHAR(20) DEFAULT 'info' CHECK (type IN ('info', 'success', 'warning', 'error')),
   link_url TEXT,
   is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 -- Ensure notifications table is in real-time publication safely
 DO $$
@@ -627,6 +629,8 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_fts ON user_profiles USING gin(fts)
 CREATE INDEX IF NOT EXISTS idx_discussions_lesson ON discussions(lesson_id);
 CREATE INDEX IF NOT EXISTS idx_discussions_parent ON discussions(parent_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_global ON notifications(created_at DESC) WHERE user_id IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_assessment_def_course ON assessment_definitions(course_id);
 CREATE INDEX IF NOT EXISTS idx_assessment_ques_def ON assessment_questions(assessment_id);
 

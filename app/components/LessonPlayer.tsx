@@ -95,6 +95,14 @@ export default function LessonPlayer({
       if (res.passed) {
         alert("Selamat! Jawaban Anda benar. Sekarang Anda bisa lanjut ke materi berikutnya.");
       } else {
+        // Trigger Live CS for help if they fail
+        const event = new CustomEvent("trigger-live-cs", {
+            detail: {
+                message: `Saya melihat kamu sedikit kesulitan di tugas **${currentAssignment.title}**. Mau saya bantu jelaskan konsepnya?`,
+                context: { type: "assignment", id: currentAssignment.id, metadata: { score: res.score } }
+            }
+        });
+        window.dispatchEvent(event);
         alert("Skor Anda belum mencukupi. Silakan coba lagi.");
       }
     } catch (e) {
@@ -103,6 +111,7 @@ export default function LessonPlayer({
       setIsSubmitting(false);
     }
   };
+
 
   // Enhanced Markdown-lite Parser
   const parseContent = (content: string) => {
@@ -197,7 +206,7 @@ export default function LessonPlayer({
           </div>
           
           <div className="flex items-center gap-3">
-             <div className="hidden md:flex items-center gap-2 mr-4">
+              <div className="hidden md:flex items-center gap-2 mr-4">
                 <div className="h-1.5 w-32 bg-white/5 rounded-full overflow-hidden">
                    <div 
                     className="h-full bg-purple-500 rounded-full transition-all duration-500" 
@@ -208,6 +217,22 @@ export default function LessonPlayer({
                   {completedLessonIds.length}/{lessons.length} SELESAI
                 </span>
              </div>
+
+             <button 
+                onClick={() => {
+                    const event = new CustomEvent("trigger-live-cs", {
+                        detail: {
+                            message: `Halo! Ada bagian dari materi **${activeLesson.title}** yang kurang dipahami? Saya siap membantu!`,
+                            context: { type: "lesson", id: activeLesson.id, metadata: { course: courseTitle } }
+                        }
+                    });
+                    window.dispatchEvent(event);
+                }}
+                className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-[10px] font-black uppercase transition-all"
+             >
+                <Brain size={14} /> Tanya Mentor
+             </button>
+
              <button 
               onClick={handleToggleComplete}
               disabled={isSyncing}

@@ -11,7 +11,7 @@ interface InterstitialAdProps {
 }
 
 export default function InterstitialAd({ promotion, onClose }: InterstitialAdProps) {
-  const [countdown, setCountdown] = useState(5); // Auto close after 5s or allow skip
+  const [countdown, setCountdown] = useState(5);
   const [canSkip, setCanSkip] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -21,7 +21,6 @@ export default function InterstitialAd({ promotion, onClose }: InterstitialAdPro
       return;
     }
 
-    // Delay showing slightly for effect
     const showTimer = setTimeout(() => {
       setIsVisible(true);
       markInterstitialAsSeen();
@@ -43,7 +42,7 @@ export default function InterstitialAd({ promotion, onClose }: InterstitialAdPro
 
   const handleClose = () => {
     setIsVisible(false);
-    setTimeout(onClose, 400); // Wait for exit animation
+    setTimeout(onClose, 400);
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -66,7 +65,7 @@ export default function InterstitialAd({ promotion, onClose }: InterstitialAdPro
            />
         </div>
 
-        <div className="absolute top-4 right-4 z-20 flex items-center gap-3">
+        <div className="absolute top-4 right-4 z-30 flex items-center gap-3">
           <div className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-bold border border-white/10 flex items-center gap-2">
             Sponsored
             {countdown > 0 ? (
@@ -84,22 +83,23 @@ export default function InterstitialAd({ promotion, onClose }: InterstitialAdPro
           </button>
         </div>
 
-        {/* Content */}
+        {/* Ad Content - Image fills the slot completely */}
         <button 
           onClick={handleClick}
           className="w-full text-left group block relative"
         >
-          <div className="relative aspect-video w-full bg-[#0c0c14] overflow-hidden">
-            <Image 
-              src={promotion.imageUrl} 
+          <div className="relative w-full h-[340px] md:h-[400px] bg-[#0c0c14] overflow-hidden shrink-0">
+            <Image
+              src={promotion.imageUrl}
               alt={promotion.title}
               fill
+              sizes="(max-width: 768px) 100vw, 672px"
               className="object-cover group-hover:scale-105 transition-transform duration-700"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
           </div>
           
-          <div className="absolute bottom-0 left-0 right-0 p-8">
+          <div className="absolute bottom-0 left-0 right-0 p-8 z-20">
             <div className="max-w-xl">
                <span className="inline-block px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-black uppercase tracking-widest mb-3 border border-purple-500/30">
                  Special Offer
@@ -115,7 +115,7 @@ export default function InterstitialAd({ promotion, onClose }: InterstitialAdPro
         </button>
 
         {/* Action Bar */}
-        <div className="p-6 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
+        <div className="p-6 bg-white/[0.02] border-t border-white/5 flex items-center justify-between relative z-20">
            <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
               <Shield size={14} className="text-purple-400" /> Safe & Verified by MyLearning
            </div>

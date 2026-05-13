@@ -8,7 +8,12 @@ export interface LiveChatSession {
   guestEmail?: string;
   status: "open" | "active" | "closed";
   agentId?: string;
+  metadata?: any;
+  lastMessageAt: string;
+  unreadCountAgent: number;
+  unreadCountUser: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface ChatMessage {
@@ -44,17 +49,20 @@ export async function checkOnlineAgents(): Promise<{ adminOnline: boolean; instr
   }
 }
 
-export async function createChatSession(userData: { userId?: string, name: string, email: string }): Promise<LiveChatSession | null> {
+export async function createChatSession(userData: { userId?: string, name: string, email: string, metadata?: any, fingerprint?: string }): Promise<LiveChatSession | null> {
   const { data, error } = await supabase
     .from("live_chats")
     .insert({
       user_id: userData.userId,
       guest_name: userData.name,
       guest_email: userData.email,
+      metadata: userData.metadata || {},
+      fingerprint: userData.fingerprint,
       status: "open"
     })
     .select()
     .single();
+
 
   if (error) {
     console.error("Error creating chat session:", error);
@@ -102,7 +110,15 @@ export async function getOpenChatsForAdmin(): Promise<LiveChatSession[]> {
     .from("live_chats")
     .select("*")
     .in("status", ["open", "active"])
-    .order("created_at", { ascending: false });
+    .order("last_message_at", { ascending: false });
 
   return data || [];
 }
+
+export async function resetUnreadCount(chatId: string, type: "agent" | "user"): Promise<void> {
+    await supabase.rpc("reset_chat_unread_count", {
+        chat_uuid: chatId,
+        target_type: type
+    });
+}
+

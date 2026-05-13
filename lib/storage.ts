@@ -5,7 +5,8 @@ import { getPublicSentinelConfigs } from "./sentinel/actions";
  * Service to handle file uploads to Supabase Storage
  */
 
-const MAX_VIDEO_SIZE = 1024 * 1024 * 1024; // 1 GB 
+const MAX_VIDEO_SIZE = 512 * 1024 * 1024; // 512 MB for regular videos
+const MAX_PROMO_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB for ads/promos (optimized for web)
 
 export async function uploadThumbnail(file: File): Promise<{ url: string | null; error: any }> {
   return uploadToBucket(file, "thumbnails", "course-thumbnails");
@@ -79,6 +80,9 @@ export async function uploadVideo(
 }
 
 export async function uploadPromotionVideo(file: File): Promise<{ url: string | null; error: any }> {
+  if (file.size > MAX_PROMO_VIDEO_SIZE) {
+    return { url: null, error: new Error("Iklan video terlalu besar. Maksimal 50 MB.") };
+  }
   return uploadVideo(file, "promos");
 }
 
@@ -95,7 +99,8 @@ const ALLOWED_IMAGE_TYPES: Record<string, string> = {
   'image/gif': 'gif',
 };
 
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_PROMO_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB for ads
 
 async function uploadToBucket(file: File, bucket: string, folder: string): Promise<{ url: string | null; error: any }> {
   try {
@@ -155,6 +160,9 @@ async function uploadToBucket(file: File, bucket: string, folder: string): Promi
 }
 
 export async function uploadPromotionImage(file: File): Promise<{ url: string | null; error: any }> {
+  if (file.size > MAX_PROMO_IMAGE_SIZE) {
+    return { url: null, error: new Error("Gambar iklan terlalu besar. Maksimal 5 MB.") };
+  }
   return uploadToBucket(file, "thumbnails", "promos");
 }
 

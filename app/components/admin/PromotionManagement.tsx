@@ -484,11 +484,11 @@ export default function PromotionManagement() {
                     </label>
                   </div>
                   {ep.imageUrl && (
-                    <div className="relative w-full max-w-lg aspect-video rounded-xl overflow-hidden border border-white/5 mt-4 shadow-2xl bg-black/40">
+                    <div className="relative w-full max-w-lg max-h-[240px] aspect-video rounded-xl overflow-hidden border border-white/5 mt-4 shadow-2xl bg-black/40">
                       {ep.imageUrl.match(/\.(mp4|webm|ogg)$/i) || ep.imageUrl.includes('videos') ? (
                         <video src={ep.imageUrl} className="w-full h-full object-cover" controls muted />
                       ) : (
-                        <Image src={ep.imageUrl} alt="Preview" fill className="object-cover" />
+                        <Image src={ep.imageUrl} alt="Preview" fill sizes="512px" className="object-cover" />
                       )}
                       <button
                         type="button"
@@ -675,12 +675,12 @@ export default function PromotionManagement() {
               {promotions.map((promo) => (
                 <div key={promo.id} className="card p-4 group hover:border-purple-500/30 transition-all">
                   <div className="flex flex-col sm:flex-row items-center gap-6">
-                    <div className="relative w-full sm:w-32 aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/5">
+                    <div className="relative w-full sm:w-32 max-w-[200px] aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/5">
                       {promo.imageUrl ? (
                         promo.imageUrl.match(/\.(mp4|webm|ogg)$/i) || promo.imageUrl.includes('videos') ? (
                           <video src={promo.imageUrl} className="w-full h-full object-cover" muted />
                         ) : (
-                          <Image src={promo.imageUrl} alt={promo.title} fill className="object-cover" />
+                          <Image src={promo.imageUrl} alt={promo.title} fill sizes="128px" className="object-cover" />
                         )
                       ) : (
                         <div className="flex items-center justify-center h-full"><ImageIcon className="text-slate-700" size={24} /></div>

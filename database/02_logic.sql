@@ -178,20 +178,38 @@ $$ language 'plpgsql';
 
 -- 6. TRIGGER FUNCTION: Handle New User (Auth to Profile Sync)
 -- Automatically creates a profile record when a new user signs up
-CREATE OR REPLACE FUNCTION handle_new_user() 
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.user_profiles (user_id, full_name, email, avatar_url, role)
-  VALUES (
-    NEW.id, 
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
-    NEW.email,
-    NEW.raw_user_meta_data->>'avatar_url', 
-    'user'
   );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 6b. TRIGGER FUNCTION: Update Notification Timestamp
+CREATE OR REPLACE FUNCTION update_notification_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6c. FUNCTION: Broadcast Notification (Global)
+CREATE OR REPLACE FUNCTION broadcast_notification(
+  p_title TEXT,
+  p_message TEXT,
+  p_type VARCHAR DEFAULT 'info',
+  p_link_url TEXT DEFAULT NULL
+) RETURNS UUID AS $$
+DECLARE
+  v_notif_id UUID;
+BEGIN
+  INSERT INTO notifications (user_id, title, message, type, link_url)
+  VALUES (NULL, p_title, p_message, p_type, p_link_url)
+  RETURNING id INTO v_notif_id;
+  
+  RETURN v_notif_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 
 -- 7. TRIGGER FUNCTION: Automasi Pembuatan Sertifikat
 -- Mencegah Race Condition & Inkonsistensi Data
@@ -275,6 +293,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================
 -- APPLY TRIGGERS
 -- ============================================
+
+-- Notifications
+DROP TRIGGER IF EXISTS tr_update_notification_timestamp ON notifications;
+CREATE TRIGGER tr_update_notification_timestamp
+BEFORE UPDATE ON notifications
+FOR EACH ROW
+EXECUTE FUNCTION update_notification_timestamp();
+
 
 -- Timestamps
 DROP TRIGGER IF EXISTS set_updated_at_user_profiles ON user_profiles;

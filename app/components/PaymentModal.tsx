@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { Enrollment, uploadPaymentProof, updateEnrollmentPrice, removeVoucherFromEnrollment } from "@/lib/enrollment";
@@ -30,6 +30,22 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
   const [discountAmount, setDiscountAmount] = useState(0);
   const [finalPrice, setFinalPrice] = useState(initialPrice);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live CS Proactive Trigger for Payment
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        const event = new CustomEvent("trigger-live-cs", {
+            detail: {
+                message: `Halo! Butuh bantuan pembayaran untuk kursus **${courseTitle}**? Saya punya kode voucher khusus buat kamu: **DISKON10**`,
+                context: { type: "payment", id: courseId, metadata: { price: finalPrice, title: courseTitle } }
+            }
+        });
+        window.dispatchEvent(event);
+    }, 60000); // 1 minute
+
+    return () => clearTimeout(timer);
+  }, [courseTitle, courseId, finalPrice]);
+
 
   const handleApplyVoucher = async () => {
     if (!voucherCode.trim()) return;
@@ -133,8 +149,17 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
       onSuccess();
     } else {
       setError(result.error || "Gagal mengunggah bukti.");
+      // Trigger help on error
+      const event = new CustomEvent("trigger-live-cs", {
+          detail: {
+              message: `Maaf ya, sepertinya ada kendala saat mengunggah bukti pembayaran. Mau saya bantu cek secara manual?`,
+              context: { type: "payment_error", id: enrollment.id, metadata: { error: result.error } }
+          }
+      });
+      window.dispatchEvent(event);
     }
   };
+
 
   // Format price for display
   const formatPriceLocal = (p: number) => {

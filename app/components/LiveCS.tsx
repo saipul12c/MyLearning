@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Send, Bot, User, Phone, CheckCircle, Clock, AlertCircle, Paperclip, Star } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import { getGeminiResponse, type UserContext } from "@/lib/gemini";
-import { detectAgentRequest } from "@/lib/utils";
+import { detectAgentRequest, getClientFingerprint } from "@/lib/utils";
 import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages } from "@/lib/live_chat";
 import { saveContactMessage, getUserEnrollments } from "@/lib/enrollment";
 import { uploadChatFile } from "@/lib/storage";
@@ -41,6 +41,9 @@ export default function LiveCS() {
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
   const [suggestionChips, setSuggestionChips] = useState<string[]>(["Cara daftar?", "Info Kursus"]);
   const [ticketId, setTicketId] = useState("");
+  const [activeContext, setActiveContext] = useState<{ type: string; id?: string; metadata?: any } | null>(null);
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
+  
   
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -52,22 +55,49 @@ export default function LiveCS() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 0. Proactive Greeting (Once per session after 30s)
+  // 0. Proactive Greeting & External Triggers
   useEffect(() => {
+    // Listen for external triggers
+    const handleTrigger = (e: any) => {
+        const { action, message, context, open = true } = e.detail;
+        
+        if (open) setIsOpen(true);
+        if (context) setActiveContext(context);
+        
+        if (message) {
+            setMessages(prev => [...prev, {
+                role: "model",
+                content: message,
+                timestamp: new Date()
+            }]);
+            setMode("ai");
+        }
+
+        if (action === "contact_agent") {
+            handleContactAgent();
+        }
+    };
+
+    window.addEventListener("trigger-live-cs", handleTrigger);
+
     // Stop if we are on Login or Register pages
     const EXCLUDED_PAGES = ["/login", "/register"];
-    if (EXCLUDED_PAGES.includes(pathname)) return;
+    if (EXCLUDED_PAGES.includes(pathname)) return () => window.removeEventListener("trigger-live-cs", handleTrigger);
 
     const hasBeenShown = sessionStorage.getItem("proactive_greeting_shown");
-    if (hasBeenShown) return;
+    if (hasBeenShown) return () => window.removeEventListener("trigger-live-cs", handleTrigger);
 
     const timer = setTimeout(() => {
       setIsOpen(true);
       sessionStorage.setItem("proactive_greeting_shown", "true");
-    }, 30000); // 30 seconds
+    }, 45000); // 45 seconds default
 
-    return () => clearTimeout(timer);
+    return () => {
+        clearTimeout(timer);
+        window.removeEventListener("trigger-live-cs", handleTrigger);
+    };
   }, [pathname]);
+
 
   // Fetch enrolled courses for AI awareness
   useEffect(() => {
@@ -268,7 +298,8 @@ export default function LiveCS() {
       }
 
       // AI Response with UserContext Awareness
-      const history = messages.map(m => ({
+      // Truncate history to avoid token overflow and keep UI snappy
+      const history = messages.slice(-10).map(m => ({
         role: m.role === "model" ? "model" : "user" as any,
         parts: [{ text: m.content }]
       }));
@@ -276,8 +307,11 @@ export default function LiveCS() {
       const context: UserContext = {
         fullName: user?.fullName,
         isLoggedIn: !!isLoggedIn,
-        enrolledCourseIds: enrolledIds
+        enrolledCourseIds: enrolledIds,
+        currentPage: pathname,
+        activeContext: activeContext // Pass the lesson/payment context to Gemini
       };
+
 
       const response = await getGeminiResponse(history, userMsg, context);
       
@@ -358,8 +392,11 @@ export default function LiveCS() {
       const session = await createChatSession({
         userId: user?.id,
         name: user?.fullName || "Guest",
-        email: user?.email || "guest@email.com"
+        email: user?.email || "guest@email.com",
+        metadata: activeContext,
+        fingerprint: getClientFingerprint()
       });
+
       
       if (session) {
         setChatSessionId(session.id);
@@ -393,8 +430,11 @@ export default function LiveCS() {
     
     const session = await createChatSession({
       name: guestInfo.name,
-      email: guestInfo.email
+      email: guestInfo.email,
+      metadata: activeContext,
+      fingerprint: getClientFingerprint()
     });
+
     
     if (session) {
       setChatSessionId(session.id);
@@ -503,16 +543,64 @@ export default function LiveCS() {
                             <Link 
                               href={props.href || "#"} 
                               className="text-cyan-400 hover:text-cyan-300 underline font-bold transition-colors"
-                              onClick={(e) => {
-                                // Small touch: auto-close chat if it's a course link? 
-                                // Maybe not, depends on preference.
-                              }}
                             >
                               {props.children}
                             </Link>
                           );
                         }
                         return <a target="_blank" rel="noopener noreferrer" {...props} />;
+                      },
+                      // Custom Rendering for Rich Elements if they are in the markdown
+                      code: ({ node, inline, className, children, ...props }: any) => {
+                         const match = /language-(\w+)/.exec(className || '');
+                         const content = String(children).replace(/\n$/, '');
+                         
+                         if (!inline && match && match[1] === 'course_card') {
+                            try {
+                                const data = JSON.parse(content);
+                                return (
+                                    <div className="my-3 p-3 bg-white/5 border border-white/10 rounded-xl flex gap-3 items-center hover:bg-white/10 transition-colors cursor-pointer group" onClick={() => window.location.href = `/courses/${data.slug}`}>
+                                        <div className="w-16 h-16 rounded-lg bg-purple-500/20 flex-shrink-0 overflow-hidden">
+                                            <img src={data.image} alt={data.title} className="w-full h-full object-cover" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">Rekomendasi</p>
+                                            <h4 className="text-xs font-bold text-white truncate">{data.title}</h4>
+                                            <p className="text-[10px] text-slate-400 line-clamp-1">{data.description}</p>
+                                        </div>
+                                    </div>
+                                );
+                            } catch (e) { return <code>{children}</code>; }
+                         }
+
+                         if (!inline && match && match[1] === 'voucher') {
+                             try {
+                                 const data = JSON.parse(content);
+                                 return (
+                                     <div className="my-3 p-4 bg-gradient-to-br from-purple-600/20 to-cyan-500/20 border border-purple-500/30 rounded-xl border-dashed relative overflow-hidden group">
+                                         <div className="relative z-10">
+                                             <p className="text-[10px] text-cyan-400 font-bold uppercase">Kupon Spesial</p>
+                                             <h4 className="text-lg font-black text-white">{data.code}</h4>
+                                             <p className="text-[10px] text-slate-300 mt-1">{data.info}</p>
+                                             <button 
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(data.code);
+                                                    alert("Voucher disalin!");
+                                                }}
+                                                className="mt-2 text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors"
+                                             >
+                                                 Salin Kode
+                                             </button>
+                                         </div>
+                                         <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform">
+                                             <Star size={64} fill="currentColor" />
+                                         </div>
+                                     </div>
+                                 );
+                             } catch (e) { return <code>{children}</code>; }
+                         }
+
+                         return <code className={className} {...props}>{children}</code>;
                       }
                     }}
                   >
@@ -522,6 +610,7 @@ export default function LiveCS() {
               ) : (
                 msg.content
               )}
+
             </div>
           </div>
         ))}

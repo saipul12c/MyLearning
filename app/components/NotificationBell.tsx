@@ -16,10 +16,22 @@ export default function NotificationBell() {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
+    // 1. Fetch INITIAL notifications (including global)
     if (isLoggedIn && user) {
-      fetchNotifications();
-      
-      const channel = supabase
+        fetchNotifications();
+    } else {
+        // Guests can see global announcements too
+        fetchGlobalNotifications();
+    }
+  }, [isLoggedIn, user]);
+
+  useEffect(() => {
+    // 2. Real-time Listeners
+    const channels: any[] = [];
+
+    // USER specific channel
+    if (isLoggedIn && user) {
+      const userChannel = supabase
         .channel(`notifications-${user.id}`)
         .on(
           'postgres_changes',
@@ -30,33 +42,64 @@ export default function NotificationBell() {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            const newNotif: Notification = {
-              id: payload.new.id,
-              userId: payload.new.user_id,
-              title: payload.new.title,
-              message: payload.new.message,
-              type: payload.new.type,
-              linkUrl: payload.new.link_url,
-              isRead: payload.new.is_read,
-              createdAt: payload.new.created_at
-            };
+            const newNotif = formatNotification(payload.new);
             setNotifications(prev => [newNotif, ...prev]);
-            
-            // Notification sound (optional)
-            try {
-              const audio = new Audio('/notification.mp3');
-              audio.volume = 0.5;
-              audio.play().catch(() => {});
-            } catch (p) {}
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+             // Sync Read Status across tabs
+             setNotifications(prev => prev.map(n => n.id === payload.new.id ? { ...n, isRead: payload.new.is_read } : n));
           }
         )
         .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+      
+      channels.push(userChannel);
     }
+
+    // GLOBAL channel (For everyone)
+    const globalChannel = supabase
+      .channel('global-notifications-bell')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=is.null`
+        },
+        (payload) => {
+          const newNotif = formatNotification(payload.new);
+          setNotifications(prev => [newNotif, ...prev]);
+        }
+      )
+      .subscribe();
+    
+    channels.push(globalChannel);
+
+    return () => {
+      channels.forEach(ch => supabase.removeChannel(ch));
+    };
   }, [isLoggedIn, user]);
+
+  const formatNotification = (n: any): Notification => ({
+    id: n.id,
+    userId: n.user_id,
+    title: n.title,
+    message: n.message,
+    type: n.type,
+    linkUrl: n.link_url,
+    isRead: n.is_read,
+    createdAt: n.created_at
+  });
+
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -73,6 +116,20 @@ export default function NotificationBell() {
     const data = await getUserNotifications(user.id);
     setNotifications(data);
   };
+
+  const fetchGlobalNotifications = async () => {
+    const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .is("user_id", null)
+        .order("created_at", { ascending: false })
+        .limit(10);
+    
+    if (data) {
+        setNotifications(data.map(formatNotification));
+    }
+  };
+
 
   const handleMarkAsRead = async (id: string) => {
     await markAsRead(id);
@@ -91,7 +148,6 @@ export default function NotificationBell() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  if (!isLoggedIn) return null;
 
   return (
     <div className="relative" ref={dropdownRef}>

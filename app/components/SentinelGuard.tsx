@@ -29,15 +29,20 @@ export default function SentinelGuard({ children }: { children: React.ReactNode 
   });
   const [loading, setLoading] = useState(!state);
 
-  const isPublicPage = pathname.startsWith('/security-check') || 
+  const isPublicPage = pathname === '/' || 
+                       pathname.startsWith('/about') || 
+                       pathname.startsWith('/courses') || 
+                       pathname.startsWith('/events') || 
+                       pathname.startsWith('/pring') || 
+                       pathname.startsWith('/faq') || 
+                       pathname.startsWith('/contact') || 
+                       pathname.startsWith('/login') || 
+                       pathname.startsWith('/register') || 
+                       pathname.startsWith('/verify') || 
+                       pathname.startsWith('/privasi') || 
+                       pathname.startsWith('/terms') || 
                        pathname.startsWith('/maintenance') || 
-                       pathname.startsWith('/login') ||
-                       pathname.startsWith('/register') ||
-                       pathname.startsWith('/faq') ||
-                       pathname.startsWith('/security') ||
-                       pathname.startsWith('/privasi') ||
-                       pathname.startsWith('/terms') ||
-                       pathname === '/';
+                       pathname.startsWith('/security-check');
 
   useEffect(() => {
     async function checkSentinel() {

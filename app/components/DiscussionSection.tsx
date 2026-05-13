@@ -143,13 +143,19 @@ export default function DiscussionSection({ lessonId }: DiscussionSectionProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <Link 
-                      href={`/profile/${d.userId}`}
-                      className="text-sm font-bold text-white flex items-center gap-1.5 hover:text-purple-400 transition-colors"
-                    >
-                      {d.userName}
-                      {(d.userRole === 'admin' || d.userRole === 'instructor') && <VerifiedBadge size={12} />}
-                    </Link>
+                    {d.userId ? (
+                      <Link 
+                        href={`/profile/${d.userId}`}
+                        className="text-sm font-bold text-white flex items-center gap-1.5 hover:text-purple-400 transition-colors"
+                      >
+                        {d.userName}
+                        {(d.userRole === 'admin' || d.userRole === 'instructor') && <VerifiedBadge size={12} />}
+                      </Link>
+                    ) : (
+                      <div className="text-sm font-bold text-white flex items-center gap-1.5">
+                        {d.userName}
+                      </div>
+                    )}
                     <span className="text-[10px] text-slate-600 font-medium">
                       {new Date(d.createdAt).toLocaleDateString()}
                     </span>
@@ -206,13 +212,19 @@ export default function DiscussionSection({ lessonId }: DiscussionSectionProps) 
                            </div>
                            <div className="flex-1 min-w-0">
                              <div className="flex items-center justify-between mb-1">
-                               <Link 
-                                 href={`/profile/${r.userId}`}
-                                 className="text-xs font-bold text-slate-300 flex items-center gap-1 hover:text-purple-400 transition-colors"
-                               >
-                                 {r.userName}
-                                 {(r.userRole === 'admin' || r.userRole === 'instructor') && <VerifiedBadge size={10} />}
-                               </Link>
+                               {r.userId ? (
+                                 <Link 
+                                   href={`/profile/${r.userId}`}
+                                   className="text-xs font-bold text-slate-300 flex items-center gap-1 hover:text-purple-400 transition-colors"
+                                 >
+                                   {r.userName}
+                                   {(r.userRole === 'admin' || r.userRole === 'instructor') && <VerifiedBadge size={10} />}
+                                 </Link>
+                               ) : (
+                                 <div className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                                   {r.userName}
+                                 </div>
+                               )}
                                <span className="text-[10px] text-slate-600 italic">{new Date(r.createdAt).toLocaleDateString()}</span>
                              </div>
                              <p className="text-xs text-slate-400 leading-relaxed bg-white/[0.01] p-3 rounded-xl rounded-tl-none border border-white/5">

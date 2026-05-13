@@ -9,18 +9,15 @@ export const PLATFORM_NAME = "MyLearning";
  * Format number to Indonesian Rupiah currency string
  */
 export function formatPrice(price: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(price);
+  const formatted = price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `Rp ${formatted}`;
 }
 
 /**
  * Format number with thousand separators (fixed locale for Hydration Safety)
  */
 export function formatNumber(num: number): string {
-  return new Intl.NumberFormat("id-ID").format(num);
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
 /**
@@ -68,4 +65,17 @@ export function detectAgentRequest(text: string): boolean {
     "instruktur", "manusia", "bantuan langsung", "cs live"
   ];
   return keywords.some(k => text.toLowerCase().includes(k));
+}
+
+/**
+ * Gets or creates a unique client fingerprint stored in localStorage
+ */
+export function getClientFingerprint(): string {
+  if (typeof window === 'undefined') return 'server';
+  let fp = localStorage.getItem('client_fingerprint');
+  if (!fp) {
+    fp = 'fp-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('client_fingerprint', fp);
+  }
+  return fp;
 }

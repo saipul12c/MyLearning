@@ -47,8 +47,11 @@ async function executeWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promis
 export interface UserContext {
   fullName?: string;
   isLoggedIn: boolean;
-  enrolledCourseIds: string[]; // IDs of courses the user is currently officially enrolled in (paid/completed)
+  enrolledCourseIds: string[];
+  currentPage?: string;
+  activeContext?: { type: string; id?: string; metadata?: any } | null;
 }
+
 
 export async function getGeminiResponse(
   chatHistory: { role: "user" | "model"; parts: { text: string }[] }[], 
@@ -60,15 +63,17 @@ export async function getGeminiResponse(
       return "Sistem AI sedang offline. Silakan coba lagi nanti atau hubungi agen.";
     }
 
-    // 1. Fetch catalog & potentially restricted lesson materials
-    const courses = await getCourses();
-    
-    // Safety Logic: Filter lesson content based on user access
-    // We only share full lesson content with AI if the user has paid for it OR it's a free preview.
-    // For recommendation mode, we share only titles and descriptions.
+    // 1. Fetch catalog with essential columns only to reduce DB load & context size
+    const { data: courses, error: courseError } = await supabase
+      .from("courses")
+      .select("id, title, slug, price, description")
+      .limit(20); // Limit to top 20 courses to prevent context overflow
+
+    // Safety Logic: Filter lesson metadata (not content) to reduce payload
     const { data: lessonData, error: lessonError } = await supabase
       .from("lessons")
-      .select("course_id, title, description, content_type, is_free_preview");
+      .select("course_id, title, description, is_free_preview")
+      .limit(200); // Guard against massive lesson counts
 
     const lessonsByCourseId = (lessonData || []).reduce((acc: any, curr: any) => {
       if (!acc[curr.course_id]) acc[curr.course_id] = [];
@@ -76,7 +81,7 @@ export async function getGeminiResponse(
       return acc;
     }, {});
 
-    const catalog = courses
+    const catalog = (courses || [])
       .map(c => {
         const userHasAccess = userContext?.isLoggedIn && userContext.enrolledCourseIds.includes(c.id);
         
@@ -88,11 +93,11 @@ export async function getGeminiResponse(
         let lessonsText = "";
         if (accessibleLessons.length > 0) {
           lessonsText = "\n  Materi Tersedia:\n" + accessibleLessons
-            .map((l: any) => `    - ${l.title}${l.is_free_preview ? " (Pratinjau Gratis)" : ""}: ${l.description?.substring(0, 100)}...`)
+            .map((l: any) => `    - ${l.title}${l.is_free_preview ? " (Pratinjau Gratis)" : ""}`)
             .join("\n");
         }
 
-        return `- [**${c.title}**](/courses/${c.slug}) - Rp ${c.price.toLocaleString('id-ID')}\n  Ringkasan: ${c.description.substring(0, 100)}...${lessonsText}`;
+        return `- [**${c.title}**](/courses/${c.slug}) - Rp ${c.price.toLocaleString('id-ID')}\n  Ringkasan: ${c.description.substring(0, 120)}...${lessonsText}`;
       })
       .join('\n\n');
 
@@ -110,6 +115,20 @@ TUGAS ANDA:
    - Jika pengguna bertanya tentang materi berbayar yang belum mereka miliki, jelaskan secara garis besar saja dan arahkan mereka untuk membeli kursus tersebut untuk melihat detail lengkapnya.
 5. Selalu gunakan format Markdown yang rapi.
 6. Gunakan Bahasa Indonesia yang ramah, profesional, dan sedikit santai (Premium feel).
+7. KONTEKS AKTIF (PENTING):
+   - Jika pengguna berada di halaman materi (Lesson), berikan bantuan sebagai MENTOR.
+   - Jika pengguna berada di halaman pembayaran (Payment) dan ada kendala, berikan bantuan teknis atau penawaran voucher.
+   - Gunakan data di bawah ini untuk memahami apa yang sedang dihadapi pengguna.
+
+INFO KONTEKS PENGGUNA:
+- Halaman Saat Ini: ${userContext?.currentPage || "Tidak diketahui"}
+- Konteks Aktif: ${userContext?.activeContext ? JSON.stringify(userContext.activeContext) : "Tidak ada"}
+
+INSTRUKSI RENDERING KHUSUS (PREMIUM):
+- Jika merekomendasikan kursus, selain link, Anda bisa menyertakan blok kode khusus untuk merender KARTU KURSUS. 
+  Format: \`\`\`course_card {"slug": "slug-kursus", "title": "Judul", "image": "url-gambar", "description": "deskripsi singkat"} \`\`\`
+- Jika memberikan voucher, gunakan: \`\`\`voucher {"code": "KODE123", "info": "Potongan 10% untuk kursus ini"} \`\`\`
+- Gunakan blok kode ini HANYA JIKA sangat relevan untuk meningkatkan visual chat.
 
 INSTRUKSI LINKING (PENTING):
 - Jika menyebutkan nama kursus, Anda WAJIB menggunakan format link: [Nama Kursus](/courses/slug). 
