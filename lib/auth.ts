@@ -4,6 +4,7 @@
 
 import { supabase } from "./supabase";
 import { getPublicSentinelConfigs, reportFeatureError } from "./sentinel/actions";
+import { slugify } from "./utils";
 
 export type UserRole = "admin" | "instructor" | "user";
 
@@ -11,6 +12,7 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  slug?: string;
   phone: string;
   bio: string;
   role: UserRole;
@@ -104,6 +106,7 @@ export async function register(
         id: authData.user.id,
         email: authData.user.email!,
         fullName,
+        slug: slugify(fullName),
         phone: "",
         bio: "",
         role: "user",
@@ -175,6 +178,10 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
 }
 
 async function fetchUserProfile(userId: string, email: string, createdAt: string): Promise<User> {
+  // CRITICAL: Get the true role from the JWT session to prevent spoofing
+  const { data: { session } } = await supabase.auth.getSession();
+  const jwtRole = session?.user?.app_metadata?.role;
+
   const { data: profile, error } = await supabase
     .from("user_profiles")
     .select("*")
@@ -189,9 +196,10 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
       id: userId,
       email,
       fullName: "",
+      slug: "",
       phone: "",
       bio: "",
-      role: "user",
+      role: (jwtRole || "user") as UserRole,
       createdAt,
       isOnline: false,
       lastSeenAt: createdAt,
@@ -200,11 +208,13 @@ async function fetchUserProfile(userId: string, email: string, createdAt: string
 
   return {
     id: userId,
-    email: profile.email || email, // Prefer email from profile if available
+    email: profile.email || email, 
     fullName: profile.full_name,
+    slug: slugify(profile.full_name),
     phone: profile.phone || "",
     bio: profile.bio || "",
-    role: (profile.role || "user").toString().toLowerCase().trim() as UserRole,
+    // Prioritize JWT role for security, fallback to profile role for display if JWT not available
+    role: (jwtRole || profile.role || "user").toString().toLowerCase().trim() as UserRole,
     createdAt: profile.created_at || createdAt,
     avatarUrl: profile.avatar_url,
     isOnline: profile.is_online || false,
@@ -241,6 +251,7 @@ export async function getPublicUser(userId: string): Promise<SafeUser | null> {
     id: userId,
     email: profile.email || "user@hidden.com",
     fullName: profile.full_name,
+    slug: slugify(profile.full_name),
     phone: "",
     bio: profile.bio || "",
     role: (profile.role || "user").toString().toLowerCase().trim() as UserRole,
@@ -297,6 +308,7 @@ export async function updateProfile(
         id: userId,
         email: authUser?.email || "",
         fullName: data.full_name,
+        slug: slugify(data.full_name),
         phone: data.phone || "",
         bio: data.bio || "",
         role: (data.role || "user").toString().toLowerCase().trim() as UserRole,
@@ -361,6 +373,7 @@ export async function getAllRegisteredUsers(): Promise<SafeUser[]> {
       id: p.user_id,
       email: p.email || "user@hidden.com", // Showing actual email if stored in user_profiles
       fullName: p.full_name,
+      slug: slugify(p.full_name),
       phone: p.phone || "",
       bio: p.bio || "",
       role: p.role as UserRole,
@@ -456,6 +469,7 @@ export async function getUsersPaginatedAdmin(options: {
       id: p.user_id,
       email: p.email || "user@hidden.com",
       fullName: p.full_name,
+      slug: slugify(p.full_name),
       phone: p.phone || "",
       bio: p.bio || "",
       role: p.role as UserRole,

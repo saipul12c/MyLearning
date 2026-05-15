@@ -16,12 +16,17 @@ export interface FeatureManifest {
   devNotes?: string;
   dependencies?: string[];
   errorThreshold?: number;
+  allowedCountries?: string[];
+  rateLimitOverrides?: Record<string, number>;
+  expireAt?: string;
+  broadcastOnDisable?: boolean;
+  broadcastMessage?: string;
 }
 
 export const SYSTEM_MANIFEST = {
-  version: "2.0.0", // Added 30 User Features Universe
+  version: "1.1.0", // Added 30 User Features Universe
   lastUpdated: "2026-05-13",
-  
+
   // Define all features that SHOULD exist in the system
   features: [
     {
@@ -254,7 +259,7 @@ export const SYSTEM_MANIFEST = {
     {
       key: 'ai_tutor_beta',
       category: 'feature',
-      description: 'Aktifkan fitur tutor AI berbasis Gemini 1.5 Pro.',
+      description: 'Aktifkan fitur tutor AI berbasis Gemini 3 Pro.',
       proposedValue: false,
       isPublic: true,
       impact: 'medium',

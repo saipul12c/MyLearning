@@ -176,8 +176,15 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- 6. TRIGGER FUNCTION: Handle New User (Auth to Profile Sync)
--- Automatically creates a profile record when a new user signs up
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.user_profiles (user_id, full_name, email, role)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    NEW.email,
+    'user'
   );
   RETURN NEW;
 END;
@@ -291,6 +298,55 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================
+-- 10. SECURITY HARDENING: Protective Triggers
+-- ============================================
+
+-- A. Prevent Privilege Escalation (User cannot change their own role)
+CREATE OR REPLACE FUNCTION protect_user_role()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If the caller is not an admin, they cannot change the role
+    -- We use is_admin() helper from 03_security.sql
+    IF (OLD.role IS DISTINCT FROM NEW.role) AND NOT (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin') THEN
+        -- Allow if it's the initial insert (OLD is NULL)
+        IF OLD IS NOT NULL THEN
+            RAISE EXCEPTION 'Forbidden: You are not authorized to change the role field.';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- B. Prevent Self-Grading (User cannot change passed or score status)
+CREATE OR REPLACE FUNCTION protect_assignment_grading()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If the caller is not an admin or instructor, they cannot change passed/score
+    IF (OLD.passed IS DISTINCT FROM NEW.passed OR OLD.score IS DISTINCT FROM NEW.score) 
+       AND NOT (auth.jwt() -> 'app_metadata' ->> 'role' IN ('admin', 'instructor')) THEN
+        RAISE EXCEPTION 'Forbidden: Only Admins or Instructors can grade assignments.';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- C. Prevent Enrollment Bypass (User cannot change completion or payment status)
+CREATE OR REPLACE FUNCTION protect_enrollment_sensitive_data()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Protect critical status fields
+    IF (
+        OLD.payment_status IS DISTINCT FROM NEW.payment_status OR 
+        OLD.final_project_completed IS DISTINCT FROM NEW.final_project_completed OR
+        OLD.certificate_id IS DISTINCT FROM NEW.certificate_id
+    ) AND NOT (auth.jwt() -> 'app_metadata' ->> 'role' IN ('admin', 'instructor')) THEN
+        RAISE EXCEPTION 'Forbidden: Critical enrollment status can only be updated by Admins or Instructors.';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================
 -- APPLY TRIGGERS
 -- ============================================
 
@@ -315,12 +371,37 @@ CREATE TRIGGER set_updated_at_courses BEFORE UPDATE ON courses FOR EACH ROW EXEC
 DROP TRIGGER IF EXISTS set_updated_at_reviews ON reviews;
 CREATE TRIGGER set_updated_at_reviews BEFORE UPDATE ON reviews FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS set_updated_at_enrollments ON enrollments;
+CREATE TRIGGER set_updated_at_enrollments BEFORE UPDATE ON enrollments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_assessment_definitions_updated_at ON assessment_definitions;
 CREATE TRIGGER update_assessment_definitions_updated_at BEFORE UPDATE ON assessment_definitions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Course Content Stats
 DROP TRIGGER IF EXISTS trigger_sync_course_content ON lessons;
 CREATE TRIGGER trigger_sync_course_content AFTER INSERT OR UPDATE OR DELETE ON lessons FOR EACH ROW EXECUTE FUNCTION sync_course_content_stats();
+
+-- Timestamps for other tables
+DROP TRIGGER IF EXISTS set_updated_at_categories ON categories;
+CREATE TRIGGER set_updated_at_categories BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_updated_at_certificates ON certificates;
+CREATE TRIGGER set_updated_at_certificates BEFORE UPDATE ON certificates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_updated_at_promotions ON promotions;
+CREATE TRIGGER set_updated_at_promotions BEFORE UPDATE ON promotions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_updated_at_promotion_requests ON promotion_requests;
+CREATE TRIGGER set_updated_at_promotion_requests BEFORE UPDATE ON promotion_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_updated_at_platform_events ON platform_events;
+CREATE TRIGGER set_updated_at_platform_events BEFORE UPDATE ON platform_events FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_updated_at_event_registrations ON event_registrations;
+CREATE TRIGGER set_updated_at_event_registrations BEFORE UPDATE ON event_registrations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_updated_at_tier_purchases ON tier_purchases;
+CREATE TRIGGER set_updated_at_tier_purchases BEFORE UPDATE ON tier_purchases FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Course Review Stats
 DROP TRIGGER IF EXISTS trigger_sync_course_reviews ON reviews;
@@ -362,6 +443,22 @@ DROP TRIGGER IF EXISTS trg_auto_generate_certificate ON public.enrollments;
 CREATE TRIGGER trg_auto_generate_certificate
 BEFORE INSERT OR UPDATE OF progress_percentage, payment_status ON public.enrollments
 FOR EACH ROW EXECUTE FUNCTION handle_certificate_generation();
+
+-- Security Protection Triggers
+DROP TRIGGER IF EXISTS trg_protect_user_role ON public.user_profiles;
+CREATE TRIGGER trg_protect_user_role
+BEFORE UPDATE OF role ON public.user_profiles
+FOR EACH ROW EXECUTE FUNCTION protect_user_role();
+
+DROP TRIGGER IF EXISTS trg_protect_assignment_grading ON public.assignment_progress;
+CREATE TRIGGER trg_protect_assignment_grading
+BEFORE UPDATE OF passed, score ON public.assignment_progress
+FOR EACH ROW EXECUTE FUNCTION protect_assignment_grading();
+
+DROP TRIGGER IF EXISTS trg_protect_enrollment_sensitive ON public.enrollments;
+CREATE TRIGGER trg_protect_enrollment_sensitive
+BEFORE UPDATE OF payment_status, final_project_completed, certificate_id ON public.enrollments
+FOR EACH ROW EXECUTE FUNCTION protect_enrollment_sensitive_data();
 
 -- ======================================================
 -- 4. MAINTENANCE PROCEDURES
@@ -462,7 +559,7 @@ BEGIN
         rejection_reason = 'Pendaftaran otomatis kedaluwarsa karena melewati batas waktu pembayaran (3 hari).',
         updated_at = NOW()
     WHERE payment_status = 'pending' 
-      AND created_at < NOW() - INTERVAL '3 days';
+      AND enrolled_at < NOW() - INTERVAL '3 days';
     
     -- 2. Bersihkan Registrasi Event (Status: rejected + cancelled)
     UPDATE event_registrations
@@ -472,6 +569,15 @@ BEGIN
         admin_notes = 'Otomatis dibatalkan sistem karena melewati batas waktu pembayaran (3 hari).',
         updated_at = NOW()
     WHERE payment_status = 'pending' 
+      AND created_at < NOW() - INTERVAL '3 days';
+
+    -- 3. Bersihkan Pembelian Tier (Status: expired)
+    UPDATE tier_purchases
+    SET 
+        status = 'expired',
+        rejection_reason = 'Pembayaran otomatis kedaluwarsa karena melewati batas waktu (3 hari).',
+        updated_at = NOW()
+    WHERE status = 'pending' 
       AND created_at < NOW() - INTERVAL '3 days';
 
     RAISE NOTICE 'Pembersihan pembayaran tertunda (>3 hari) telah selesai dilakukan.';

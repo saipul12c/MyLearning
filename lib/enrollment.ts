@@ -166,7 +166,8 @@ export async function enrollCourse(
       return { success: false, error: "Anda sudah memiliki pendaftaran aktif atau menunggu untuk kursus ini." };
     }
 
-    // 2. Check for any active enrollment (Limit 1 active)
+    // 2. Check for any active enrollment (Limit removed for flexibility)
+    /* 
     const { data: active } = await supabase
       .from("enrollments")
       .select("id, course_title, course_slug")
@@ -180,6 +181,7 @@ export async function enrollCourse(
         error: `Anda masih memiliki kursus aktif "${active.course_title || active.course_slug}". Selesaikan dulu.` 
       };
     }
+    */
 
     // 3. Fetch course data and validate price/vouchers server-side
     const { data: courseData, error: courseError } = await supabase

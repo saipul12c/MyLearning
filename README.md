@@ -639,6 +639,6 @@ MyLearning dikembangkan oleh tim dedicated yang passionate tentang education tec
 
 **Last Updated**: April 2026
 
-**Version**: 0.1.0
+**Version**: 1.1.0
 
 Terima kasih telah menggunakan MyLearning! 🎓

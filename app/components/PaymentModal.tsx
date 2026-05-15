@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight } from "lucide-react";
+import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight, Clock } from "lucide-react";
 import Image from "next/image";
 import { Enrollment, uploadPaymentProof, updateEnrollmentPrice, removeVoucherFromEnrollment } from "@/lib/enrollment";
 import { validateVoucher, Voucher } from "@/lib/vouchers";
@@ -31,7 +31,38 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
   const [finalPrice, setFinalPrice] = useState(initialPrice);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Live CS Proactive Trigger for Payment
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+
+  // 1. Countdown Timer Logic
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const enrolledAt = new Date(enrollment.enrolledAt).getTime();
+      const deadline = enrolledAt + (3 * 24 * 60 * 60 * 1000); // 3 days
+      const now = new Date().getTime();
+      const difference = deadline - now;
+
+      if (difference <= 0) {
+        return null;
+      }
+
+      return {
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((difference / 1000 / 60) % 60),
+        seconds: Math.floor((difference / 1000) % 60),
+      };
+    };
+
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    setTimeLeft(calculateTimeLeft());
+
+    return () => clearInterval(timer);
+  }, [enrollment.enrolledAt]);
+
+  // 2. Live CS Proactive Trigger for Payment
   useEffect(() => {
     const timer = setTimeout(() => {
         const event = new CustomEvent("trigger-live-cs", {
@@ -189,6 +220,31 @@ export default function PaymentModal({ enrollment, qrisUrl, courseTitle, price: 
             <X size={20} />
           </button>
         </div>
+
+        {/* Countdown Bar */}
+        {timeLeft && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-center gap-4 animate-pulse">
+            <div className="flex items-center gap-2 text-amber-400">
+              <Clock size={14} className="animate-spin-slow" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Sisa Waktu Pembayaran:</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {[
+                { label: 'D', value: timeLeft.days },
+                { label: 'H', value: timeLeft.hours },
+                { label: 'M', value: timeLeft.minutes },
+                { label: 'S', value: timeLeft.seconds }
+              ].map((unit, i) => (
+                <div key={unit.label} className="flex items-center gap-1">
+                  <span className="bg-amber-500/20 text-white font-black text-xs px-1.5 py-0.5 rounded min-w-[24px] text-center">
+                    {unit.value.toString().padStart(2, '0')}
+                  </span>
+                  {i < 3 && <span className="text-amber-500/50 font-black text-[10px]">:</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto p-6 md:p-8">
           <div className="grid md:grid-cols-2 gap-8">

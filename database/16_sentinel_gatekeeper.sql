@@ -47,8 +47,8 @@ VALUES
 ('module_upload_enabled', 'true', 'Kontrol fitur upload file ke storage', 'security', TRUE, 100, '{}'),
 ('allow_new_enrollments', 'true', 'Enable/disable new course enrollments', 'feature', TRUE, 100, '{}'),
 ('security_lockdown', 'false', 'Lock down all write operations', 'security', FALSE, 100, '{}'),
-('ai_tutor_beta', 'false', 'Aktifkan fitur tutor AI berbasis Gemini 1.5 Pro', 'feature', TRUE, 0, '{}'),
-('system_version', '"1.3.0"', 'Current stable system version', 'system', TRUE, 100, '{}'),
+('ai_tutor_beta', 'false', 'Aktifkan fitur tutor AI berbasis Gemini 3 Pro', 'feature', TRUE, 0, '{}'),
+('system_version', '"1.1.0"', 'Current stable system version', 'system', TRUE, 100, '{}'),
 ('code_fingerprint', '""', 'Hash of the current source code manifest', 'system', FALSE, 100, '{}'),
 ('ddos_protection_enabled', 'false', 'Aktifkan sistem filtrasi trafik otomatis', 'security', TRUE, 100, '{}'),
 ('ddos_protection_level', '"low"', 'Level proteksi: low (soft), medium (rate-limit), high (challenge)', 'security', TRUE, 100, '{}'),
@@ -57,5 +57,6 @@ VALUES
 ('certificate_generation', 'true', 'Izinkan sistem membuat sertifikat kursus otomatis', 'feature', TRUE, 100, '{}'),
 ('gamification_system', 'true', 'Aktifkan sistem poin, badges, dan leaderboard', 'feature', TRUE, 100, '{}'),
 ('discussions_enabled', 'true', 'Aktifkan forum diskusi di setiap materi kursus', 'feature', TRUE, 100, '{}'),
-('voucher_system_enabled', 'true', 'Aktifkan penggunaan kode promo dan voucher', 'feature', TRUE, 100, '{}')
+('voucher_system_enabled', 'true', 'Aktifkan penggunaan kode promo dan voucher', 'feature', TRUE, 100, '{}'),
+('ip_whitelist', '[]', 'Daftar alamat IP yang dikecualikan dari pemblokiran otomatis', 'security', FALSE, 100, '{}')
 ON CONFLICT (key) DO NOTHING;

@@ -18,7 +18,18 @@ import {
   Waves,
   ZapOff,
   Zap,
-  Globe
+  Globe,
+  MapPin,
+  Clock,
+  Megaphone,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Trash2,
+  Skull,
+  History,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
 import { 
@@ -31,8 +42,12 @@ import {
   acquireLock,
   releaseLock,
   resetErrorCount,
-  updateErrorThreshold
+  updateErrorThreshold,
+  getBlockedIPs,
+  unblockIP,
+  getSentinelLogs
 } from "@/lib/sentinel/actions";
+
 import { SentinelConfig } from "@/lib/sentinel/types";
 import { SYSTEM_MANIFEST } from "@/lib/sentinel/manifest";
 
@@ -43,8 +58,16 @@ export default function SentinelGatekeeperPage() {
   const [syncData, setSyncData] = useState<any>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTab, setSelectedTab] = useState<'features' | 'threat'>('features');
+  const [blockedIPs, setBlockedIPs] = useState<any[]>([]);
+  const [sentinelLogs, setSentinelLogs] = useState<any[]>([]);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [editingConfig, setEditingConfig] = useState<SentinelConfig | null>(null);
+  const [schedulingKey, setSchedulingKey] = useState<string | null>(null);
+  const [scheduleValue, setScheduleValue] = useState<any>(true);
+  const [scheduleDate, setScheduleDate] = useState<string>("");
 
-  // Auto-hide toast
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -63,38 +86,57 @@ export default function SentinelGatekeeperPage() {
   async function loadConfigs() {
     try {
       setLoading(true);
-      const [data, sync] = await Promise.all([
+      const [data, sync, blocked, logs] = await Promise.all([
         getAllSentinelConfigs(),
-        syncManifestWithDatabase()
+        syncManifestWithDatabase(),
+        getBlockedIPs(),
+        getSentinelLogs(50)
       ]);
       setConfigs(data);
       setSyncData(sync);
+      setBlockedIPs(blocked);
+      setSentinelLogs(logs);
     } catch (error: any) {
-      showToast("Gagal memuat konfigurasi Sentinel: " + error.message, "error");
+      showToast("Gagal memuat data Sentinel: " + error.message, "error");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleUnblock(ip: string) {
+    if (!user?.id || updating) return;
+    try {
+      setUpdating(`unblock_${ip}`);
+      await unblockIP(ip, user.id);
+      setBlockedIPs(prev => prev.filter(b => b.ip_address !== ip));
+      showToast(`IP ${ip} berhasil dibuka blokirnya`);
+      const logs = await getSentinelLogs(50);
+      setSentinelLogs(logs);
+    } catch (error: any) {
+      showToast("Gagal membuka blokir IP: " + error.message, "error");
+    } finally {
+      setUpdating(null);
     }
   }
 
   async function handleToggle(key: string, currentValue: any, forcedValue?: any) {
     if (!user?.id || updating) return;
     
-    // Use forced value if provided, otherwise toggle boolean or keep current
-    const newValue = forcedValue !== undefined 
-      ? forcedValue 
-      : (typeof currentValue === 'boolean' ? !currentValue : currentValue);
+    const criticalKeys = ['maintenance_mode', 'security_lockdown', 'ddos_protection_enabled', 'module_auth_enabled'];
+    if (criticalKeys.includes(key)) {
+      const actionName = forcedValue === false || (forcedValue === undefined && currentValue === true) ? "MENONAKTIFKAN" : "MENGAKTIFKAN";
+      if (!confirm(`PERINGATAN!\n\nAnda akan ${actionName} fitur kritis: ${key.toUpperCase()}. Lanjutkan?`)) return;
+    }
+
+    const newValue = forcedValue !== undefined ? forcedValue : (typeof currentValue === 'boolean' ? !currentValue : currentValue);
     
     try {
       setUpdating(key);
       await updateSentinelConfig(key, newValue, user.id);
-      
-      setConfigs(prev => prev.map(c => 
-        c.key === key ? { ...c, value: newValue, updated_at: new Date().toISOString() } : c
-      ));
-      
-      showToast(`${key} berhasil diperbarui`);
+      setConfigs(prev => prev.map(c => c.key === key ? { ...c, value: newValue, updated_at: new Date().toISOString() } : c));
+      showToast(`${key} diperbarui`);
     } catch (error: any) {
-      showToast("Gagal memperbarui: " + error.message, "error");
+      showToast(error.message, "error");
     } finally {
       setUpdating(null);
     }
@@ -102,623 +144,334 @@ export default function SentinelGatekeeperPage() {
 
   async function handleUpdateRollout(key: string, percentage: number) {
     if (!user?.id || updating) return;
-
     try {
       setUpdating(key + '_rollout');
       await updateSentinelConfig(key, configs.find(c => c.key === key)?.value, user.id, percentage);
-      
-      setConfigs(prev => prev.map(c => 
-        c.key === key ? { ...c, rollout_percentage: percentage, updated_at: new Date().toISOString() } : c
-      ));
-      
+      setConfigs(prev => prev.map(c => c.key === key ? { ...c, rollout_percentage: percentage } : c));
       showToast(`Rollout ${key} diatur ke ${percentage}%`);
     } catch (error: any) {
-      showToast("Gagal memperbarui rollout: " + error.message, "error");
+      showToast(error.message, "error");
     } finally {
       setUpdating(null);
     }
   }
 
-  async function handleToggleRole(key: string, role: string) {
-    if (!user?.id || updating) return;
-
-    const config = configs.find(c => c.key === key);
-    if (!config) return;
-
-    const currentRoles = config.targeting_roles || [];
-    const newRoles = currentRoles.includes(role)
-      ? currentRoles.filter(r => r !== role)
-      : [...currentRoles, role];
-
+  async function handleSaveAdvanced(key: string) {
+    if (!user?.id || !editingConfig) return;
     try {
-      setUpdating(key + '_role');
-      await updateSentinelConfig(key, config.value, user.id, config.rollout_percentage, newRoles);
-      
-      setConfigs(prev => prev.map(c => 
-        c.key === key ? { ...c, targeting_roles: newRoles, updated_at: new Date().toISOString() } : c
-      ));
-      
-      showToast(`Targeting role untuk ${key} diperbarui`);
-    } catch (error: any) {
-      showToast("Gagal memperbarui targeting: " + error.message, "error");
-    } finally {
-      setUpdating(null);
-    }
-  }
-
-  async function handleLock(key: string) {
-    if (!user?.id || updating) return;
-    try {
-      setUpdating(key + '_lock');
-      await acquireLock(key, user.id);
+      setUpdating(key + '_advanced');
+      await updateSentinelConfig(
+        key, 
+        editingConfig.value, 
+        user.id, 
+        editingConfig.rollout_percentage, 
+        editingConfig.targeting_roles,
+        editingConfig.allowed_countries,
+        editingConfig.rate_limit_overrides,
+        editingConfig.expire_at || undefined,
+        editingConfig.broadcast_on_disable,
+        editingConfig.broadcast_message
+      );
       loadConfigs();
-      showToast("Konfigurasi berhasil dikunci untuk 5 menit");
+      showToast("Pengaturan lanjutan berhasil disimpan");
+      setExpandedKey(null);
     } catch (error: any) {
       showToast(error.message, "error");
     } finally {
       setUpdating(null);
     }
   }
-
-  async function handleUnlock(key: string) {
-    if (!user?.id || updating) return;
-    try {
-      setUpdating(key + '_unlock');
-      await releaseLock(key, user.id);
-      loadConfigs();
-      showToast("Kunci berhasil dilepas");
-    } catch (error: any) {
-      showToast(error.message, "error");
-    } finally {
-      setUpdating(null);
-    }
-  }
-
-  async function handleResetErrors(key: string) {
-    if (!user?.id || updating) return;
-    try {
-      setUpdating(key + '_reset');
-      await resetErrorCount(key, user.id);
-      loadConfigs();
-      showToast("Error counter berhasil direset");
-    } catch (error: any) {
-      showToast(error.message, "error");
-    } finally {
-      setUpdating(null);
-    }
-  }
-
-  async function handleUpdateThreshold(key: string, threshold: number) {
-    if (!user?.id || updating) return;
-    try {
-      setUpdating(key + '_threshold');
-      await updateErrorThreshold(key, threshold, user.id);
-      setConfigs(prev => prev.map(c => 
-        c.key === key ? { ...c, error_threshold: threshold, updated_at: new Date().toISOString() } : c
-      ));
-      showToast(`Error threshold ${key} diatur ke ${threshold}`);
-    } catch (error: any) {
-      showToast(error.message, "error");
-    } finally {
-      setUpdating(null);
-    }
-  }
-
-  async function handleSchedule(key: string, pendingValue: any, releaseAt: string) {
-    if (!user?.id || updating) return;
-    try {
-      setUpdating(key + '_schedule');
-      await scheduleRelease(key, pendingValue, releaseAt, user.id);
-      loadConfigs();
-      showToast(`Rilis ${key} dijadwalkan pada ${new Date(releaseAt).toLocaleString()}`);
-    } catch (error: any) {
-      showToast(error.message, "error");
-    } finally {
-      setUpdating(null);
-      setSchedulingKey(null);
-    }
-  }
-
-  const [schedulingKey, setSchedulingKey] = useState<string | null>(null);
-  const [scheduleValue, setScheduleValue] = useState<any>(true);
-  const [scheduleDate, setScheduleDate] = useState<string>("");
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        <div className="relative">
-          <div className="absolute inset-0 bg-blue-500/20 blur-2xl rounded-full animate-pulse"></div>
-          <Shield className="w-16 h-16 text-blue-400 animate-pulse relative z-10" />
-        </div>
-        <p className="text-slate-400 mt-6 font-medium tracking-widest uppercase text-xs">Initializing Sentinel Systems...</p>
+        <Shield className="w-16 h-16 text-blue-400 animate-pulse" />
+        <p className="text-slate-400 mt-6 font-medium tracking-widest uppercase text-xs">Initializing Sentinel...</p>
       </div>
     );
   }
 
   const categories = ['system', 'security', 'feature', 'general'];
+  const countries = [
+    { code: 'ID', name: 'Indonesia' },
+    { code: 'US', name: 'United States' },
+    { code: 'SG', name: 'Singapore' },
+    { code: 'MY', name: 'Malaysia' }
+  ];
 
   return (
     <div className="max-w-7xl mx-auto pb-24 px-6">
       {/* Header Section */}
       <div className="relative mb-12 p-10 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-sm overflow-hidden group">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-blue-500/15 transition-colors duration-1000"></div>
-        
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
           <div>
             <div className="flex items-center gap-2 text-blue-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">
               <Shield size={12} className="animate-pulse" />
-              <span>Sentinel Gatekeeper v{configs.find(c => c.key === 'system_version')?.value?.toString().replace(/"/g, '') || '1.0.0'}</span>
+              <span>Sentinel Gatekeeper v1.1.0</span>
             </div>
             <h1 className="text-5xl font-black text-white tracking-tight mb-4">Control <span className="text-blue-500">Center</span></h1>
-            <p className="text-slate-400 text-lg max-w-xl leading-relaxed font-medium">Platform otoritas tunggal untuk manajemen fitur, keamanan DDoS, dan sinkronisasi status aplikasi secara real-time.</p>
+            <p className="text-slate-400 text-lg max-w-xl leading-relaxed font-medium">Platform otoritas tunggal untuk manajemen fitur dan keamanan real-time.</p>
+            <div className="mt-6 flex items-center gap-4">
+              <a 
+                href="/docs/sentinel/SECURITY_GUIDE.md" 
+                target="_blank" 
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <Info size={14} /> Security Guide
+              </a>
+            </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="flex items-center gap-5 px-8 py-5 rounded-3xl bg-white/5 border border-white/5 shadow-xl shadow-black/20">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                <Activity size={24} />
-              </div>
-              <div>
-                <div className="text-white font-bold text-lg">System Online</div>
-                <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Global Status</div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-5 px-8 py-5 rounded-3xl bg-white/5 border border-white/5 shadow-xl shadow-black/20">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400">
-                <Globe size={24} />
-              </div>
-              <div>
-                <div className="text-white font-bold text-lg">Broadcast Active</div>
-                <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Auto Announcement</div>
-              </div>
-            </div>
+          <div className="flex items-center gap-3 p-1.5 rounded-2xl bg-white/5 border border-white/10">
+            <button onClick={() => setSelectedTab('features')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedTab === 'features' ? 'bg-blue-500 text-white' : 'text-slate-500 hover:text-white'}`}>System Controls</button>
+            <button onClick={() => setSelectedTab('threat')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedTab === 'threat' ? 'bg-red-500 text-white' : 'text-slate-500 hover:text-white'}`}>Threat Intel</button>
           </div>
         </div>
       </div>
 
-      {/* Detection Engine Status */}
-      <div className="mb-12 flex items-center justify-between p-4 rounded-2xl bg-black/20 border border-white/5">
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${syncData && (syncData.versionMismatch || syncData.newFeatures.length > 0 || syncData.fingerprintMismatch || syncData.orphanedFeatures.length > 0) ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Detection Engine: {syncData && (syncData.versionMismatch || syncData.newFeatures.length > 0 || syncData.fingerprintMismatch || syncData.orphanedFeatures.length > 0) ? 'Changes Detected' : 'No Changes Found'}
-          </span>
-        </div>
-        <button onClick={loadConfigs} className="flex items-center gap-2 text-[10px] font-bold text-blue-400 uppercase hover:text-blue-300 transition-colors">
-          <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} />
-          Scan For Changes
-        </button>
-      </div>
+      {selectedTab === 'features' && (
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Section Introduction */}
+          <div className="flex flex-col gap-2 mb-4">
+            <h2 className="text-sm font-black text-blue-400 uppercase tracking-widest">Sistem Navigasi Kontrol</h2>
+            <p className="text-slate-500 text-sm leading-relaxed max-w-2xl">
+              Gunakan panel ini untuk mengelola fungsionalitas inti MyLearning. Setiap perubahan di sini akan berdampak langsung pada pengalaman pengguna di seluruh platform. Pastikan Anda memahami level **Impact** sebelum melakukan perubahan.
+            </p>
+          </div>
 
-      {/* DDoS Command Center - Streamlined */}
-      {configs.find(c => c.key === 'ddos_protection_enabled')?.value === true && (
-        <div className="mb-12 p-1 rounded-[2rem] bg-gradient-to-r from-indigo-500/20 via-blue-500/10 to-transparent border border-indigo-500/20 backdrop-blur-xl">
-          <div className="bg-slate-950/40 rounded-[1.9rem] p-8">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-                  <Waves size={24} className="animate-pulse" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white tracking-tight">DDoS Mitigation Center</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></span>
-                    <span className="text-indigo-400/70 text-[10px] font-bold uppercase tracking-widest">Monitoring Traffic</span>
+          {/* Search Bar */}
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+              <Search size={18} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+            </div>
+            <input 
+              type="text" 
+              placeholder="Cari fitur (contoh: 'maintenance', 'payment', 'ddos')..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-3xl py-6 pl-16 pr-8 text-white text-lg outline-none focus:border-blue-500/50 focus:bg-white/[0.07] transition-all placeholder:text-slate-600"
+            />
+          </div>
+
+          {/* Sync Alert */}
+          {syncData && (syncData.versionMismatch || syncData.newFeatures.length > 0) && (
+            <div className="p-8 rounded-[2rem] bg-blue-500/5 border border-blue-500/20 flex flex-col lg:flex-row items-center justify-between gap-8">
+               <div className="flex items-center gap-6">
+                 <RefreshCcw size={32} className="text-blue-400 animate-spin-slow" />
+                 <div>
+                   <h3 className="text-white font-bold text-2xl tracking-tight mb-2">Sinkronisasi Diperlukan</h3>
+                   <p className="text-slate-400 text-sm">Versi sistem atau manifest fitur tidak cocok dengan database. Sinkronisasi sekarang untuk menerapkan perubahan kode terbaru ke antarmuka ini.</p>
+                 </div>
+               </div>
+               <button onClick={loadConfigs} className="px-10 py-4 rounded-2xl bg-blue-500 text-white text-[11px] font-black uppercase shadow-xl shadow-blue-500/20 hover:scale-105 transition-all">Synchronize Now</button>
+            </div>
+          )}
+
+          {/* Feature Sections */}
+          <div className="space-y-24">
+            {categories.map(category => {
+              const categoryConfigs = configs
+                .filter(c => c.category === category)
+                .filter(c => c.key.toLowerCase().includes(searchTerm.toLowerCase()) || (c.description || '').toLowerCase().includes(searchTerm.toLowerCase()));
+              
+              if (categoryConfigs.length === 0) return null;
+
+              return (
+                <div key={category} className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                  <div className="flex items-center gap-4 mb-10 ml-2">
+                    <div className="flex flex-col">
+                      <h2 className="text-2xl font-black text-white capitalize tracking-tight">{category} Protocol</h2>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                        {category === 'system' ? 'Konfigurasi Inti Platform' : category === 'security' ? 'Proteksi & Akses Data' : 'Fitur & Pengalaman Pengguna'}
+                      </p>
+                    </div>
+                    <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent ml-6"></div>
                   </div>
-                </div>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-6">
-                <div className="flex items-center gap-3 bg-white/5 px-4 py-2.5 rounded-xl border border-white/5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Level</span>
-                  <div className="flex gap-1.5">
-                    {['low', 'medium', 'high'].map(lvl => (
-                      <button
-                        key={lvl}
-                        onClick={() => handleToggle('ddos_protection_level', null, lvl)}
-                        className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${
-                          configs.find(c => c.key === 'ddos_protection_level')?.value === lvl
-                            ? 'bg-indigo-500 text-white'
-                            : 'bg-white/5 text-slate-500 hover:text-slate-300'
-                        }`}
-                      >
-                        {lvl}
-                      </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {categoryConfigs.map(config => (
+                      <div key={config.key} className="group relative bg-slate-900/30 border border-white/5 hover:border-white/10 rounded-[2.5rem] p-10 transition-all duration-500">
+                        <div className="absolute top-8 right-8 flex items-center gap-3">
+                          {/* Impact Badge */}
+                          <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider border ${
+                            config.impact === 'critical' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
+                            config.impact === 'high' ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' :
+                            config.impact === 'medium' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' :
+                            'bg-slate-500/10 border-slate-500/20 text-slate-400'
+                          }`}>
+                            {config.impact || 'low'} Impact
+                          </div>
+                          <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${config.is_public ? 'bg-emerald-500/10 text-emerald-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                            {config.is_public ? 'Public' : 'Admin'}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col h-full">
+                          <div className="mb-8">
+                            <h3 className="text-xl font-bold text-white mb-3 group-hover:text-blue-400 transition-colors uppercase tracking-tight">{config.key.replace(/_/g, ' ')}</h3>
+                            <p className="text-slate-400 text-sm leading-relaxed max-w-sm">{config.description}</p>
+                          </div>
+
+                          <div className="mt-auto pt-8 border-t border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              {typeof config.value === 'boolean' ? (
+                                <button
+                                  onClick={() => handleToggle(config.key, config.value)}
+                                  className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex items-center ${config.value ? 'bg-blue-600' : 'bg-slate-800'}`}
+                                >
+                                  <div className={`w-4 h-4 rounded-full bg-white transition-all duration-300 ${config.value ? 'translate-x-6' : 'translate-x-0'}`} />
+                                </button>
+                              ) : (
+                                <div className="text-sm font-mono text-white bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">{JSON.stringify(config.value)}</div>
+                              )}
+                              <button onClick={() => { setExpandedKey(expandedKey === config.key ? null : config.key); setEditingConfig(config); }} className={`p-2.5 rounded-xl transition-all border ${expandedKey === config.key ? 'bg-blue-500 text-white' : 'bg-white/5 text-slate-500'}`}>
+                                <Settings size={14} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {expandedKey === config.key && editingConfig && (
+                            <div className="mt-8 pt-8 border-t border-white/10 animate-in slide-in-from-top-4">
+                               <div className="space-y-6">
+                                  {config.category === 'feature' && (
+                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                      <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest text-blue-500">
+                                        <span>Rollout Percentage</span>
+                                        <span className="text-white">{config.rollout_percentage}%</span>
+                                      </div>
+                                      <input type="range" min="0" max="100" step="10" value={config.rollout_percentage} onChange={(e) => handleUpdateRollout(config.key, parseInt(e.target.value))} className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                    </div>
+                                  )}
+                                  
+                                  {config.key === 'ip_whitelist' && (
+                                    <div className="space-y-4">
+                                       <textarea 
+                                         value={JSON.stringify(editingConfig.value, null, 2)}
+                                         onChange={(e) => {
+                                           try { setEditingConfig({ ...editingConfig, value: JSON.parse(e.target.value) }); } catch(e){}
+                                         }}
+                                         className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-xs font-mono text-white min-h-[100px]"
+                                       />
+                                    </div>
+                                  )}
+
+                                  <button onClick={() => handleSaveAdvanced(config.key)} className="w-full py-4 rounded-2xl bg-blue-500 text-white text-[11px] font-black uppercase shadow-xl shadow-blue-500/20">Simpan Perubahan</button>
+                               </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3 bg-white/5 px-4 py-2.5 rounded-xl border border-white/5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Threshold</span>
-                  <span className="text-white font-mono font-bold">{configs.find(c => c.key === 'ddos_rate_limit')?.value || 100} <span className="text-slate-500 font-normal">r/m</span></span>
-                </div>
-
-                <button 
-                  onClick={() => handleToggle('ddos_protection_enabled', true, false)}
-                  className="px-5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-all group"
-                >
-                  <ZapOff size={14} className="inline mr-2 group-hover:animate-bounce" /> Emergency Stop
-                </button>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Auto-Discovery Alert - Modernized */}
-      {syncData && (syncData.versionMismatch || syncData.newFeatures.length > 0 || syncData.fingerprintMismatch || syncData.orphanedFeatures.length > 0) && (
-        <div className="mb-12 overflow-hidden rounded-[2.5rem] bg-blue-500/5 border border-blue-500/20 backdrop-blur-md">
-          <div className="p-8 flex flex-col lg:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-6">
-              <div className="w-16 h-16 rounded-[2rem] bg-blue-500/20 flex items-center justify-center text-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.15)]">
-                <RefreshCcw size={32} className="animate-spin-slow" />
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-2xl tracking-tight mb-3">Sync Required</h3>
-                <div className="flex flex-wrap gap-2">
-                  {syncData.versionMismatch && <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-400 text-[9px] font-black uppercase tracking-wider border border-purple-500/20">New Version Detected</span>}
-                  {syncData.fingerprintMismatch && <span className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 text-[9px] font-black uppercase tracking-wider border border-red-500/20">Code Drift Detected</span>}
-                  {syncData.newFeatures.length > 0 && <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 text-[9px] font-black uppercase tracking-wider border border-emerald-500/20">{syncData.newFeatures.length} New Modules</span>}
-                  {syncData.orphanedFeatures.length > 0 && <span className="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-400 text-[9px] font-black uppercase tracking-wider border border-orange-500/20">{syncData.orphanedFeatures.length} Legacy Keys</span>}
+      {selectedTab === 'threat' && (
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Section Introduction */}
+          <div className="flex flex-col gap-2 mb-4">
+            <h2 className="text-sm font-black text-red-500 uppercase tracking-widest">Intelijen & Pertahanan</h2>
+            <p className="text-slate-500 text-sm leading-relaxed max-w-2xl">
+              Monitor ancaman secara real-time. Bagian ini mendata aktivitas mencurigakan, serangan brute-force, dan anomali trafik yang telah diredam oleh sistem Sentinel untuk menjaga stabilitas MyLearning.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            <div className="lg:col-span-1">
+              <div className="sticky top-12 p-8 rounded-[2rem] bg-slate-900/40 border border-red-500/20 backdrop-blur-xl">
+                <Skull size={32} className="text-red-500 mb-6" />
+                <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Blocked IPs</h3>
+                <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+                  Daftar alamat IP yang telah dilarang masuk karena melanggar protokol keamanan, mencoba melakukan serangan injeksi, atau gagal login berkali-kali.
+                </p>
+                <div className="pt-8 border-t border-white/5 text-center">
+                  <div className="text-5xl font-black text-white">{blockedIPs.length}</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-2">Active Bans</div>
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              {syncData.orphanedFeatures.length > 0 && (
-                <button 
-                  className="px-6 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-slate-400 font-bold text-sm hover:bg-red-500/10 hover:text-red-400 transition-all"
-                  onClick={async () => {
-                    if (!confirm("Cleanup legacy features?")) return;
-                    try {
-                      const result = await cleanupOrphanedFeatures(syncData.orphanedFeatures);
-                      if (result.protected.length > 0) {
-                        showToast(`${result.deleted.length} dihapus, ${result.protected.length} dilindungi (is_protected).`);
-                      } else {
-                        showToast(`${result.deleted.length} fitur legacy berhasil dihapus.`);
-                      }
-                      loadConfigs();
-                    } catch (e: any) { showToast(e.message, 'error'); }
-                  }}
-                >
-                  Cleanup
-                </button>
-              )}
-              <button 
-                className="px-10 py-3.5 rounded-2xl bg-blue-500 text-white font-bold text-sm hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20 active:scale-95"
-                onClick={async () => {
-                  if (!user?.id) return;
-                  setUpdating('sync');
-                  try {
-                    // 1. Update Version & Fingerprint
-                    await updateSentinelConfig('system_version', SYSTEM_MANIFEST.version, user.id);
-                    await updateSentinelConfig('code_fingerprint', syncData.codeFingerprint, user.id);
-                    
-                    // 2. Insert New Features
-                    if (syncData.newFeatures.length > 0) {
-                      const { supabase } = await import("@/lib/supabase");
-                      for (const feature of syncData.newFeatures) {
-                        await supabase.from('sentinel_configs').insert({
-                          key: feature.key,
-                          value: feature.proposedValue,
-                          description: feature.description,
-                          category: feature.category,
-                          is_public: feature.isPublic,
-                          metadata: { dev_notes: feature.devNotes },
-                          updated_by: user.id
-                        });
-                      }
-                    }
-                    
-                    loadConfigs();
-                    showToast("Sistem berhasil disinkronkan dengan Manifest terbaru");
-                  } catch (e: any) {
-                    showToast("Gagal sinkronisasi: " + e.message, "error");
-                  } finally {
-                    setUpdating(null);
-                  }
-                }}
-              >
-                {updating === 'sync' ? <RefreshCcw size={18} className="animate-spin" /> : "Synchronize System"}
-              </button>
-            </div>
-          </div>
 
-          {/* New: Detailed Change List */}
-          <div className="mx-8 mb-8 p-6 rounded-3xl bg-black/20 border border-white/5">
-             <p className="text-[10px] text-slate-500 uppercase font-black mb-4 tracking-widest">Detection Details & Changelog:</p>
-             <div className="space-y-3">
-                {syncData.newFeatures.map((f: any) => (
-                   <div key={f.key} className="flex items-center justify-between text-xs p-2 rounded-xl bg-white/5 border border-white/5">
-                      <span className="text-slate-300 font-mono flex items-center gap-2">
-                        <Zap size={12} className="text-emerald-400" /> [{f.category}] {f.key}
-                      </span>
-                      <span className="text-slate-500 italic">Proposed: {JSON.stringify(f.proposedValue)}</span>
-                   </div>
-                ))}
-                {syncData.versionMismatch && (
-                   <div className="text-xs text-purple-400 font-mono p-2 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2">
-                      <Activity size={12} /> System Upgrade: {syncData.currentDbVersion} → {SYSTEM_MANIFEST.version}
-                   </div>
-                )}
-                {syncData.fingerprintMismatch && (
-                   <div className="text-xs text-red-400 font-mono p-2 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2">
-                      <Shield size={12} /> Code Structure Modified (Hash Drift Detected)
-                   </div>
-                )}
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Warning Banner if Maintenance Mode is ON */}
-      {configs.find(c => c.key === 'maintenance_mode')?.value === true && (
-        <div className="mb-10 p-6 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center gap-4 animate-pulse">
-          <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500">
-            <AlertOctagon size={24} />
-          </div>
-          <div>
-            <h3 className="text-red-400 font-bold text-lg leading-tight">MAINTENANCE MODE IS ACTIVE</h3>
-            <p className="text-red-400/70 text-sm">Aplikasi saat ini tidak dapat diakses oleh pengguna publik.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Config Sections */}
-      <div className="space-y-20">
-        {categories.map(category => {
-          const categoryConfigs = configs.filter(c => c.category === category);
-          if (categoryConfigs.length === 0) return null;
-
-          return (
-            <div key={category} className="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-              <div className="flex items-center gap-4 mb-10 ml-2">
-                <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-500 group-hover:text-blue-400 transition-colors">
-                  {category === 'system' && <Server size={20} />}
-                  {category === 'security' && <Lock size={20} />}
-                  {category === 'feature' && <Zap size={20} />}
-                  {category === 'general' && <Settings size={20} />}
+            <div className="lg:col-span-2 space-y-4">
+              {blockedIPs.length === 0 ? (
+                <div className="p-20 rounded-[2.5rem] bg-white/5 border border-dashed border-white/10 flex flex-col items-center justify-center">
+                  <Shield size={48} className="text-emerald-500/20 mb-6" />
+                  <p className="text-slate-500 text-center font-medium">Sistem bersih dari ancaman.<br/><span className="text-[10px] uppercase font-black tracking-widest text-slate-600 mt-2 block">All clear</span></p>
                 </div>
-                <h2 className="text-2xl font-black text-white capitalize tracking-tight">{category} Protocol</h2>
-                <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent ml-6"></div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-8">
-                {categoryConfigs.map(config => (
-                  <div 
-                    key={config.key} 
-                    className="group relative bg-slate-900/30 border border-white/5 hover:border-white/10 rounded-[2.5rem] p-10 transition-all duration-500"
-                  >
-                    {/* Status Badge - Top Right */}
-                    <div className="absolute top-8 right-8">
-                      <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                        config.is_public 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                          : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                      }`}>
-                        {config.is_public ? <Globe size={10} /> : <Shield size={10} />}
-                        {config.is_public ? 'Public' : 'Admin'}
+              ) : (
+                blockedIPs.map(threat => (
+                  <div key={threat.ip_address} className="p-6 rounded-[1.5rem] bg-slate-900/40 border border-white/10 flex items-center justify-between group hover:border-red-500/30 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500">
+                        <AlertCircle size={20} />
                       </div>
-                    </div>
-
-                    <div className="flex flex-col h-full">
-                      {/* Main Info */}
-                      <div className="mb-8">
-                        <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2 group-hover:text-blue-400 transition-colors">
-                          {config.key.replace(/_/g, ' ')}
-                          {syncData?.driftedFeatures?.includes(config.key) && (
-                            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                          )}
-                        </h3>
-                        <p className="text-slate-400 text-sm leading-relaxed max-w-sm">
-                          {config.description}
-                        </p>
-                      </div>
-
-                      {/* Stability Monitor - Compact */}
-                      {Boolean(config.error_threshold && config.error_threshold > 0) && (
-                        <div className="mb-8 bg-black/20 p-4 rounded-2xl border border-white/5">
-                          <div className="flex items-center justify-between mb-3">
-                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <Activity size={12} /> Stability
-                             </span>
-                             <button onClick={() => handleResetErrors(config.key)} className="text-[9px] font-bold text-slate-400 hover:text-white transition-colors">Reset</button>
-                          </div>
-                          <div className="flex items-center gap-4">
-                             <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full transition-all duration-1000 ${
-                                    (config.current_errors || 0) >= (config.error_threshold || 0) ? 'bg-red-500' : 'bg-blue-500'
-                                  }`}
-                                  style={{ width: `${Math.min(100, ((config.current_errors || 0) / (config.error_threshold || 1)) * 100)}%` }}
-                                />
-                             </div>
-                             <span className="text-[10px] font-mono font-bold text-slate-400">{config.current_errors || 0}/{config.error_threshold}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Dependencies & Canary - Optimized */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-                        {config.dependencies && config.dependencies.length > 0 && (
-                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                             <p className="text-[9px] text-slate-500 uppercase font-black mb-3 tracking-widest">Dependencies</p>
-                             <div className="flex flex-wrap gap-1.5">
-                                {config.dependencies.map(dep => (
-                                   <span key={dep} className="px-2 py-0.5 rounded bg-white/5 text-[9px] text-slate-400 font-mono">{dep}</span>
-                                ))}
-                             </div>
-                          </div>
-                        )}
-
-                        {config.category === 'feature' && config.value === true && (
-                          <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                             <div className="flex items-center justify-between mb-3">
-                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Rollout</span>
-                                <span className="text-[10px] font-bold text-white">{config.rollout_percentage}%</span>
-                             </div>
-                             <input 
-                                type="range" min="0" max="100" step="10"
-                                value={config.rollout_percentage}
-                                onChange={(e) => setConfigs(prev => prev.map(c => c.key === config.key ? { ...c, rollout_percentage: parseInt(e.target.value) } : c))}
-                                onMouseUp={(e: any) => handleUpdateRollout(config.key, parseInt(e.target.value))}
-                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                             />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Scheduling & Value Form (New) */}
-                      {schedulingKey === config.key ? (
-                        <div className="mb-8 p-6 rounded-3xl bg-blue-500/10 border border-blue-500/30 animate-in zoom-in-95 duration-200">
-                           <div className="flex items-center justify-between mb-4">
-                              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Schedule Update</span>
-                              <button onClick={() => setSchedulingKey(null)} className="text-slate-500 hover:text-white"><RefreshCcw size={12} /></button>
-                           </div>
-                           <div className="space-y-4">
-                              <div>
-                                 <label className="text-[8px] text-slate-500 uppercase font-bold block mb-1.5">New Value</label>
-                                 <div className="flex gap-2">
-                                    <button 
-                                      onClick={() => setScheduleValue(true)}
-                                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border ${scheduleValue === true ? 'bg-blue-500 text-white border-blue-400' : 'bg-white/5 text-slate-500 border-white/5'}`}
-                                    >
-                                      True
-                                    </button>
-                                    <button 
-                                      onClick={() => setScheduleValue(false)}
-                                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border ${scheduleValue === false ? 'bg-red-500 text-white border-red-400' : 'bg-white/5 text-slate-500 border-white/5'}`}
-                                    >
-                                      False
-                                    </button>
-                                 </div>
-                              </div>
-                              <div>
-                                 <label className="text-[8px] text-slate-500 uppercase font-bold block mb-1.5">Release At</label>
-                                 <input 
-                                    type="datetime-local" 
-                                    value={scheduleDate}
-                                    onChange={(e) => setScheduleDate(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500"
-                                 />
-                              </div>
-                              <button 
-                                onClick={() => handleSchedule(config.key, scheduleValue, scheduleDate)}
-                                className="w-full py-2.5 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase shadow-lg shadow-blue-500/20"
-                              >
-                                {updating === config.key + '_schedule' ? 'Scheduling...' : 'Set Schedule'}
-                              </button>
-                           </div>
-                        </div>
-                      ) : config.release_at ? (
-                        <div className="mb-8 p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-3">
-                           <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
-                                 <Activity size={12} className="animate-pulse" /> Scheduled
-                              </span>
-                              <button 
-                                onClick={() => applyReleaseNow(config.key, user?.id!).then(loadConfigs)}
-                                className="text-[9px] font-bold text-white bg-amber-500 px-3 py-1 rounded-lg hover:bg-amber-600 transition-colors"
-                              >
-                                Release Now
-                              </button>
-                           </div>
-                           <div className="flex items-center justify-between">
-                              <span className="text-xs text-slate-300">New Value: <span className="font-mono text-amber-400">{JSON.stringify(config.pending_value)}</span></span>
-                              <span className="text-[9px] text-slate-500 font-medium">{new Date(config.release_at).toLocaleString()}</span>
-                           </div>
-                        </div>
-                      ) : null}
-
-                      {/* Action Row */}
-                      <div className="mt-auto pt-8 border-t border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                           {typeof config.value === 'boolean' ? (
-                             <button
-                               onClick={() => handleToggle(config.key, config.value)}
-                               className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex items-center ${config.value ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-slate-800'}`}
-                             >
-                               <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300 ${config.value ? 'translate-x-6' : 'translate-x-0'}`} />
-                             </button>
-                           ) : (
-                             <div className="text-sm font-mono text-white bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-                               {JSON.stringify(config.value)}
-                             </div>
-                           )}
-                           
-                           {!schedulingKey && (
-                             <button 
-                               onClick={() => setSchedulingKey(config.key)}
-                               className="p-1.5 rounded-lg bg-white/5 border border-white/5 text-slate-500 hover:text-white transition-all"
-                               title="Schedule an update"
-                             >
-                               <Activity size={14} />
-                             </button>
-                           )}
-                           
-                           {config.locked_by && (
-                             <div className="flex items-center gap-1.5 text-red-400 animate-pulse">
-                               <Lock size={12} />
-                               <span className="text-[9px] font-black uppercase">Protected</span>
-                             </div>
-                           )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                           {!config.locked_by && (
-                             <button onClick={() => handleLock(config.key)} className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-500 transition-all border border-white/5">
-                               <Lock size={14} />
-                             </button>
-                           )}
-                           <div className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter ml-2">
-                             {new Date(config.updated_at).toLocaleDateString()}
-                           </div>
+                      <div>
+                        <div className="text-lg font-mono font-bold text-white">{threat.ip_address}</div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-[10px] text-red-500 uppercase font-black mt-1">{threat.reason || 'Security Violation'}</div>
+                          <span className="text-[10px] text-slate-600 font-medium italic">Sejak {new Date(threat.created_at).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
+                    <button onClick={() => handleUnblock(threat.ip_address)} className="px-6 py-3 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase shadow-lg shadow-emerald-500/20 opacity-0 group-hover:opacity-100 transition-all hover:scale-105 active:scale-95">Unblock Access</button>
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      {/* Simplified Footer */}
-      <div className="mt-32 pt-16 border-t border-white/5 flex flex-col items-center">
-        <div className="flex items-center gap-6 mb-8 opacity-20">
-          <Shield size={32} className="text-white" />
-          <div className="h-10 w-px bg-white" />
-          <Globe size={32} className="text-white" />
+          <div className="p-10 rounded-[2.5rem] bg-slate-900/40 border border-white/5 backdrop-blur-xl">
+            <div className="flex items-center justify-between mb-10">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-4">
+                <History size={24} className="text-blue-500" /> Security Audit Logs
+              </h3>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Real-time Event Stream</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-white/5 text-[10px] text-slate-500 uppercase font-black tracking-widest">
+                    <th className="pb-4">Timestamp</th>
+                    <th className="pb-4">Event</th>
+                    <th className="pb-4">IP Address</th>
+                    <th className="pb-4">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {sentinelLogs.map((log, idx) => (
+                    <tr key={idx}>
+                      <td className="py-4 text-[10px] text-slate-400 font-mono">{new Date(log.created_at).toLocaleString()}</td>
+                      <td className="py-4">
+                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${log.event_type.includes('block') ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>{log.event_type.replace(/_/g, ' ')}</span>
+                      </td>
+                      <td className="py-4 text-xs font-mono text-slate-300">{log.ip_address || '---'}</td>
+                      <td className="py-4 text-[10px] text-slate-500 font-medium">{typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-        <p className="text-slate-500 text-xs font-medium uppercase tracking-[0.3em] text-center max-w-sm leading-relaxed">
-          Sentinel Protocol ensures system integrity and global state synchronization across the MyLearning ecosystem.
-        </p>
+      )}
+
+      {/* Footer */}
+      <div className="mt-32 pt-16 border-t border-white/5 flex flex-col items-center opacity-30">
+        <Shield size={32} className="text-white mb-6" />
+        <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.5em] text-center max-w-sm">Sentinel Protocol // Secure Command Center</p>
       </div>
 
-      {/* Custom Toast Notification */}
       {toast && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-10">
-          <div className={`px-6 py-4 rounded-3xl border backdrop-blur-xl shadow-2xl flex items-center gap-3 ${
-            toast.type === 'success' 
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/20' 
-              : 'bg-red-500/10 border-red-500/30 text-red-400 shadow-red-500/20'
-          }`}>
-            {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertOctagon size={18} />}
-            <span className="text-sm font-bold tracking-tight uppercase">{toast.message}</span>
+          <div className={`px-8 py-5 rounded-[2rem] border backdrop-blur-xl shadow-2xl flex items-center gap-4 ${toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+            <Info size={20} />
+            <span className="text-sm font-black uppercase tracking-tight">{toast.message}</span>
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-function CheckCircle2(props: any) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
   );
 }

@@ -8,6 +8,10 @@ const runAuthBypass = require('./modules/auth-bypass');
 const runCrudExploit = require('./modules/crud-exploit');
 const runSecurityMisc = require('./modules/security-misc');
 const runRateLimit = require('./modules/rate-limit');
+const runIdorExploit = require('./modules/idor-exploit');
+const runWebVulnerabilities = require('./modules/web-vulnerabilities');
+const runBusinessLogic = require('./modules/business-logic');
+const runDestructiveAttack = require('./modules/destructive-attack');
 
 // Shared State
 let stats = {
@@ -44,6 +48,14 @@ async function main() {
             await runSecurityMisc(stats, vulnerabilities);
         } else if (ATTACK_MODE === 'RATE_LIMIT') {
             await runRateLimit(stats, vulnerabilities);
+        } else if (ATTACK_MODE === 'IDOR_EXPLOIT') {
+            await runIdorExploit(stats, vulnerabilities);
+        } else if (ATTACK_MODE === 'WEB_VULN') {
+            await runWebVulnerabilities(stats, vulnerabilities);
+        } else if (ATTACK_MODE === 'BUSINESS_LOGIC') {
+            await runBusinessLogic(stats, vulnerabilities);
+        } else if (ATTACK_MODE === 'DESTRUCTIVE') {
+            await runDestructiveAttack(stats, vulnerabilities);
         } else {
             await runDdos(stats, startTime, customCount);
         }

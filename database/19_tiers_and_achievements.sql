@@ -78,6 +78,11 @@ ALTER TABLE tiers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_achievements ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist to prevent errors
+DROP POLICY IF EXISTS "Anyone can view tiers" ON tiers;
+DROP POLICY IF EXISTS "Anyone can view achievements" ON achievements;
+DROP POLICY IF EXISTS "Users can view their own achievements" ON user_achievements;
+
 CREATE POLICY "Anyone can view tiers" ON tiers FOR SELECT USING (true);
 CREATE POLICY "Anyone can view achievements" ON achievements FOR SELECT USING (true);
 CREATE POLICY "Users can view their own achievements" ON user_achievements FOR SELECT USING (auth.uid() = user_id);
@@ -111,3 +116,16 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 9. REFRESH SCHEMA
 NOTIFY pgrst, 'reload schema';
+
+-- Update Tiers Benefits to match FEATURES_MANIFEST in lib/features.ts
+
+UPDATE tiers SET benefits = '["Verified Certificates", "Ad-Free Experience", "Materi Dasar", "Badge Bronze"]'::jsonb WHERE slug = 'bronze';
+UPDATE tiers SET benefits = '["Offline Vault", "Live Q&A Sessions", "Materi Menengah", "Badge Silver"]'::jsonb WHERE slug = 'silver';
+UPDATE tiers SET benefits = '["Detailed Feedback", "Priority Roadmap", "Akses Semua Materi", "Badge Gold"]'::jsonb WHERE slug = 'gold';
+UPDATE tiers SET benefits = '["Premium Resource Access", "Resume Builder AI", "Grup Eksklusif", "Badge Platinum"]'::jsonb WHERE slug = 'platinum';
+UPDATE tiers SET benefits = '["Mentorship Access", "Group Masterminds", "Workshop Bulanan", "Badge Diamond"]'::jsonb WHERE slug = 'diamond';
+UPDATE tiers SET benefits = '["AI Learning Path", "Project Sandbox", "Mentoring 1-on-1", "Badge Emerald"]'::jsonb WHERE slug = 'emerald';
+UPDATE tiers SET benefits = '["Skill Fingerprinting", "Dynamic Dark Mode", "Review Portofolio", "Badge Ruby"]'::jsonb WHERE slug = 'ruby';
+UPDATE tiers SET benefits = '["Live Code Playground", "Peer Review Credits", "Akses Networking VIP", "Badge Sapphire"]'::jsonb WHERE slug = 'sapphire';
+UPDATE tiers SET benefits = '["Job Matching AI", "Global Leaderboard", "Kesempatan Pembicara", "Badge Mastermind"]'::jsonb WHERE slug = 'mastermind';
+UPDATE tiers SET benefits = '["Interactive 3D/AR", "Sentinel Protection", "Semua Manfaat Elite", "Badge Legendary"]'::jsonb WHERE slug = 'legendary';

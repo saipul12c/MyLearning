@@ -10,6 +10,7 @@ export interface SentinelConfig {
   description: string;
   category: SentinelCategory;
   is_public: boolean;
+  impact?: 'low' | 'medium' | 'high' | 'critical';
   metadata: {
     changelog?: string;
     impact?: 'low' | 'medium' | 'high' | 'critical';
@@ -24,6 +25,13 @@ export interface SentinelConfig {
   locked_at?: string;
   updated_at: string;
   updated_by?: string;
+  
+  // v1.1.0 Features
+  allowed_countries?: string[];
+  rate_limit_overrides?: Record<string, number>;
+  expire_at?: string;
+  broadcast_on_disable?: boolean;
+  broadcast_message?: string;
 }
 
 export type SentinelState = Record<string, any>;

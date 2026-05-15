@@ -40,25 +40,25 @@ export default function AdminEnrollmentsPage() {
   // 2. Fetch Data
   useEffect(() => {
     let isMounted = true;
-    
+
     // If instructor and we don't have instructorId yet, wait
     if (isInstructor && !isAdmin && !instructorId) return;
 
     const fetchData = async () => {
       try {
         if (enrollments.length === 0) {
-           setLoading(true);
+          setLoading(true);
         } else {
-           setIsFiltering(true);
+          setIsFiltering(true);
         }
-        
+
         const { data, totalCount: count, error: fetchErr } = await getAllEnrollmentsAdmin(
-          page, 
-          pageSize, 
+          page,
+          pageSize,
           statusFilter,
           instructorId || undefined
         );
-        
+
         if (isMounted) {
           if (fetchErr) {
             setError(fetchErr);
@@ -82,7 +82,7 @@ export default function AdminEnrollmentsPage() {
     };
 
     fetchData();
-    
+
     return () => { isMounted = false; };
   }, [refresh, page, statusFilter, instructorId, isAdmin, isInstructor]);
 
@@ -107,10 +107,10 @@ export default function AdminEnrollmentsPage() {
 
   const handleVerify = async (id: string, approve: boolean) => {
     const reason = approve ? undefined : rejectionReason;
-    
+
     // Save old state in case we need to roll back
     const oldEnrollments = [...enrollments];
-    
+
     // Optimistically update UI
     setEnrollments(prev => prev.filter(enr => enr.id !== id));
     setTotalCount(prev => prev - 1);
@@ -118,7 +118,7 @@ export default function AdminEnrollmentsPage() {
     setIsRejecting(null);
 
     const result = await verifyPayment(id, approve, reason);
-    
+
     if (!result.success) {
       // Rollback on failure
       setEnrollments(oldEnrollments);
@@ -130,9 +130,9 @@ export default function AdminEnrollmentsPage() {
   if (error) {
     return (
       <div className="py-20">
-        <ErrorState 
-          message={error} 
-          onRetry={() => setRefresh(r => r + 1)} 
+        <ErrorState
+          message={error}
+          onRetry={() => setRefresh(r => r + 1)}
         />
       </div>
     );
@@ -156,30 +156,29 @@ export default function AdminEnrollmentsPage() {
           <button
             key={s}
             onClick={() => handleFilterChange(s)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-              statusFilter === s ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "bg-white/5 text-slate-500 hover:text-slate-300"
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${statusFilter === s ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "bg-white/5 text-slate-500 hover:text-slate-300"
+              }`}
           >
-            {s === "all" ? "Semua" : 
-             s === "pending" ? "Pending" :
-             s === "waiting_verification" ? "Perlu Verifikasi" : 
-             s === "active" ? "Aktif" : 
-             s === "completed" ? "Selesai" : 
-             s === "expired" ? "Expired" :
-             s === "rejected" ? "Ditolak" : 
-             s === "failed" ? "Gagal (3x)" : "Refunded"}
+            {s === "all" ? "Semua" :
+              s === "pending" ? "Pending" :
+                s === "waiting_verification" ? "Perlu Verifikasi" :
+                  s === "active" ? "Aktif" :
+                    s === "completed" ? "Selesai" :
+                      s === "expired" ? "Expired" :
+                        s === "rejected" ? "Ditolak" :
+                          s === "failed" ? "Gagal (3x)" : "Refunded"}
           </button>
         ))}
       </div>
 
       <div className="card overflow-hidden relative">
         {isFiltering && (
-           <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
-              <div className="bg-[#0f0f1a] p-4 rounded-xl border border-white/10 shadow-2xl flex items-center gap-3">
-                 <div className="w-5 h-5 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
-                 <span className="text-white text-xs font-bold uppercase tracking-widest">Sinkronisasi...</span>
-              </div>
-           </div>
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
+            <div className="bg-[#0f0f1a] p-4 rounded-xl border border-white/10 shadow-2xl flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+              <span className="text-white text-xs font-bold uppercase tracking-widest">Sinkronisasi...</span>
+            </div>
+          </div>
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -211,23 +210,22 @@ export default function AdminEnrollmentsPage() {
                         </div>
                       </td>
                       <td className="px-5 py-3 text-center">
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          enr.status === "active" ? "bg-cyan-500/15 text-cyan-400" :
-                          enr.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
-                          enr.status === "waiting_verification" ? "bg-amber-500/15 text-amber-400 animate-pulse" :
-                          enr.status === "rejected" ? "bg-red-500/15 text-red-400" :
-                          enr.status === "failed" ? "bg-red-600/20 text-red-500" :
-                          enr.status === "refunded" ? "bg-purple-500/15 text-purple-400" :
-                          enr.status === "pending" ? "bg-slate-500/15 text-slate-300" :
-                          "bg-slate-500/15 text-slate-400"
-                        }`}>
-                          {enr.status === "active" ? "Aktif" : 
-                           enr.status === "completed" ? "Selesai" : 
-                           enr.status === "waiting_verification" ? "Verifikasi" : 
-                           enr.status === "rejected" ? "Ditolak" :
-                           enr.status === "failed" ? "Gagal 3x" : 
-                           enr.status === "refunded" ? "Refunded" :
-                           enr.status === "pending" ? "Pending" : "Expired"}
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${enr.status === "active" ? "bg-cyan-500/15 text-cyan-400" :
+                            enr.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
+                              enr.status === "waiting_verification" ? "bg-amber-500/15 text-amber-400 animate-pulse" :
+                                enr.status === "rejected" ? "bg-red-500/15 text-red-400" :
+                                  enr.status === "failed" ? "bg-red-600/20 text-red-500" :
+                                    enr.status === "refunded" ? "bg-purple-500/15 text-purple-400" :
+                                      enr.status === "pending" ? "bg-slate-500/15 text-slate-300" :
+                                        "bg-slate-500/15 text-slate-400"
+                          }`}>
+                          {enr.status === "active" ? "Aktif" :
+                            enr.status === "completed" ? "Selesai" :
+                              enr.status === "waiting_verification" ? "Verifikasi" :
+                                enr.status === "rejected" ? "Ditolak" :
+                                  enr.status === "failed" ? "Gagal 3x" :
+                                    enr.status === "refunded" ? "Refunded" :
+                                      enr.status === "pending" ? "Pending" : "Expired"}
                         </span>
                       </td>
                       <td className="px-5 py-3 text-center text-slate-500 text-xs">
@@ -236,7 +234,7 @@ export default function AdminEnrollmentsPage() {
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-2 text-xs">
                           {enr.status === "waiting_verification" && (
-                            <button 
+                            <button
                               onClick={() => setSelectedProof(enr)}
                               className="px-2 py-1 rounded bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 flex items-center gap-1"
                             >
@@ -254,7 +252,7 @@ export default function AdminEnrollmentsPage() {
                             </>
                           )}
                           {enr.status === "rejected" && (
-                              <span className="text-slate-500 italic">Ditolak ({enr.paymentRetryCount}x)</span>
+                            <span className="text-slate-500 italic">Ditolak ({enr.paymentRetryCount}x)</span>
                           )}
                         </div>
                       </td>
@@ -270,25 +268,25 @@ export default function AdminEnrollmentsPage() {
       {/* Pagination Controls */}
       {totalCount > pageSize && (
         <div className="flex items-center justify-between bg-white/5 px-6 py-4 rounded-2xl border border-white/5">
-           <p className="text-xs text-slate-500">
-             Menampilkan <span className="text-white font-bold">{(page - 1) * pageSize + 1}</span> - <span className="text-white font-bold">{Math.min(page * pageSize, totalCount)}</span> dari <span className="text-white font-bold">{totalCount}</span> data
-           </p>
-           <div className="flex gap-2">
-              <button 
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1 || loading}
-                className="px-4 py-2 rounded-lg bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                Previous
-              </button>
-              <button 
-                onClick={() => setPage(p => p + 1)}
-                disabled={page * pageSize >= totalCount || loading}
-                className="px-4 py-2 rounded-lg bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                Next
-              </button>
-           </div>
+          <p className="text-xs text-slate-500">
+            Menampilkan <span className="text-white font-bold">{(page - 1) * pageSize + 1}</span> - <span className="text-white font-bold">{Math.min(page * pageSize, totalCount)}</span> dari <span className="text-white font-bold">{totalCount}</span> data
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="px-4 py-2 rounded-lg bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page * pageSize >= totalCount || loading}
+              className="px-4 py-2 rounded-lg bg-white/5 text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
@@ -300,7 +298,7 @@ export default function AdminEnrollmentsPage() {
               <h3 className="text-white font-bold">Verifikasi Bukti Bayar</h3>
               <button onClick={() => { setSelectedProof(null); setIsRejecting(null); }} className="text-slate-500 hover:text-white"><X size={20} /></button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto max-h-[75vh] custom-scrollbar">
               <div className="mb-4 bg-white/5 p-4 rounded-xl border border-white/5">
                 <div className="grid grid-cols-2 gap-4">
@@ -334,10 +332,10 @@ export default function AdminEnrollmentsPage() {
 
               <div className="h-64 sm:h-80 bg-black rounded-xl border border-white/10 relative overflow-hidden mb-6 shadow-inner">
                 {selectedProof.paymentProofUrl ? (
-                  <Image 
-                    src={selectedProof.paymentProofUrl} 
-                    alt="Payment Proof" 
-                    fill 
+                  <Image
+                    src={selectedProof.paymentProofUrl}
+                    alt="Payment Proof"
+                    fill
                     sizes="(max-width: 768px) 100vw, 800px"
                     className="object-contain"
                   />
@@ -350,7 +348,7 @@ export default function AdminEnrollmentsPage() {
                 <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
                   <div>
                     <label className="text-xs text-slate-500 block mb-2">Pilih Alasan Penolakan:</label>
-                    <select 
+                    <select
                       className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-red-500/50 outline-none"
                       value={rejectionReason}
                       onChange={(e) => setRejectionReason(e.target.value)}
@@ -367,13 +365,13 @@ export default function AdminEnrollmentsPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
-                  <button 
+                  <button
                     onClick={() => setIsRejecting(selectedProof.id)}
                     className="flex items-center justify-center gap-2 border border-red-500/30 bg-red-500/10 text-red-400 py-3 rounded-xl hover:bg-red-500/20 transition-all font-bold"
                   >
                     <ThumbsDown size={18} /> Tolak
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleVerify(selectedProof.id, true)}
                     className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl hover:shadow-lg hover:shadow-emerald-500/20 transition-all font-bold"
                   >

@@ -241,6 +241,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <LogOut size={18} /> Keluar
           </button>
+          <div className="px-3 pt-4 pb-2 text-[8px] font-black text-slate-700 uppercase tracking-[0.4em] text-center border-t border-white/5 mt-4">
+             MyLearning v1.1.0 // Sentinel v1.1.0
+          </div>
         </div>
       </aside>
 

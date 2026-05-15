@@ -29,10 +29,23 @@ export function checkFeatureAccess(
   config: SentinelConfig, 
   user?: { id?: string; role?: string },
   anonymousId?: string,
-  allConfigs?: Record<string, any> // Needed for dependency checking
+  allConfigs?: Record<string, any>, // Needed for dependency checking
+  countryCode?: string // Added for Geo-Fencing
 ): boolean {
   // 1. If global toggle is off, feature is off for everyone
   if (config.value !== true) return false;
+
+  // 1.1 Check Expiry
+  if (config.expire_at && new Date(config.expire_at) <= new Date()) {
+    return false;
+  }
+
+  // 1.2 Check Geo-Fencing
+  if (countryCode && config.allowed_countries && config.allowed_countries.length > 0) {
+    if (!config.allowed_countries.includes(countryCode)) {
+      return false;
+    }
+  }
 
   // 2. Check Dependencies (Item 2)
   if (config.dependencies && config.dependencies.length > 0 && allConfigs) {
@@ -88,7 +101,10 @@ export async function isFeatureEnabled(
     .eq('key', key)
     .single();
 
-  if (!config) return true; // Fail-open: if config not found, allow
+  if (!config) {
+    // Fail-closed for security/module keys, fail-open for features
+    return !(key.startsWith('module_') || key.startsWith('security_') || key.includes('ddos'));
+  }
 
   // Build allConfigs map for dependency checking
   let allConfigs: Record<string, any> | undefined;
@@ -107,6 +123,29 @@ export async function isFeatureEnabled(
 }
 
 /**
+ * Issues a signed verification token for the DDoS challenge.
+ * This MUST be a server-side action.
+ */
+export async function issueSentinelVerificationToken(ip: string, userAgent: string): Promise<string> {
+  const SENTINEL_SECRET = process.env.SENTINEL_SECRET || 'fallback-secret-for-dev-only';
+  const timestamp = Date.now().toString(36);
+  const payload = `${timestamp}.${ip}.${userAgent.slice(0, 20)}`;
+  
+  // Use SubtleCrypto for Edge compatibility if needed, 
+  // but here we are in a standard Node/Serverless environment.
+  // We'll use a simple node crypto approach or match the Edge implementation.
+  const { createHmac } = await import('crypto');
+  const sig = createHmac('sha256', SENTINEL_SECRET)
+    .update(payload)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  return `${timestamp}.${sig}`;
+}
+
+/**
  * Fetches all public sentinel configurations.
  * Optimized for frontend/middleware usage.
  * Automatically applies scheduled changes if release_at has passed.
@@ -116,7 +155,7 @@ export async function getPublicSentinelConfigs(): Promise<SentinelState> {
   
   const { data, error } = await supabase
     .from('sentinel_configs')
-    .select('key, value, pending_value, release_at')
+    .select('key, value, pending_value, release_at, expire_at, allowed_countries')
     .eq('is_public', true);
 
   if (error) {
@@ -128,6 +167,12 @@ export async function getPublicSentinelConfigs(): Promise<SentinelState> {
   const releasesToApply: { key: string; value: any }[] = [];
 
   for (const curr of (data || [])) {
+    // 1. Handle Expiry (Item: Ephemeral Features)
+    if (curr.expire_at && new Date(curr.expire_at) <= new Date()) {
+      result[curr.key] = false; // Force disabled if expired
+      continue;
+    }
+
     if (curr.release_at && curr.release_at <= now && curr.pending_value !== null) {
       result[curr.key] = curr.pending_value;
       releasesToApply.push({ key: curr.key, value: curr.pending_value });
@@ -307,7 +352,11 @@ export async function getAllSentinelConfigs(): Promise<SentinelConfig[]> {
     throw new Error(`Failed to fetch sentinel configs: ${error.message}`);
   }
 
-  return data || [];
+  // Map metadata.impact to top-level impact for UI convenience
+  return (data || []).map(config => ({
+    ...config,
+    impact: (config.metadata as any)?.impact || 'low'
+  })) as SentinelConfig[];
 }
 
 /**
@@ -318,7 +367,12 @@ export async function updateSentinelConfig(
   value: any, 
   userId: string,
   rolloutPercentage?: number,
-  targetingRoles?: string[]
+  targetingRoles?: string[],
+  allowedCountries?: string[],
+  rateLimitOverrides?: Record<string, number>,
+  expireAt?: string | null,
+  broadcastOnDisable?: boolean,
+  broadcastMessage?: string
 ): Promise<void> {
   // 1. Check Lock (Item 6)
   const { data: current } = await supabase
@@ -344,13 +398,13 @@ export async function updateSentinelConfig(
     updated_at: new Date().toISOString() 
   };
 
-  if (rolloutPercentage !== undefined) {
-    updateData.rollout_percentage = rolloutPercentage;
-  }
-
-  if (targetingRoles !== undefined) {
-    updateData.targeting_roles = targetingRoles;
-  }
+  if (rolloutPercentage !== undefined) updateData.rollout_percentage = rolloutPercentage;
+  if (targetingRoles !== undefined) updateData.targeting_roles = targetingRoles;
+  if (allowedCountries !== undefined) updateData.allowed_countries = allowedCountries;
+  if (rateLimitOverrides !== undefined) updateData.rate_limit_overrides = rateLimitOverrides;
+  if (expireAt !== undefined) updateData.expire_at = expireAt;
+  if (broadcastOnDisable !== undefined) updateData.broadcast_on_disable = broadcastOnDisable;
+  if (broadcastMessage !== undefined) updateData.broadcast_message = broadcastMessage;
 
   const { error } = await supabase
     .from('sentinel_configs')
@@ -478,3 +532,51 @@ export async function updateErrorThreshold(
     throw new Error(`Failed to update error threshold: ${error.message}`);
   }
 }
+
+/**
+ * THREAT INTELLIGENCE ACTIONS
+ */
+
+export async function getBlockedIPs(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('sentinel_threat_intelligence')
+    .select('*')
+    .eq('is_blocked', true)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function unblockIP(ip: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('sentinel_threat_intelligence')
+    .update({ 
+      is_blocked: false,
+      blocked_until: new Date().toISOString(), // Expire immediately
+      metadata: { unblocked_by: userId, unblocked_at: new Date().toISOString() }
+    })
+    .eq('ip_address', ip);
+
+  if (error) throw error;
+
+  // Log the unblock action
+  await supabase.from('sentinel_logs').insert({
+    event_type: 'ip_unblock',
+    ip_address: ip,
+    user_id: userId,
+    details: { action: 'manual_unblock' }
+  });
+}
+
+export async function getSentinelLogs(limit: number = 50): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('sentinel_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+}
+

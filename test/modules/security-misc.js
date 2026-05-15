@@ -26,6 +26,10 @@ async function runSecurityMisc(stats, vulnerabilities) {
                 console.log(`   ❌ VULNERABILITY FOUND: File sensitif bocor di ${endpoint}!`);
                 vulnerabilities.push(`Data/File leak di ${endpoint}`);
                 stats.success++;
+            } else if (res.data_headers && (res.data_headers['x-powered-by'] || res.data_headers['server']?.includes('/'))) {
+                 console.log(`   ❌ VULNERABILITY FOUND: Kebocoran informasi Server/X-Powered-By di ${endpoint}!`);
+                 vulnerabilities.push(`Server Banner Leak (Information Disclosure) di ${endpoint}`);
+                 stats.success++;
             } else if (responseStr.toLowerCase().includes('error') && responseStr.includes('stack')) {
                  console.log(`   ❌ VULNERABILITY FOUND: Verbose Error/Stack Trace bocor di ${endpoint}!`);
                  vulnerabilities.push(`Verbose Error Leak di ${endpoint}`);

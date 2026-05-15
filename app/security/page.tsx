@@ -11,11 +11,35 @@ import {
   Server,
   Globe,
   RefreshCcw,
-  LayoutDashboard
+  LayoutDashboard,
+  MapPin,
+  Clock,
+  Megaphone,
+  HeartPulse,
+  GitMerge,
+  Power
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { motion, Variants } from "framer-motion";
 import { useAuth } from "../components/AuthContext";
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.15 }
+  }
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { type: "spring", stiffness: 80, damping: 15 }
+  }
+};
 
 export default function SecurityReleasePage() {
   const { user } = useAuth();
@@ -67,33 +91,46 @@ export default function SecurityReleasePage() {
 
       {/* Hero Section */}
       <section className="relative z-10 pt-20 pb-32 px-6 overflow-hidden">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+          className="max-w-5xl mx-auto text-center"
+        >
+          <motion.div variants={itemVariants} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-8">
             <Zap size={12} className="animate-pulse" />
-            V1.3.0 SECURITY UPGRADE
-          </div>
-          <h1 className="text-5xl md:text-7xl font-black text-white mb-8 tracking-tight leading-[1.1] animate-in fade-in slide-in-from-bottom-6 duration-1000">
+            V1.1.0 SENTINEL ADVANCEMENTS
+          </motion.div>
+          <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl font-black text-white mb-8 tracking-tight leading-[1.1]">
             Perlindungan <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400">Tanpa Henti</span><br />
             Untuk Pengalaman Belajar Anda.
-          </h1>
-          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-12 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
+          </motion.h1>
+          <motion.p variants={itemVariants} className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-12">
             Sentinel Gatekeeper adalah sistem keamanan berlapis yang dirancang untuk menjaga integritas platform dan privasi data Anda dari segala ancaman siber.
-          </p>
+          </motion.p>
 
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-500">
+          <motion.div variants={itemVariants} className="flex flex-col md:flex-row items-center justify-center gap-4">
             <Link href="/register" className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-2xl shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95">
               Mulai Belajar Sekarang
             </Link>
             <button className="px-10 py-4 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 font-bold rounded-2xl transition-all">
               Pelajari Protokol Kami
             </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Floating Security Badge */}
-        <div className="mt-24 max-w-4xl mx-auto relative group">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.6, duration: 0.8 }}
+          className="mt-24 max-w-4xl mx-auto relative group"
+        >
           <div className="absolute inset-0 bg-indigo-500/20 blur-[100px] rounded-full opacity-50 group-hover:opacity-100 transition-opacity" />
-          <div className="relative bg-slate-900/50 border border-white/10 rounded-[2.5rem] p-8 md:p-12 backdrop-blur-2xl">
+          <motion.div 
+            whileHover={{ y: -5 }}
+            className="relative bg-slate-900/50 border border-white/10 rounded-[2.5rem] p-8 md:p-12 backdrop-blur-2xl"
+          >
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {[
                 { icon: ShieldCheck, label: "Verifikasi Berlapis", value: "Aktiv" },
@@ -110,8 +147,8 @@ export default function SecurityReleasePage() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Features Detail */}
@@ -126,12 +163,24 @@ export default function SecurityReleasePage() {
             </div>
             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-800 to-transparent mx-8 hidden md:block"></div>
             <div className="text-right">
-              <span className="text-indigo-400 font-mono text-sm tracking-tighter uppercase font-bold">Protocol v1.3 - Secure Connection</span>
+              <span className="text-indigo-400 font-mono text-sm tracking-tighter uppercase font-bold">Protocol v1.1.0 - Secure Connection</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={containerVariants}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
             {[
+              {
+                title: "Geo-Fencing Architecture",
+                desc: "Membatasi akses platform berdasarkan wilayah geografis untuk memitigasi serangan regional dan mematuhi regulasi lokal secara dinamis.",
+                icon: MapPin,
+                color: "from-emerald-500/20 to-emerald-600/5"
+              },
               {
                 title: "Adaptive Traffic Filtering",
                 desc: "Sistem kami secara cerdas membedakan antara aktivitas belajar yang normal dan percobaan akses yang mencurigakan.",
@@ -145,32 +194,91 @@ export default function SecurityReleasePage() {
                 color: "from-indigo-500/20 to-indigo-600/5"
               },
               {
+                title: "Adaptive QoS Engine",
+                desc: "Alokasi bandwidth dan rate limiting cerdas berdasarkan Tier pengguna, memastikan performa maksimal bagi member prioritas.",
+                icon: Activity,
+                color: "from-blue-500/20 to-blue-600/5"
+              },
+              {
+                title: "Real-time Broadcaster",
+                desc: "Sistem pengumuman instan yang terintegrasi langsung dengan kill-switch modul, memberikan transparansi status layanan tanpa reload.",
+                icon: Megaphone,
+                color: "from-indigo-500/20 to-indigo-600/5"
+              },
+              {
+                title: "Ephemeral Features",
+                desc: "Fitur yang dapat dijadwalkan untuk aktif dan mati secara otomatis (Auto-expiry), ideal untuk event terbatas dan beta testing.",
+                icon: Clock,
+                color: "from-purple-500/20 to-purple-600/5"
+              },
+              {
                 title: "Resilient Infrastructure",
                 desc: "Arsitektur Edge Computing kami memastikan website tetap ringan dan responsif meskipun sedang dalam pemeliharaan.",
                 icon: RefreshCcw,
-                color: "from-purple-500/20 to-purple-600/5"
+                color: "from-slate-500/20 to-slate-600/5"
+              },
+              {
+                title: "Threat Intelligence",
+                desc: "Sistem Auto-Lockdown yang secara otomatis memblokir IP mencurigakan setelah 5 percobaan akses ilegal untuk mencegah Brute Force.",
+                icon: ShieldCheck,
+                color: "from-red-500/20 to-red-600/5"
+              },
+              {
+                title: "Sentinel Challenge",
+                desc: "Lapisan verifikasi manual menggunakan Access Key rahasia untuk memastikan hanya personel terverifikasi yang bisa menembus proteksi DDoS.",
+                icon: Lock,
+                color: "from-amber-500/20 to-amber-600/5"
+              },
+              {
+                title: "Autonomous Self-Healing",
+                desc: "Sentinel memantau kesehatan modul secara mandiri. Jika terdeteksi anomali berulang (error threshold), sistem akan menonaktifkan fitur tersebut secara otomatis.",
+                icon: HeartPulse,
+                color: "from-pink-500/20 to-pink-600/5"
+              },
+              {
+                title: "Intelligent Governance",
+                desc: "Mengelola ketergantungan antar fitur secara cerdas. Memastikan seluruh ekosistem platform berjalan harmonis dengan validasi integritas dependensi otomatis.",
+                icon: GitMerge,
+                color: "from-cyan-500/20 to-cyan-600/5"
+              },
+              {
+                title: "Granular Kill-Switches",
+                desc: "Kontrol mutlak atas modul kritis seperti Pembayaran, Autentikasi, dan Upload. Admin dapat mengunci fungsi spesifik secara instan tanpa mengganggu modul lainnya.",
+                icon: Power,
+                color: "from-orange-500/20 to-orange-600/5"
               }
             ].map((feature, i) => (
-              <div key={i} className="group p-8 rounded-[2rem] bg-slate-900/40 border border-white/5 hover:border-indigo-500/30 transition-all duration-500">
+              <motion.div 
+                key={i} 
+                variants={itemVariants}
+                whileHover={{ y: -8, transition: { duration: 0.2 } }}
+                className="group p-8 rounded-[2rem] bg-slate-900/40 border border-white/5 hover:border-indigo-500/30 transition-colors duration-500 flex flex-col h-full"
+              >
                 <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 border border-white/5 group-hover:scale-110 transition-transform duration-500`}>
                   <feature.icon className="text-indigo-400 w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-4">{feature.title}</h3>
-                <p className="text-slate-500 text-sm leading-relaxed mb-6">
+                <p className="text-slate-500 text-sm leading-relaxed mb-6 flex-grow">
                   {feature.desc}
                 </p>
-                <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-widest cursor-pointer group-hover:gap-4 transition-all">
+                <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-widest cursor-pointer group-hover:gap-4 transition-all mt-auto">
                   Pelajari Lebih Lanjut <ChevronRight size={14} />
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Trust Quote */}
       <section className="relative z-10 py-32 px-6">
-        <div className="max-w-4xl mx-auto text-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8 }}
+          className="max-w-4xl mx-auto text-center"
+        >
           <div className="relative inline-block">
             <div className="absolute -top-12 -left-12 text-indigo-500/10 text-9xl font-serif">“</div>
             <h3 className="text-2xl md:text-4xl font-medium text-slate-300 leading-relaxed italic relative z-10">
@@ -182,7 +290,7 @@ export default function SecurityReleasePage() {
             <div className="w-12 h-px bg-indigo-500/30 mb-6" />
             <div className="text-white font-bold tracking-widest uppercase text-xs">Tim Keamanan Platform</div>
           </div>
-        </div>
+        </motion.div>
       </section>
     </div>
   );

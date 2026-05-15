@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
   course_slug TEXT,
   course_title TEXT,
   enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
   progress_percentage DECIMAL(5,2) DEFAULT 0.00 CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
   last_lesson_id UUID REFERENCES lessons(id) ON DELETE SET NULL,

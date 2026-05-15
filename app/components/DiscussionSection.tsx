@@ -6,6 +6,7 @@ import { Send, MessageSquare, Reply, Trash2, CheckCircle2, MoreVertical } from "
 import { useAuth } from "./AuthContext";
 import { getDiscussionsByLesson, postDiscussion, deleteDiscussion, type Discussion } from "@/lib/discussions";
 import VerifiedBadge from "./VerifiedBadge";
+import { slugify } from "@/lib/utils";
 
 interface DiscussionSectionProps {
   lessonId: string;
@@ -143,9 +144,9 @@ export default function DiscussionSection({ lessonId }: DiscussionSectionProps) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    {d.userId ? (
+                    {d.userName ? (
                       <Link 
-                        href={`/profile/${d.userId}`}
+                        href={`/profile/${slugify(d.userName)}`}
                         className="text-sm font-bold text-white flex items-center gap-1.5 hover:text-purple-400 transition-colors"
                       >
                         {d.userName}
@@ -212,9 +213,9 @@ export default function DiscussionSection({ lessonId }: DiscussionSectionProps) 
                            </div>
                            <div className="flex-1 min-w-0">
                              <div className="flex items-center justify-between mb-1">
-                               {r.userId ? (
+                               {r.userName ? (
                                  <Link 
-                                   href={`/profile/${r.userId}`}
+                                   href={`/profile/${slugify(r.userName)}`}
                                    className="text-xs font-bold text-slate-300 flex items-center gap-1 hover:text-purple-400 transition-colors"
                                  >
                                    {r.userName}

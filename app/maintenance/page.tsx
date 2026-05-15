@@ -40,15 +40,25 @@ export default function MaintenancePage() {
             ))}
           </div>
 
-          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest animate-pulse">
-            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-            Sentinel Protocol: ACTIVE_MAINTENANCE
+          <div className="flex flex-col items-center gap-6 mt-12">
+            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest animate-pulse">
+              <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+              Sentinel Protocol: ACTIVE_MAINTENANCE
+            </div>
+
+            <a 
+              href="/security-check" 
+              className="text-[10px] text-slate-700 font-bold uppercase tracking-[0.3em] hover:text-blue-500/50 transition-colors"
+            >
+              Admin Entry
+            </a>
           </div>
         </div>
 
         <p className="text-center mt-10 text-slate-600 text-sm font-medium">
           &copy; {new Date().getFullYear()} MyLearning. All rights reserved.
         </p>
+
       </div>
     </div>
   );

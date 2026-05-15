@@ -88,9 +88,9 @@ async function sendRequest(url, method, data = null, headers = {}, options = {})
                 const newCookies = setCookie.map(c => c.split(';')[0]).join('; ');
                 cookieJar = (cookieJar ? cookieJar + '; ' : '') + newCookies;
             }
-            return { status: 'SUCCESS', code: res.status, data: res.data, latency };
+            return { status: 'SUCCESS', code: res.status, data: res.data, data_headers: res.headers, latency };
         } else {
-            return { status: 'FAILED', code: res.status, latency, data: res.data };
+            return { status: 'FAILED', code: res.status, latency, data: res.data, data_headers: res.headers };
         }
     } catch (err) {
         return { status: 'ERROR', code: err.message, latency: Date.now() - startReq };

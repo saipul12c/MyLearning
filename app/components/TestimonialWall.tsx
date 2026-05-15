@@ -3,6 +3,7 @@
 import { Star, Quote, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import VerifiedBadge from "./VerifiedBadge";
+import { slugify } from "@/lib/utils";
 
 interface Testimonial {
   id: string;
@@ -63,9 +64,9 @@ export default function TestimonialWall({ testimonials }: TestimonialWallProps) 
                </div>
             </div>
             <div className="min-w-0">
-              {t.userId ? (
+              {t.userName ? (
                 <Link 
-                  href={`/profile/${t.userId}`}
+                  href={`/profile/${slugify(t.userName)}`}
                   className="text-white font-bold text-sm flex items-center gap-1.5 hover:text-purple-400 transition-colors"
                 >
                   {t.userName}

@@ -60,7 +60,18 @@ async function runAuthBypass(stats, vulnerabilities) {
             vulnerabilities.push(`Sentinel Config Poisoning di ${route}`);
             stats.success++;
         }
-        
+        console.log(`🔍 Menguji Sentinel Access Key Brute Force ke: ${route}`);
+        const commonKeys = ['admin', '123456', 'password', 'root', 'sentinel'];
+        for (const key of commonKeys) {
+            const resKey = await sendRequest(route, 'GET', null, { 'X-Sentinel-Key': key });
+            if (resKey.status === 'SUCCESS') {
+                console.log(`   ❌ VULNERABILITY FOUND: Sentinel Key Brute Force sukses dengan key [${key}]!`);
+                vulnerabilities.push(`Sentinel Key Brute Force (${key}) di ${route}`);
+                stats.success++;
+                break;
+            }
+        }
+
         // Update generic stats
         if (res1.status === 'BLOCKED' || res2.status === 'BLOCKED' || res3.status === 'BLOCKED' || res4.status === 'BLOCKED' || resIP.status === 'BLOCKED' || resAuth.status === 'BLOCKED') {
             stats.blocked++;

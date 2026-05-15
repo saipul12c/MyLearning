@@ -11,7 +11,7 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Update system version in Sentinel
 UPDATE public.sentinel_configs 
-SET value = '"1.5.0"' 
+SET value = '"1.1.0"' 
 WHERE key = 'system_version';
 
 -- Refresh cache PostgREST

@@ -20,11 +20,15 @@ function showMenu() {
     console.log('║ 3. CRUD Exploit & Injection Test   ║');
     console.log('║ 4. Security Misconfiguration Test  ║');
     console.log('║ 5. Rate Limit & Enumeration Test   ║');
+    console.log('║ 6. IDOR & Privilege Escalation     ║');
+    console.log('║ 7. Advanced Web Vulnerabilities    ║');
+    console.log('║ 8. Business Logic Exploits         ║');
+    console.log('║ 9. Destructive & Lethal Attack     ║');
     console.log('╚══════════════════════════════════════╝');
 
     return new Promise((resolve) => {
         const ask = () => {
-            rl.question('Masukkan pilihan (1/2/3/4/5): ', (answer) => {
+            rl.question('Masukkan pilihan (1/2/3/4/5/6): ', (answer) => {
                 const choice = answer.trim();
                 if (choice === '1') {
                     rl.close();
@@ -41,12 +45,27 @@ function showMenu() {
                 } else if (choice === '5') {
                     rl.close();
                     resolve('RATE_LIMIT');
+                } else if (choice === '6') {
+                    rl.close();
+                    resolve('IDOR_EXPLOIT');
+                } else if (choice === '7') {
+                    rl.close();
+                    resolve('WEB_VULN');
+                } else if (choice === '8') {
+                    rl.close();
+                    resolve('BUSINESS_LOGIC');
+                } else if (choice === '9') {
+                    rl.close();
+                    resolve('DESTRUCTIVE');
                 } else {
-                    console.log('Pilihan tidak valid. Silakan masukkan 1, 2, 3, 4, atau 5.');
+                    console.log('Pilihan tidak valid. Silakan masukkan angka 1-9.');
                     ask();
                 }
             });
         };
+
+
+
         ask();
     });
 }

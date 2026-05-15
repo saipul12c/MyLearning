@@ -1,8 +1,15 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// In-memory store for rate limiting per edge isolate (tahan concurrent spam)
+// In-memory store for simple throttling (timestamps)
 const rateLimitCache = new Map<string, number>();
+
+// In-memory store for DDoS Token Bucket
+interface RateLimitBucket {
+  tokens: number;
+  lastRefill: number;
+}
+const ddosBucketCache = new Map<string, RateLimitBucket>();
 
 // In-memory config cache to replace insecure cookie-based cache
 const configCache = {
@@ -10,7 +17,29 @@ const configCache = {
   lastFetched: 0
 };
 
+// Secure hashing for Sentinel tokens (Edge-compatible)
+async function generateSentinelSignature(payload: string, secret: string) {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const data = encoder.encode(payload);
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign('HMAC', key, data);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
 export async function proxy(request: NextRequest) {
+  const SENTINEL_SECRET = process.env.SENTINEL_SECRET || 'fallback-secret-for-dev-only';
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -159,9 +188,9 @@ export async function proxy(request: NextRequest) {
       </body>
       </html>
     `;
-    return new NextResponse(html, { 
-      status, 
-      headers: { 'Content-Type': 'text/html' } 
+    return new NextResponse(html, {
+      status,
+      headers: { 'Content-Type': 'text/html' }
     });
   }
 
@@ -213,26 +242,18 @@ export async function proxy(request: NextRequest) {
   )
 
   // 1. Get User Session & Role
+  // CRITICAL FIX: Always trust JWT app_metadata role over database table role to prevent self-promotion bypass
   const { data: { user } } = await supabase.auth.getUser()
-  
-  // Fetch profile to check role
-  let role = 'user'
-  if (user) {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single()
-    role = profile?.role || 'user'
-  }
+  const role = user?.app_metadata?.role || 'user'
 
   // --- SENTINEL CACHE & DDOS LOGIC ---
   // Safely get IP from headers or request object
   const ip = (request as any).ip || request.headers.get('x-forwarded-for') || 'unknown';
-  
+
   // 1. FETCH SENTINEL CONFIG (With Secure In-Memory Cache)
+  const country = request.headers.get('x-vercel-ip-country') || request.headers.get('cf-ipcountry') || 'unknown';
   let state: Record<string, any> = {}
-  
+
   const nowMs = Date.now();
   const CACHE_TTL = 30000; // 30 seconds
 
@@ -242,25 +263,53 @@ export async function proxy(request: NextRequest) {
     try {
       const { data: configs, error } = await supabase
         .from('sentinel_configs')
-        .select('key, value, pending_value, release_at')
+        .select('key, value, pending_value, release_at, expire_at, allowed_countries, rate_limit_overrides')
         .in('key', [
-          'maintenance_mode', 
-          'security_lockdown', 
-          'ddos_protection_enabled', 
+          'maintenance_mode',
+          'security_lockdown',
+          'module_auth_enabled',
+          'ddos_protection_enabled',
           'ddos_protection_level',
-          'ddos_rate_limit'
+          'ddos_rate_limit',
+          'allowed_countries',
+          'rate_limit_overrides',
+          'expire_at',
+          'ip_whitelist'
         ])
 
       if (error) throw error
 
-      const nowStr = new Date().toISOString()
-      const newState: Record<string, any> = {}
-      configs?.forEach(c => {
-        if (c.release_at && c.release_at <= nowStr && c.pending_value !== null) {
+      const nowStr = new Date().toISOString();
+      const newState: Record<string, any> = {};
+
+      // Fetch Blocked IP Status (Threat Intel)
+      const { data: threatIntel } = await supabase
+        .from('sentinel_threat_intelligence')
+        .select('is_blocked, reason')
+        .eq('ip_address', ip)
+        .eq('is_blocked', true)
+        .single();
+
+      if (threatIntel) {
+        newState['ip_blocked'] = true;
+        newState['block_reason'] = threatIntel.reason;
+      }
+
+
+
+      (configs as any[])?.forEach((c: any) => {
+        // Handle Expiry in Cache (v1.1.0)
+        if (c.expire_at && new Date(c.expire_at) <= new Date()) {
+          newState[c.key] = false;
+        } else if (c.release_at && c.release_at <= nowStr && c.pending_value !== null) {
           newState[c.key] = c.pending_value
         } else {
           newState[c.key] = c.value
         }
+
+        // Save metadata for Geo and QoS
+        if (c.allowed_countries) newState[`${c.key}_geo`] = c.allowed_countries;
+        if (c.rate_limit_overrides) newState[`${c.key}_qos`] = c.rate_limit_overrides;
       })
       state = newState
       configCache.state = state;
@@ -272,9 +321,9 @@ export async function proxy(request: NextRequest) {
       if (configCache.lastFetched > 0) {
         state = configCache.state;
       } else {
-        state = { 
-          maintenance_mode: false, 
-          ddos_protection_enabled: true, 
+        state = {
+          maintenance_mode: false,
+          ddos_protection_enabled: true,
           ddos_protection_level: 'medium',
           ddos_rate_limit: 100
         }
@@ -291,20 +340,259 @@ export async function proxy(request: NextRequest) {
   try {
     const isAdmin = role === 'admin'
     const isLoginPage = request.nextUrl.pathname.startsWith('/login')
+    const isRegisterPage = request.nextUrl.pathname.startsWith('/register')
     const isMaintenancePage = request.nextUrl.pathname.startsWith('/maintenance')
     const isChallengePage = request.nextUrl.pathname.startsWith('/security-check')
     const isPublicAsset = request.nextUrl.pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/)
-    const isPrefetch = request.headers.get('purpose') === 'prefetch' || request.headers.get('x-nextjs-prefetch') === '1'
+    const isPrefetch = request.headers.get('purpose') === 'prefetch' ||
+      request.headers.get('x-nextjs-prefetch') === '1' ||
+      request.headers.get('x-nextjs-prerender') === 'true'
     const path = request.nextUrl.pathname
     const publicPages = ['/', '/about', '/pring', '/courses', '/events', '/faq', '/contact', '/privasi', '/terms', '/login', '/register', '/verify']
     const isPublicPage = publicPages.some(p => path === p || path.startsWith(p + '/'))
 
-    if (isPublicAsset || isMaintenancePage || isChallengePage || isPrefetch) {
-        return response
+    if (isPublicAsset || isMaintenancePage || isPrefetch) {
+      return response
+    }
+
+    // --- SECURITY CHECK ROUTE PROTECTION ---
+    if (isChallengePage) {
+      const isEmergency = state.maintenance_mode === true ||
+        state.security_lockdown === true ||
+        state.ddos_protection_level === 'high' ||
+        state.ip_blocked === true;
+
+      if (!isEmergency && !isAdmin) {
+        return createSentinelErrorResponse(
+          "Akses Dibatasi",
+          "Halaman verifikasi ini dinonaktifkan karena sistem sedang dalam kondisi aman. Tidak ada verifikasi tambahan yang diperlukan saat ini.",
+          403
+        );
+      }
+      return response;
+    }
+
+
+    // --- SENTINEL DLP (DATA LEAK PREVENTION) LAYER ---
+    // Patterns for sensitive data that should NEVER leak in JSON/Text responses
+    const DLP_RULES = [
+      {
+        name: 'INDONESIAN_PHONE',
+        pattern: /(?:\+62|62|0)8[1-9][0-9]{7,10}/g,
+        mask: (val: string) => val.slice(0, 4) + '****' + val.slice(-3)
+      },
+      {
+        name: 'BCRYPT_HASH',
+        pattern: /\$2[ayb]\$[0-9]{2}\$[./A-Za-z0-9]{53}/g,
+        mask: () => '[PROTECTED_HASH]'
+      },
+      {
+        name: 'JWT_TOKEN',
+        pattern: /eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/g,
+        mask: () => '[PROTECTED_TOKEN]'
+      },
+      {
+        name: 'INTERNAL_ID_SECRET',
+        pattern: /sb-[a-zA-Z0-9]{20,}/g,
+        mask: () => '[INTERNAL_ID_MASKED]'
+      }
+    ];
+
+    const applyDLP = (text: string): { scrubbed: string; violations: string[] } => {
+      let scrubbed = text;
+      const violations: Set<string> = new Set();
+
+      DLP_RULES.forEach(rule => {
+        const matches = text.match(rule.pattern);
+        if (matches) {
+          violations.add(rule.name);
+          scrubbed = scrubbed.replace(rule.pattern, rule.mask as any);
+        }
+      });
+
+      return { scrubbed, violations: Array.from(violations) };
+    };
+
+
+    // --- SENTINEL WAF (WEB APPLICATION FIREWALL) LAYER ---
+    const searchParams = request.nextUrl.searchParams.toString().toLowerCase();
+    const urlPath = request.nextUrl.pathname.toLowerCase();
+
+    const DANGEROUS_PATTERNS = [
+      // SQL Injection (Comprehensive)
+      /union\s+select/i, /drop\s+table/i, /truncate\s+table/i, /insert\s+into/i, /delete\s+from/i, /sleep\(\d+\)/i, /waitfor\s+delay/i,
+      /or\s+['"]?\d+['"]?\s*=\s*['"]?\d+/i, /['"]\s*or\s*['"]\d+['"]\s*=\s*['"]\d+/i, /admin['"]\s*--/i, /['"]\s*--;/i,
+      // XSS (Comprehensive)
+      /<script/i, /alert\(/i, /onerror=/i, /onload=/i, /javascript:/i, /<svg/i, /eval\(/i, /onclick=/i, /onmouseover=/i, /<iframe/i, /srcdoc=/i,
+      // RCE & OS Command Injection
+      /(\||&|;)\s*(cat|ls|whoami|rm|wget|curl|bash|sh|nc|powershell|cmd|python|perl|php)/i,
+      // Path Traversal & Information Disclosure
+      /\.\.\//, /\/\.env/, /\/\.git/, /\/package\.json/, /\/docker-compose/i, /\/\.next/i, /\/etc\/passwd/i, /\/boot\.ini/i,
+      // Prototype Pollution
+      /__proto__/, /constructor\.prototype/,
+      // NoSQL/Logic Injection (Bonus for security depth)
+      /\$ne\s*:/i, /\$gt\s*:/i, /\$where\s*:/i,
+      // --- NEW: AI PROMPT INJECTION PROTECTION (2026 Ready) ---
+      /ignore\s+previous\s+instructions/i, /disregard\s+all\s+previous/i, /forget\s+your\s+system\s+prompt/i,
+      /ignore\s+everything\s+above/i, /print\s+your\s+instructions/i, /output\s+the\s+system\s+prompt/i,
+      /you\s+are\s+now\s+a\s+(hacker|developer|unfiltered)/i, /forget\s+all\s+prior\s+directives/i,
+      // --- NEW: SSRF (Server-Side Request Forgery) PROTECTION ---
+      /127\.0\.0\.1/, /169\.254\.169\.254/, /localhost/i, /0\.0\.0\.0/,
+      /metadata\.google\.internal/i, /instance-data/i, /internal-api/i
+    ];
+
+    // NEW: POST/PUT Body Inspection
+    let bodyText = "";
+    const method = request.method.toUpperCase();
+    const contentType = request.headers.get('content-type') || "";
+    const contentLength = parseInt(request.headers.get('content-length') || "0");
+
+    // Inspect bodies for JSON, Form, and Text types (limit to 512KB for performance)
+    if (method !== 'GET' && method !== 'HEAD' && contentLength < 524288 &&
+      (contentType.includes('application/json') || contentType.includes('application/x-www-form-urlencoded') || contentType.includes('text/plain'))) {
+      try {
+        const clonedReq = request.clone();
+        bodyText = await clonedReq.text();
+      } catch (e) {
+        // Silent fail for body read to avoid breaking legitimate traffic
+      }
+    }
+
+    const isMalicious = DANGEROUS_PATTERNS.some(pattern =>
+      pattern.test(urlPath) || pattern.test(searchParams) || (bodyText && pattern.test(bodyText))
+    );
+
+    // Audit Log for Malicious attempts (even if Admin, just to have a trail)
+    if (isMalicious) {
+      console.warn(`[SENTINEL SECURITY AUDIT] Potential attack detected from ${ip} (${isAdmin ? 'ADMIN' : 'USER'}): ${urlPath}`);
+    }
+
+    // --- NEW: SENTINEL DLP ENFORCEMENT ---
+    const { violations: dlpViolations } = applyDLP(bodyText || urlPath);
+    if (dlpViolations.length > 0) {
+      console.error(`[SENTINEL DLP] Blocked potential data leak from ${ip}: ${dlpViolations.join(', ')}`);
+
+      // If not admin, block the request if it contains sensitive patterns (to prevent data exfiltration)
+      if (!isAdmin) {
+        return createSentinelErrorResponse(
+          "Kebijakan Keamanan Data (DLP)",
+          "Sistem Sentinel mendeteksi adanya data sensitif dalam permintaan Anda yang melanggar kebijakan keamanan. Akses ditolak untuk mencegah kebocoran data.",
+          403
+        );
+      }
+    }
+
+    if (isMalicious && !isAdmin) {
+      return createSentinelErrorResponse(
+        "Serangan Terdeteksi",
+        "Sistem Sentinel mendeteksi adanya muatan (payload) berbahaya dalam permintaan Anda. IP Anda telah dicatat sebagai ancaman potensial.",
+        403
+      );
+    }
+
+    // --- NEW: SENTINEL IDOR / BOLA DETECTOR ---
+    // Detects attempts to access other users' private data before it even hits the DB
+    const privatePaths = ['/api/profiles', '/api/enrollments', '/api/lesson-progress'];
+    const matchingPrivatePath = privatePaths.find(p => urlPath.startsWith(p));
+
+    if (matchingPrivatePath && user?.id && !isAdmin) {
+      // Extract the requested ID from the path (e.g., /api/profiles/SOME-ID)
+      const pathSegments = urlPath.split('/').filter(Boolean);
+      const requestedId = pathSegments[pathSegments.length - 1];
+
+      // If the path has an ID and it's not the current user's ID
+      // and it's not a generic 'me' or 'current' endpoint
+      if (requestedId &&
+        requestedId.length > 20 &&
+        requestedId !== user.id &&
+        !['me', 'current', 'public'].includes(requestedId)) {
+
+        console.warn(`[SENTINEL IDOR] Unauthorized access attempt by ${user.id} to resource ${requestedId}`);
+
+        return createSentinelErrorResponse(
+          "Akses Tidak Sah (IDOR)",
+          "Sistem Sentinel mendeteksi upaya akses data milik pengguna lain. Aktivitas ini telah dicatat dan dilaporkan.",
+          403
+        );
+      }
+    }
+
+    // --- BOT & USER AGENT ANALYSIS ---
+    const userAgent = request.headers.get('user-agent') || ''
+    const isCommonBot = /bot|spider|crawler|curl|postman|python|headless|selenium|puppeteer|playwright/i.test(userAgent)
+    const hasSuspiciousHeaders = !request.headers.get('accept-language') || !request.headers.get('accept')
+
+    // --- NEW: SENTINEL BEHAVIORAL SHIELD (Anti-Scraper) ---
+
+    // 1. Honey-Trap Detection: Block anything that touches the honey-trap (unless it's a prefetch)
+    if ((urlPath.includes('/api/sentinel/honey-trap') || urlPath.includes('/admin/config.php')) && !isPrefetch) {
+      console.warn(`[SENTINEL BOT] Honey-trap triggered by ${ip}`);
+      return createSentinelErrorResponse(
+        "Akses Diblokir",
+        "Aktivitas otomatis terdeteksi. Akses Anda telah dibatasi secara permanen.",
+        403
+      );
+    }
+
+    // 2. Navigation Integrity: API requests must have a valid Referer or same-origin signal
+    const referer = request.headers.get('referer') || '';
+    const origin = request.headers.get('origin') || '';
+    const host = request.headers.get('host') || '';
+    const fetchSite = request.headers.get('sec-fetch-site') || ''; // same-origin, cross-site, etc.
+    const isApiRequest = urlPath.startsWith('/api/') && !urlPath.startsWith('/api/auth');
+
+    if (isApiRequest && !isAdmin && !isPublicAsset) {
+      // Relaxed check: Allow if referer matches OR if it's explicitly same-origin fetch
+      const isSameOrigin = referer.includes(host) || origin.includes(host) || fetchSite === 'same-origin';
+
+      if (!isSameOrigin) {
+        console.warn(`[SENTINEL BOT] Missing Navigation Integrity from ${ip} for ${urlPath}`);
+        return createSentinelErrorResponse(
+          "Verifikasi Gagal",
+          "Permintaan tidak valid. Harap gunakan browser standar untuk mengakses layanan ini.",
+          403
+        );
+      }
+    }
+
+    // 3. Client-Hints Check (Advanced Headless Detection)
+    // Real browsers in 2026 send sec-ch-ua headers. Scripts often don't.
+    const clientHints = request.headers.get('sec-ch-ua');
+    if (!clientHints && !isAdmin && !isPublicAsset && !isCommonBot) {
+      // Optional: Log but don't block yet to avoid false positives with very old browsers
+      // But for a high-security platform, we can enforce it.
+      // console.warn(`[SENTINEL BOT] Missing Client Hints from ${ip}`);
+    }
+
+    // --- THREAT INTELLIGENCE LAYER (Auto-Lockdown) ---
+    // Safety Net: If IP is blocked, allow access ONLY to the security challenge page
+    // This allows legitimate users/admins to unblock themselves using the Sentinel Key.
+    const whitelist = state.ip_whitelist as string[] || [];
+    const isWhitelisted = whitelist.includes(ip);
+
+    if (state.ip_blocked === true && !isAdmin && !isChallengePage && !isWhitelisted) {
+      return createSentinelErrorResponse(
+        "Akses Diblokir",
+        `Sistem mendeteksi aktivitas mencurigakan dari IP Anda. Alasan: ${state.block_reason || 'Pelanggaran keamanan.'}`,
+        403
+      );
+    }
+
+
+    // --- GEO-FENCING LAYER (v1.1.0) ---
+    const globalGeo = state.allowed_countries_geo as string[] || [];
+    if (globalGeo.length > 0 && !isAdmin && country !== 'unknown') {
+      if (!globalGeo.includes(country)) {
+        return createSentinelErrorResponse(
+          "Layanan Tidak Tersedia",
+          `Maaf, layanan kami saat ini belum tersedia di wilayah Anda (${country}).`,
+          403
+        );
+      }
     }
 
     // --- ENDPOINT SPECIFIC STRICT RATE LIMITS (ENUMERATION PROTECTION) ---
-    if (path.startsWith('/api/auth') || path.startsWith('/api/contact') || path.startsWith('/dashboard/login')) {
+    if (path.startsWith('/api/auth') || path.startsWith('/api/contact') || path.startsWith('/dashboard/login') || isRegisterPage) {
       const strictThrottleKey = `strict_req_${ip}_${path}`;
       const timeNow = Date.now();
       const lastStrictReq = rateLimitCache.get(strictThrottleKey) || 0;
@@ -321,94 +609,145 @@ export async function proxy(request: NextRequest) {
     }
 
     // --- ENHANCED BOT DETECTION ---
-    const userAgent = request.headers.get('user-agent') || ''
-    const isBot = /bot|spider|crawler|curl|postman|python|headless/i.test(userAgent)
-    
-    if (isBot && state.ddos_protection_enabled === true && !isAdmin) {
-       return createSentinelErrorResponse(
-         "Akses Ditolak",
-         "Lalu lintas otomatis atau bot tidak diizinkan untuk mengakses bagian ini demi keamanan sistem.",
-         403
-       );
+    if ((isCommonBot || hasSuspiciousHeaders) && state.ddos_protection_enabled === true && !isAdmin) {
+      return createSentinelErrorResponse(
+        "Akses Ditolak",
+        "Sistem mendeteksi akses tidak wajar. Browser Anda harus mendukung fitur standar untuk melanjutkan.",
+        403
+      );
+    }
+
+    // --- SESSION VERIFICATION (Bypass Layer) ---
+    const verifiedCookie = request.cookies.get('sentinel_verified')?.value
+    let isValidToken = false;
+
+    if (verifiedCookie) {
+      const [timestamp, sig] = verifiedCookie.split('.');
+      if (timestamp && sig) {
+        const now = Date.now();
+        const tokenAge = now - parseInt(timestamp, 36);
+
+        // Token valid for 30 minutes
+        if (tokenAge > 0 && tokenAge < 1800000) {
+          const expectedSig = await generateSentinelSignature(`${timestamp}.${ip}.${userAgent.slice(0, 20)}`, SENTINEL_SECRET);
+          if (sig === expectedSig) {
+            isValidToken = true;
+          }
+        }
+      }
     }
 
     // --- DDOS PROTECTION LAYER ---
     if (state.ddos_protection_enabled === true && !isAdmin) {
       const level = state.ddos_protection_level || 'low'
-      
-      // Level High: "Under Attack" Mode (Show Challenge)
-      if (level === 'high') {
-        const verifiedCookie = request.cookies.get('sentinel_verified')?.value
-        // Basic validation: must match token format (timestamp-random)
-        const isValidToken = verifiedCookie && /^[a-z0-9]+-[a-z0-9]{8}$/.test(verifiedCookie);
-        
-        if (!isValidToken) {
-          const challengeUrl = request.nextUrl.clone()
-          challengeUrl.pathname = '/security-check'
-          challengeUrl.searchParams.set('from', request.nextUrl.pathname)
-          return NextResponse.rewrite(challengeUrl)
-        }
-      }
-      
-      // Level Medium: Throttling (Signature-based Throttling)
+
+      // Level High: "Under Attack" Mode (Signature-based Throttling + Verified Bypass)
+      // Removed automatic rewrite to /security-check to align with user request.
+      // High level now just enforces stricter rate limits unless verified.
+
+      // Level Medium & High: Token Bucket Rate Limiting (v2.0)
       if (level === 'medium' || level === 'high') {
-        // Create a signature of IP + UserAgent to prevent cookie sharing
-        const signature = btoa(`${ip}-${userAgent.slice(0, 20)}`)
-        const throttleKey = `sentinel_req_${signature.slice(0, 10)}`
-        
+        const signature = btoa(`${ip}-${userAgent.slice(0, 10)}`)
+        const throttleKey = `sentinel_bucket_${signature.slice(0, 10)}`
+
         const nowMs = Date.now()
-        // Use in-memory cache for actual edge-level throttling (fallback to cookie)
-        const lastReq = rateLimitCache.get(throttleKey) || parseInt(request.cookies.get(throttleKey)?.value || '0')
-        
-        // Gunakan interval yang lebih agresif untuk mencegah spam. 
-        // Rate limit adalah req/min. Jika rateLimit = 100, maka minInterval = 600ms
-        // Jika request datang lebih cepat dari minInterval, langsung blokir.
-        const rateLimit = parseInt(state.ddos_rate_limit) || 100
-        let minInterval = Math.max(200, Math.floor(60000 / rateLimit))
-        
-        // Relax limit for public pages to allow fast navigation and better UX
-        if (isPublicPage) {
-            minInterval = 150 // Allow up to ~6 requests/sec for public marketing pages
+        const qosOverrides = state.ddos_rate_limit_qos as Record<string, number> || {};
+        const userTier = user?.app_metadata?.tier || 'free';
+
+        let rateLimit = parseInt(state.ddos_rate_limit) || 100
+
+        // If Level High and NOT verified, reduce rate limit significantly (e.g., 10 req/min)
+        if (level === 'high' && !isValidToken) {
+          rateLimit = 10;
+        } else if (qosOverrides[userTier]) {
+          rateLimit = qosOverrides[userTier];
         }
-        
-        if (lastReq && (nowMs - lastReq) < minInterval) {
-          return createSentinelErrorResponse(
-            "Sentinel Shield Aktif",
-            "Kecepatan akses Anda melebihi batas yang diizinkan. Kami membatasi ini untuk mencegah serangan DDoS.",
-            429
-          );
+
+        // Token Bucket Logic (v2.1 - Burst Optimized for Power Users)
+        let bucket = ddosBucketCache.get(throttleKey);
+
+        // Burst Factor: Allow users to exceed average rate by 50% for short periods
+        const burstLimit = Math.floor(rateLimit * 1.5);
+
+        if (!bucket) {
+          bucket = { tokens: burstLimit, lastRefill: nowMs };
+        } else {
+          // Refill tokens based on time passed
+          const refillRate = rateLimit / 60000; // tokens per ms
+          const elapsed = nowMs - bucket.lastRefill;
+          const tokensToAdd = elapsed * refillRate;
+
+          bucket.tokens = Math.min(burstLimit, bucket.tokens + tokensToAdd);
+          bucket.lastRefill = nowMs;
         }
-        
-        rateLimitCache.set(throttleKey, nowMs);
-        if (rateLimitCache.size > 10000) rateLimitCache.clear(); // simple memory management
-        
-        response.cookies.set(throttleKey, nowMs.toString(), { maxAge: 5, httpOnly: true })
+
+        if (bucket.tokens < 1) {
+          // False Positive Prevention: Give authenticated or verified users a small emergency buffer
+          if (user?.id || isValidToken) {
+            bucket.tokens = 5;
+          } else {
+            return createSentinelErrorResponse(
+              "Sentinel Shield Aktif",
+              "Sistem mendeteksi aktivitas trafik tinggi. Harap tunggu beberapa detik dan silahkan refresh halaman anda",
+              429
+            );
+          }
+        }
+
+        // Consume 1 token
+        bucket.tokens -= 1;
+        ddosBucketCache.set(throttleKey, bucket);
       }
     }
 
-    // Rule A: Maintenance Mode
-    if (state.maintenance_mode === true && !isAdmin && !isLoginPage) {
-        const maintenanceUrl = request.nextUrl.clone()
-        maintenanceUrl.pathname = '/maintenance'
-        return NextResponse.rewrite(maintenanceUrl)
+    // --- GLOBAL ENFORCEMENT RULES (2-Layer Security for Admins) ---
+    const isEmergency = state.maintenance_mode === true ||
+      state.security_lockdown === true ||
+      state.ddos_protection_level === 'high';
+
+    // 1. Mandatory Security Check for Admins during Emergency (Bypass Layer 2)
+    if (isEmergency && isAdmin && !isValidToken && !isChallengePage && !isLoginPage) {
+      const challengeUrl = request.nextUrl.clone()
+      challengeUrl.pathname = '/security-check'
+      challengeUrl.searchParams.set('from', request.nextUrl.pathname)
+      return NextResponse.redirect(challengeUrl)
     }
 
-    // Rule B: Security Lockdown
-    if (state.security_lockdown === true && !isAdmin && request.nextUrl.pathname.startsWith('/dashboard')) {
-        const homeUrl = request.nextUrl.clone()
-        homeUrl.pathname = '/'
-        return NextResponse.redirect(homeUrl)
+    // 2. Rule A: Maintenance Mode (Bypassable only by Verified Session - Admin or Guest with Key)
+    if (state.maintenance_mode === true && !isLoginPage && !isValidToken && !isChallengePage) {
+      const maintenanceUrl = request.nextUrl.clone()
+      maintenanceUrl.pathname = '/maintenance'
+      return NextResponse.rewrite(maintenanceUrl)
     }
+
+    // 3. Rule A.2: Auth Module Control (Kill Switch)
+    if (state.module_auth_enabled === false && !isAdmin && !isValidToken && (isLoginPage || isRegisterPage || path.startsWith('/api/auth'))) {
+      return createSentinelErrorResponse(
+        "Autentikasi Dinonaktifkan",
+        "Layanan login dan registrasi sementara tidak tersedia untuk alasan keamanan.",
+        503
+      );
+    }
+
+    // 4. Rule B: Security Lockdown
+    if (state.security_lockdown === true && !isValidToken && request.nextUrl.pathname.startsWith('/dashboard')) {
+      const homeUrl = request.nextUrl.clone()
+      homeUrl.pathname = '/'
+      return NextResponse.redirect(homeUrl)
+    }
+
+
+
   } catch (error) {
     console.error("Sentinel Enforcement Error:", error)
     // In case of error during enforcement, default to showing the page to avoid breaking the app
     // unless we are in high ddos mode.
     if (state.ddos_protection_level === 'high') {
-        return createSentinelErrorResponse(
-          "Verifikasi Diperlukan",
-          "Terjadi kesalahan saat memproses verifikasi keamanan. Silakan muat ulang halaman ini.",
-          503
-        );
+      return createSentinelErrorResponse(
+        "Verifikasi Diperlukan",
+        "Terjadi kesalahan saat memproses verifikasi keamanan. Silakan muat ulang halaman ini.",
+        503
+      );
     }
     return response
   }

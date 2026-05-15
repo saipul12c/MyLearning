@@ -7,6 +7,7 @@ import { Review, getCourseReviews, addReview } from "@/lib/reviews";
 import VerifiedBadge from "./VerifiedBadge";
 import { useAuth } from "@/app/components/AuthContext";
 import { getUserEnrollments } from "@/lib/enrollment";
+import { slugify } from "@/lib/utils";
 
 interface ReviewSectionProps {
   courseSlug: string;
@@ -144,8 +145,8 @@ export default function ReviewSection({ courseSlug, courseTitle }: ReviewSection
                     <User size={20} />
                   </div>
                   <div>
-                    {review.userId ? (
-                      <Link href={`/profile/${review.userId}`} className="text-white font-bold text-sm hover:text-purple-400 transition-colors flex items-center gap-1">
+                    {review.userName ? (
+                      <Link href={`/profile/${slugify(review.userName)}`} className="text-white font-bold text-sm hover:text-purple-400 transition-colors flex items-center gap-1">
                         {review.userName}
                         {(review.userRole === 'admin' || review.userRole === 'instructor') && <VerifiedBadge size={12} />}
                       </Link>

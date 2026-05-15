@@ -117,7 +117,13 @@ export default function Footer({ initialPromo = null }: { initialPromo?: Promoti
           <p className="text-slate-500 text-sm">
             &copy; {new Date().getFullYear()} MyLearning. All rights reserved.
           </p>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-6">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+               </svg>
+               Secured by Sentinel WAF v1.1.0
+            </div>
             <Link
               href="/privasi"
               className="text-slate-500 hover:text-white text-sm transition-colors"

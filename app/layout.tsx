@@ -5,6 +5,7 @@ import LayoutWrapper from "./components/LayoutWrapper";
 import ClientInitializer from "./components/ClientInitializer";
 import NotificationToast from "./components/NotificationToast";
 import SentinelGuard from "./components/SentinelGuard";
+import SentinelBroadcaster from "./components/SentinelBroadcaster";
 import { getPromotionsBatch } from "@/lib/promotions";
 
 // Disabling next/font/google due to build-time connection issues.
@@ -14,6 +15,7 @@ const inter = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://my-learning-projek.netlify.app"),
   title: {
     default: "MyLearning - Platform Belajar Online Terbaik di Indonesia",
     template: "%s | MyLearning",
@@ -28,6 +30,28 @@ export const metadata: Metadata = {
     "belajar data science",
     "kursus Indonesia",
   ],
+  openGraph: {
+    type: "website",
+    locale: "id_ID",
+    url: "https://my-learning-projek.netlify.app",
+    siteName: "MyLearning",
+    title: "MyLearning - Platform Belajar Online Terbaik di Indonesia",
+    description: "Pelajari skill digital dari instruktur terbaik. Mulai belajar gratis hari ini!",
+    images: [
+      {
+        url: "/logo.png",
+        width: 1200,
+        height: 630,
+        alt: "MyLearning Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MyLearning - Platform Belajar Online Terbaik di Indonesia",
+    description: "Pelajari skill digital dari instruktur terbaik. Mulai belajar gratis hari ini!",
+    images: ["/logo.png"],
+  },
 };
 
 export default async function RootLayout({
@@ -46,10 +70,11 @@ export default async function RootLayout({
         <AuthProvider>
           <NotificationToast />
           <ClientInitializer />
+          <SentinelBroadcaster />
           <SentinelGuard>
-            <LayoutWrapper 
-              globalPromos={globalPromos} 
-              stickyPromo={stickyPromo} 
+            <LayoutWrapper
+              globalPromos={globalPromos}
+              stickyPromo={stickyPromo}
               footerPromo={footerPromo}
             >
               {children}

@@ -3,17 +3,23 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Lock, Activity } from "lucide-react";
+import { getSignedSentinelToken } from "@/app/actions/sentinel";
 
 export default function SecurityCheckPage() {
   const router = useRouter();
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Menganalisis trafik browser...");
 
+  const [accessKey, setAccessKey] = useState("");
+  const [isDone, setIsDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(timer);
+          setIsDone(true);
           return 100;
         }
         return prev + 1;
@@ -24,7 +30,7 @@ export default function SecurityCheckPage() {
       { p: 20, s: "Memverifikasi identitas browser..." },
       { p: 50, s: "Mengecek integritas koneksi..." },
       { p: 80, s: "Menyiapkan sesi aman..." },
-      { p: 100, s: "Akses diberikan. Mengalihkan..." },
+      { p: 100, s: "Analisis Selesai. Masukkan Kunci Akses." },
     ];
 
     const statusTimer = setInterval(() => {
@@ -32,23 +38,35 @@ export default function SecurityCheckPage() {
       if (currentStage) setStatus(currentStage.s);
     }, 80);
 
-    const redirectTimer = setTimeout(() => {
-      // Set the verification cookie with a crypto-random token (30 minutes = 1800 seconds)
-      const token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-      document.cookie = "sentinel_verified=" + token + "; path=/; max-age=1800; SameSite=Strict; Secure";
-      router.refresh();
-      // Go back to the original intended URL or home
-      const searchParams = new URLSearchParams(window.location.search);
-      const from = searchParams.get('from') || '/';
-      router.push(from);
-    }, 2200);
-
     return () => {
       clearInterval(timer);
       clearInterval(statusTimer);
-      clearTimeout(redirectTimer);
     };
-  }, [progress, router]);
+  }, [progress]);
+
+  const handleEntry = async () => {
+    if (!accessKey) return;
+    setStatus("Memvalidasi kunci...");
+    setError(null);
+    
+    try {
+      const token = await getSignedSentinelToken(accessKey);
+      document.cookie = "sentinel_verified=" + token + "; path=/; max-age=1800; SameSite=Strict; Secure";
+      setStatus("Akses diberikan! Mengalihkan...");
+      
+      const searchParams = new URLSearchParams(window.location.search);
+      const from = searchParams.get('from') || '/';
+      
+      setTimeout(() => {
+        router.refresh();
+        router.push(from);
+      }, 800);
+    } catch (err: any) {
+      console.error("Failed to get security token", err);
+      setError("Kunci Sentinel Salah atau Tidak Valid.");
+      setStatus("Validasi Gagal.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans selection:bg-indigo-500/30">
@@ -73,20 +91,42 @@ export default function SecurityCheckPage() {
             Sentinel <span className="text-indigo-400">Gatekeeper</span>
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed max-w-[280px] mx-auto">
-            Sistem kami mendeteksi aktivitas trafik yang tidak biasa. Mohon tunggu sebentar sementara kami memverifikasi perangkat Anda.
+            Sistem kami mendeteksi aktivitas trafik yang tidak biasa. Mohon selesaikan verifikasi kunci untuk melanjutkan.
           </p>
         </div>
 
         {/* Progress Bar Container */}
-        <div className="space-y-4 pt-4">
-          <div className="w-full bg-slate-900/50 border border-slate-800 rounded-full h-3 overflow-hidden p-0.5 shadow-inner">
-            <div 
-              className="h-full bg-gradient-to-r from-indigo-600 to-blue-500 rounded-full transition-all duration-300 ease-out relative shadow-[0_0_15px_rgba(79,70,229,0.5)]"
-              style={{ width: `${progress}%` }}
-            >
-              <div className="absolute inset-0 bg-white/20 animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+        <div className="space-y-6 pt-4">
+          {!isDone ? (
+            <div className="w-full bg-slate-900/50 border border-slate-800 rounded-full h-3 overflow-hidden p-0.5 shadow-inner">
+              <div 
+                className="h-full bg-gradient-to-r from-indigo-600 to-blue-500 rounded-full transition-all duration-300 ease-out relative shadow-[0_0_15px_rgba(79,70,229,0.5)]"
+                style={{ width: `${progress}%` }}
+              >
+                <div className="absolute inset-0 bg-white/20 animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="animate-in fade-in zoom-in-95 duration-500 space-y-4">
+              <div className="relative group">
+                <input 
+                  type="password"
+                  placeholder="Masukkan Kunci Sentinel..."
+                  value={accessKey}
+                  onChange={(e) => setAccessKey(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleEntry()}
+                  className={`w-full bg-slate-900 border ${error ? 'border-red-500/50' : 'border-slate-800'} focus:border-indigo-500 rounded-2xl px-6 py-4 text-white outline-none transition-all text-center tracking-[0.3em] font-mono`}
+                />
+                {error && <p className="text-red-400 text-[10px] font-bold uppercase tracking-widest mt-2">{error}</p>}
+              </div>
+              <button 
+                onClick={handleEntry}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-indigo-600/20 active:scale-[0.98] transition-all"
+              >
+                Verifikasi & Masuk
+              </button>
+            </div>
+          )}
           
           <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-medium uppercase tracking-widest">
             <Activity className="w-3 h-3 animate-bounce" />
@@ -98,7 +138,7 @@ export default function SecurityCheckPage() {
         <div className="pt-12 flex flex-col items-center gap-4">
           <div className="h-px w-12 bg-slate-800" />
           <p className="text-[10px] text-slate-600 font-mono tracking-tighter">
-            DDoS PROTECTION BY SENTINEL v1.5.0
+            DDoS PROTECTION BY SENTINEL v1.1.0
           </p>
         </div>
       </div>

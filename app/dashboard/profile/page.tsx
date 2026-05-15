@@ -12,6 +12,7 @@ import SocialIcon from "@/app/components/SocialIcon";
 import Link from "next/link";
 import { uploadAvatar } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { slugify } from "@/lib/utils";
 
 type TabType = "umum" | "profesional" | "keamanan" | "voucher";
 
@@ -131,7 +132,7 @@ export default function ProfilePage() {
           <p className="text-slate-500 text-sm mt-1 uppercase tracking-widest font-bold">Personal & Professional Identity</p>
         </div>
         <Link 
-          href={`/profile/${user.id}`} 
+          href={`/profile/${user.slug || slugify(user.fullName)}`} 
           target="_blank"
           className="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all text-sm font-bold group"
         >

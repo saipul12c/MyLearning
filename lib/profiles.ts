@@ -31,9 +31,21 @@ export async function getPublicProfile(idOrSlug: string): Promise<PublicProfile 
   if (instructor?.user_id) {
     userId = instructor.user_id;
   } else if (!isUUID) {
-    // Jika bukan UUID dan tidak ditemukan di tabel instructors, berarti beneran tidak ada
-    console.warn(`Identifier ${idOrSlug} bukan UUID dan tidak ditemukan di tabel instructors.`);
-    return null;
+    // 1.5 Jika bukan UUID dan tidak ada di tabel instructors, coba cari di user_profiles berdasarkan NAMA (Slugified)
+    // Kita mencari user yang namanya mirip dengan slug yang diberikan
+    const nameSearch = idOrSlug.replace(/-/g, ' ');
+    const { data: userProfile, error: userError } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .ilike("full_name", nameSearch)
+      .maybeSingle();
+
+    if (userProfile?.user_id) {
+      userId = userProfile.user_id;
+    } else {
+      console.warn(`Identifier ${idOrSlug} bukan UUID, tidak di instructors, dan tidak ditemukan di user_profiles.`);
+      return null;
+    }
   }
 
   // 2. Fetch the base user profile from user_profiles

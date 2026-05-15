@@ -5,7 +5,7 @@ import {
   Database, Smartphone, RefreshCw, MessageCircle, 
   Link2, Baby, History, Scale, ShieldCheck, 
   ArrowRight, Info, AlertCircle, TrendingUp,
-  Globe, Bell, AlertTriangle
+  Globe, Bell, AlertTriangle, MapPin, ShieldAlert
 } from "lucide-react";
 import NativeAdCard from "@/app/components/NativeAdCard";
 
@@ -231,7 +231,7 @@ export default async function PrivacyPage() {
                         <p className="text-lg leading-relaxed">
                           Keamanan bukanlah fitur, melainkan pondasi. Kami menggunakan sistem <span className="text-white font-bold italic">Sentinel Gatekeeper</span> untuk memastikan data Anda tidak pernah jatuh ke tangan yang salah melalui enkripsi militer dan monitoring real-time.
                         </p>
-                        <div className="grid sm:grid-cols-2 gap-6">
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
                              <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Enkripsi Statis</div>
                              <p className="text-xs">Semua data database dienkripsi menggunakan AES-256 yang mustahil ditembus brute-force.</p>
@@ -247,6 +247,14 @@ export default async function PrivacyPage() {
                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
                              <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1 mb-2"><Globe size={12}/> Monitoring DDoS</div>
                              <p className="text-xs">Sentinel secara aktif memfilter trafik mencurigakan untuk menjaga stabilitas platform.</p>
+                           </div>
+                           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1 mb-2"><MapPin size={12}/> Geo-Privacy Control</div>
+                             <p className="text-xs">Membatasi aliran data berdasarkan regulasi regional untuk memastikan kepatuhan hukum lokal.</p>
+                           </div>
+                           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1 mb-2"><ShieldAlert size={12}/> Auto-Privacy Lockdown</div>
+                             <p className="text-xs">Isolasi instan pada modul data jika terdeteksi pola akses yang mengancam privasi pengguna.</p>
                            </div>
                         </div>
                       </div>

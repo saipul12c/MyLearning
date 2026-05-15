@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight, ShieldCheck, Zap } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { X, Upload, CheckCircle2, AlertCircle, Loader2, QrCode, ArrowRight, ShieldCheck, Zap, Clock } from "lucide-react";
 import Image from "next/image";
 import { TierPurchase, uploadTierPaymentProof } from "@/lib/tiers";
 import { formatPrice } from "@/lib/utils";
@@ -20,7 +20,35 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Countdown Timer Logic
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const createdAt = new Date(purchase.created_at).getTime();
+      const deadline = createdAt + (3 * 24 * 60 * 60 * 1000); // 3 days
+      const now = new Date().getTime();
+      const difference = deadline - now;
+
+      if (difference <= 0) return null;
+
+      return {
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((difference / 1000 / 60) % 60),
+        seconds: Math.floor((difference / 1000) % 60),
+      };
+    };
+
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    setTimeLeft(calculateTimeLeft());
+
+    return () => clearInterval(timer);
+  }, [purchase.created_at]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -115,6 +143,33 @@ export default function TierPaymentModal({ purchase, tierName, price, onClose, o
             <X size={24} />
           </button>
         </div>
+
+        {/* Countdown Bar */}
+        {timeLeft && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-8 py-3 flex items-center justify-center gap-6 animate-pulse">
+            <div className="flex items-center gap-2 text-amber-400">
+              <Clock size={16} className="animate-spin-slow" />
+              <span className="text-[11px] font-black uppercase tracking-[0.2em]">Batas Waktu Aktivasi Tier:</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {[
+                { label: 'D', value: timeLeft.days },
+                { label: 'H', value: timeLeft.hours },
+                { label: 'M', value: timeLeft.minutes },
+                { label: 'S', value: timeLeft.seconds }
+              ].map((unit, i) => (
+                <div key={unit.label} className="flex items-center gap-1.5">
+                  <div className="flex flex-col items-center">
+                    <span className="bg-amber-500/20 text-white font-black text-sm px-2 py-1 rounded-lg min-w-[32px] text-center border border-amber-500/30">
+                      {unit.value.toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                  {i < 3 && <span className="text-amber-500/50 font-black text-sm">:</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto p-8 md:p-10 relative z-10">
           <div className="grid md:grid-cols-2 gap-10">

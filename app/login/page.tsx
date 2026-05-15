@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
 import { useAuth } from "@/app/components/AuthContext";
+import { recordFailedLoginAttempt } from "@/app/actions/sentinel";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,9 +37,15 @@ export default function LoginPage() {
         router.push("/dashboard");
       } else {
         setError(result.error || "Login gagal.");
+        // Record failed attempt for Sentinel Auto-Lockdown
+        const blockStatus = await recordFailedLoginAttempt(email);
+        if (blockStatus.blocked) {
+          setError("IP Anda telah diblokir otomatis karena terlalu banyak percobaan login yang gagal.");
+        }
       }
     } catch (err: any) {
       setError("Terjadi kesalahan koneksi.");
+      await recordFailedLoginAttempt(email);
     } finally {
       setLoading(false);
     }

