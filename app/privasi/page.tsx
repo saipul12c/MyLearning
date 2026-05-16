@@ -5,7 +5,8 @@ import {
   Database, Smartphone, RefreshCw, MessageCircle, 
   Link2, Baby, History, Scale, ShieldCheck, 
   ArrowRight, Info, AlertCircle, TrendingUp,
-  Globe, Bell, AlertTriangle, MapPin, ShieldAlert
+  Globe, Bell, AlertTriangle, MapPin, ShieldAlert,
+  Sparkles, Brain
 } from "lucide-react";
 import NativeAdCard from "@/app/components/NativeAdCard";
 
@@ -21,6 +22,7 @@ const sections = [
   { id: "informasi", title: "Informasi yang dikumpulkan", icon: Database, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20" },
   { id: "penggunaan", title: "Cara Menggunakan Data", icon: RefreshCw, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
   { id: "pembagian", title: "Pembagian Informasi", icon: Share2, color: "text-indigo-400", bg: "bg-indigo-500/10", border: "border-indigo-500/20" },
+  { id: "ai", title: "Sentinel AI & Data", icon: Sparkles, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20" },
   { id: "keamanan", title: "Protokol Keamanan", icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
   { id: "cookie", title: "Cookie & Tracking", icon: Cookie, color: "text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/20" },
   { id: "anak", title: "Privasi Anak", icon: Baby, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/20" },
@@ -206,6 +208,52 @@ export default async function PrivacyPage() {
                   </div>
                 </div>
 
+                {/* AI Privacy Section */}
+                <div id="ai" className="scroll-mt-28">
+                  <div className="card p-8 border-purple-500/20 bg-purple-500/[0.02] relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                      <Brain size={120} />
+                    </div>
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                          <Sparkles size={24} />
+                        </div>
+                        <h3 className="text-2xl font-black text-white">Sentinel AI & Privasi Data</h3>
+                      </div>
+                      <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                        Integrasi **Sentinel AI Assistant** dilakukan dengan standar privasi tertinggi. Kami memahami sensitivitas interaksi belajar Anda, oleh karena itu kami menerapkan kebijakan ketat:
+                      </p>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                          <h4 className="text-white font-bold text-xs mb-2 flex items-center gap-2">
+                            <Lock size={14} className="text-purple-400" /> No Public Training
+                          </h4>
+                          <p className="text-[10px] text-slate-500">Data percakapan Anda tidak akan pernah dikirim ke pihak luar untuk melatih model AI publik (seperti OpenAI atau Google Public Models).</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                          <h4 className="text-white font-bold text-xs mb-2 flex items-center gap-2">
+                            <Eye size={14} className="text-purple-400" /> End-to-End Encryption
+                          </h4>
+                          <p className="text-[10px] text-slate-500">Setiap sesi interaksi dengan Sentinel AI diproses melalui kanal terenkripsi yang diawasi oleh Sentinel Gatekeeper.</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                          <h4 className="text-white font-bold text-xs mb-2 flex items-center gap-2">
+                            <Database size={14} className="text-purple-400" /> Local Context Only
+                          </h4>
+                          <p className="text-[10px] text-slate-500">Konteks percakapan hanya disimpan sementara untuk membantu asisten memahami progres belajar Anda di modul yang sedang dibuka.</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                          <h4 className="text-white font-bold text-xs mb-2 flex items-center gap-2">
+                            <ShieldCheck size={14} className="text-purple-400" /> User Controlled
+                          </h4>
+                          <p className="text-[10px] text-slate-500">Anda dapat menghapus riwayat interaksi AI Anda kapan saja melalui pengaturan profil secara permanen.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 3. Keamanan Highlight */}
                 <div id="keamanan" className="scroll-mt-28">
                   <div className="card p-10 bg-gradient-to-br from-emerald-500/10 via-[#0c0c14] to-transparent border-emerald-500/20 overflow-hidden relative group">
@@ -344,22 +392,54 @@ export default async function PrivacyPage() {
                   </div>
                 </div>
 
-                {/* 6. UU PDP Section */}
+                {/* 6. Legal Compliance Section */}
                 <div id="hukum" className="scroll-mt-28">
-                  <div className="card p-8 border-yellow-500/30 bg-[#0c1214] relative overflow-hidden group">
-                     <div className="absolute top-0 bottom-0 left-0 w-2 bg-yellow-500/50" />
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-14 h-14 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400">
+                      <Scale size={28} />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-black text-white tracking-tight">Kepatuhan Hukum & Regulasi</h2>
+                      <p className="text-yellow-400/60 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Standar Global & Domestik</p>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4 mb-8">
+                     {[
+                       { title: "UU PDP No. 27/2022", region: "Indonesia", desc: "Regulasi utama perlindungan data pribadi di Indonesia." },
+                       { title: "GDPR (General Data Protection)", region: "Uni Eropa", desc: "Standar emas perlindungan privasi data global." },
+                       { title: "CCPA / CPRA", region: "Amerika Serikat", desc: "Kepatuhan terhadap hak privasi konsumen modern." },
+                       { title: "UU ITE No. 1/2024", region: "Indonesia", desc: "Pengelolaan informasi dan transaksi elektronik yang sah." },
+                       { title: "APEC CBPR System", region: "Asia-Pasifik", desc: "Kerangka kerja transfer data lintas batas antar negara APEC." }
+                     ].map((law, i) => (
+                       <div key={i} className="card p-5 bg-[#0c1214] border-yellow-500/20 hover:border-yellow-500/40 transition-colors group relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:scale-125 transition-transform">
+                             <Shield size={40} className="text-yellow-500" />
+                          </div>
+                          <div className="text-[8px] font-black text-yellow-500 uppercase tracking-widest mb-1">{law.region}</div>
+                          <h4 className="text-white font-bold text-sm mb-2">{law.title}</h4>
+                          <p className="text-slate-500 text-[10px] leading-relaxed">{law.desc}</p>
+                       </div>
+                     ))}
+                     <Link 
+                       href="/hukum" 
+                       className="card p-5 bg-gradient-to-br from-yellow-500/10 to-transparent border-dashed border-yellow-500/30 flex flex-col items-center justify-center text-center group hover:bg-yellow-500/10 transition-all"
+                     >
+                        <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                           <ArrowRight size={16} className="text-yellow-400" />
+                        </div>
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Pelajari Rincian Kepatuhan</span>
+                     </Link>
+                  </div>
+
+                  <div className="card p-6 border-yellow-500/30 bg-[#0c1214] relative overflow-hidden group">
                      <div className="flex items-start gap-6">
                         <AlertCircle className="text-yellow-500 shrink-0 mt-1" size={32} />
                         <div>
-                           <h3 className="text-xl font-bold text-white mb-3">Pernyataan Kepatuhan UU PDP No. 27/2022</h3>
-                           <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                              Sebagai platform yang beroperasi secara resmi di wilayah Republik Indonesia, MyLearning menjamin bahwa seluruh aktivitas pengelolaan Data Pribadi dilakukan dengan dasar hukum yang sah, transparan, dan akuntabel sesuai dengan <span className="text-yellow-400 font-bold italic underline decoration-yellow-500/30">UU Perlindungan Data Pribadi</span>.
+                           <h3 className="text-lg font-bold text-white mb-2">Komitmen Tanpa Kompromi</h3>
+                           <p className="text-slate-400 text-sm leading-relaxed">
+                              Sebagai platform yang melayani ribuan siswa di seluruh dunia, MyLearning menjamin bahwa setiap aktivitas pengelolaan data dilakukan dengan dasar hukum yang sah sesuai dengan regulasi di atas.
                            </p>
-                           <div className="flex gap-4">
-                              <span className="text-[9px] font-black px-2 py-1 rounded bg-yellow-500/10 text-yellow-500 uppercase tracking-widest border border-yellow-500/20">Transparansi</span>
-                              <span className="text-[9px] font-black px-2 py-1 rounded bg-yellow-500/10 text-yellow-500 uppercase tracking-widest border border-yellow-500/20">Akuntabilitas</span>
-                              <span className="text-[9px] font-black px-2 py-1 rounded bg-yellow-500/10 text-yellow-500 uppercase tracking-widest border border-yellow-500/20">Integritas</span>
-                           </div>
                         </div>
                      </div>
                   </div>

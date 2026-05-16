@@ -45,6 +45,7 @@ export default function Footer({ initialPromo = null }: { initialPromo?: Promoti
                 { href: "/about", label: "About" },
                 { href: "/courses", label: "Kursus" },
                 { href: "/faq", label: "FAQ" },
+                { href: "/sentinel-ai", label: "Sentinel AI" },
                 { href: "/contact", label: "Kontak" },
               ].map((link) => (
                 <li key={link.href}>
@@ -135,6 +136,12 @@ export default function Footer({ initialPromo = null }: { initialPromo?: Promoti
               className="text-slate-500 hover:text-white text-sm transition-colors"
             >
               Kebijakan Privasi
+            </Link>
+            <Link
+              href="/hukum"
+              className="text-slate-500 hover:text-white text-sm transition-colors"
+            >
+              Kepatuhan Hukum
             </Link>
           </div>
         </div>

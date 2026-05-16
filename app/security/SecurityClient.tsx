@@ -17,7 +17,8 @@ import {
   Megaphone,
   HeartPulse,
   GitMerge,
-  Power
+  Power,
+  Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -59,35 +60,7 @@ export default function SecurityClient() {
         <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.03) 1px, transparent 0)', backgroundSize: '40px 40px' }} />
       </div>
 
-      {/* Navigation Bar (Ghost Style) */}
-      <nav className="relative z-50 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto backdrop-blur-md">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center justify-center group-hover:border-indigo-400/50 transition-all">
-            <ShieldCheck className="text-indigo-400 w-6 h-6" />
-          </div>
-          <span className="font-bold text-xl tracking-tight text-white">Sentinel <span className="text-indigo-400">Gatekeeper</span></span>
-        </Link>
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest">
-            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
-            System Status: Active
-          </div>
-
-          {user ? (
-            <Link
-              href={user.role === 'admin' ? "/dashboard/admin/sentinel" : "/dashboard"}
-              className="flex items-center gap-2 text-sm font-bold text-indigo-400 hover:text-indigo-300 transition-colors group"
-            >
-              <LayoutDashboard size={16} className="group-hover:rotate-12 transition-transform" />
-              <span>{user.role === 'admin' ? "Admin Console" : "Dashboard"}</span>
-            </Link>
-          ) : (
-            <Link href="/login" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">
-              Login
-            </Link>
-          )}
-        </div>
-      </nav>
+      {/* Main Content */}
 
       {/* Hero Section */}
       <section className="relative z-10 pt-20 pb-32 px-6 overflow-hidden">
@@ -148,6 +121,72 @@ export default function SecurityClient() {
               ))}
             </div>
           </motion.div>
+        </motion.div>
+      </section>
+      
+      {/* AI Assistant Section */}
+      <section className="relative z-10 py-12 px-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-7xl mx-auto"
+        >
+          <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border border-white/10 rounded-[3rem] p-8 md:p-16 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-40 transition-opacity">
+               <Sparkles size={120} className="text-indigo-400" />
+            </div>
+            
+            <div className="relative z-10 grid md:grid-cols-2 gap-12 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-black uppercase tracking-widest mb-6">
+                   <Sparkles size={12} />
+                   AI-Powered Intelligence
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black text-white mb-6 tracking-tight">
+                  Sentinel <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">AI Assistant</span>
+                </h2>
+                <p className="text-slate-400 text-lg leading-relaxed mb-8 text-left">
+                  Kecerdasan buatan canggih yang dirancang khusus untuk mendampingi perjalanan belajar Anda. Tidak hanya memberikan jawaban instan, tetapi juga memastikan setiap interaksi Anda aman, privat, dan sesuai dengan protokol keamanan kami.
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  {[
+                    "Dukungan Teknis 24/7",
+                    "Pencarian Materi Pintar",
+                    "Privasi Data Terjamin",
+                    "Enkripsi Interaksi"
+                  ].map((feat, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs font-bold text-slate-300 bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                      <ShieldCheck size={14} className="text-indigo-400" />
+                      {feat}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="relative hidden md:flex justify-center">
+                <div className="aspect-square w-64 h-64 rounded-full bg-indigo-500/5 border border-white/5 flex items-center justify-center p-8 animate-pulse">
+                  <div className="w-full h-full rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                     <div className="relative">
+                        <motion.div 
+                          animate={{ 
+                            scale: [1, 1.1, 1],
+                            rotate: [0, 5, -5, 0]
+                          }}
+                          transition={{ 
+                            duration: 5,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                        >
+                          <Sparkles className="w-24 h-24 text-indigo-400" />
+                        </motion.div>
+                        <div className="absolute inset-0 blur-2xl bg-indigo-500/30 -z-10" />
+                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
       </section>
 
@@ -240,6 +279,12 @@ export default function SecurityClient() {
                 desc: "Mengelola ketergantungan antar fitur secara cerdas. Memastikan seluruh ekosistem platform berjalan harmonis dengan validasi integritas dependensi otomatis.",
                 icon: GitMerge,
                 color: "from-cyan-500/20 to-cyan-600/5"
+              },
+              {
+                title: "Sentinel AI Assistant",
+                desc: "Asisten cerdas terintegrasi yang siap membantu navigasi, menjawab pertanyaan materi, dan memberikan dukungan teknis instan secara aman dan privat.",
+                icon: Sparkles,
+                color: "from-purple-500/20 to-purple-600/5"
               },
               {
                 title: "Granular Kill-Switches",

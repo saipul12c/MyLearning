@@ -148,7 +148,7 @@ export default function FaqClient({ initialSearchRecoveryPromo }: { initialSearc
             Pusat Bantuan MyLearning
           </h1>
           <p className="text-slate-400 text-lg sm:text-xl max-w-2xl mx-auto mb-10">
-            Temukan jawaban untuk pertanyaan umum, atau gunakan asisten AI kami untuk pencarian pintar.
+            Temukan jawaban untuk pertanyaan umum, atau gunakan Sentinel AI Assistant kami untuk pencarian pintar.
           </p>
 
           {/* Search bar */}
@@ -172,7 +172,7 @@ export default function FaqClient({ initialSearchRecoveryPromo }: { initialSearc
                   className="px-4 py-2 bg-white/5 hover:bg-purple-600/20 text-slate-300 hover:text-purple-300 rounded-xl transition-colors text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:hover:bg-white/5 disabled:hover:text-slate-300"
                 >
                   {isAiLoading ? <Loader2 size={16} className="animate-spin" /> : <Bot size={16} />}
-                  <span className="hidden sm:inline">Tanya AI</span>
+                  <span className="hidden sm:inline">Tanya Sentinel AI</span>
                 </button>
               </div>
             </div>
@@ -256,7 +256,7 @@ export default function FaqClient({ initialSearchRecoveryPromo }: { initialSearc
                   <Bot size={18} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-white">Asisten AI</h2>
+                  <h2 className="text-sm font-semibold text-white">Sentinel AI Assistant</h2>
                   <p className="text-slate-500 text-[10px] uppercase tracking-wider font-medium">Berdasarkan pusat bantuan</p>
                 </div>
               </div>
@@ -422,7 +422,7 @@ export default function FaqClient({ initialSearchRecoveryPromo }: { initialSearc
                     onClick={() => handleAskAI()}
                     className="text-purple-400 hover:text-purple-300 font-medium text-sm flex items-center justify-center gap-2 mx-auto"
                   >
-                    <Bot size={16} /> Tanya Asisten AI kami
+                    <Bot size={16} /> Tanya Sentinel AI Assistant kami
                   </button>
 
                   {/* Search Recovery Ad */}
@@ -445,7 +445,7 @@ export default function FaqClient({ initialSearchRecoveryPromo }: { initialSearc
                   Masih punya pertanyaan?
                 </h3>
                 <p className="text-slate-400 text-base mb-8 max-w-md">
-                  Jika Anda tidak dapat menemukan apa yang Anda cari, jangan ragu untuk menghubungi tim support kami.
+                  Gunakan fitur Live CS di pojok kanan bawah. Anda akan dibantu oleh Sentinel AI Assistant kami secara instan, atau dapat terhubung langsung dengan Agen Live jika memerlukan bantuan lebih lanjut.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
                   <Link href="/contact" className="px-6 py-2.5 rounded-xl bg-white text-[#09090f] hover:bg-slate-200 transition-colors font-medium text-sm">
@@ -453,7 +453,7 @@ export default function FaqClient({ initialSearchRecoveryPromo }: { initialSearc
                   </Link>
                   <button onClick={() => handleAskAI()} className="px-6 py-2.5 rounded-xl bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-colors font-medium text-sm flex items-center gap-2">
                     <Bot size={16} />
-                    Tanya AI
+                    Tanya Sentinel AI
                   </button>
                 </div>
               </div>

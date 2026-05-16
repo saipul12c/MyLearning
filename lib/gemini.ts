@@ -162,7 +162,7 @@ ${catalog}
       model: "gemini-flash-latest",
       contents: [
         { role: "user", parts: [{ text: `SYSTEM_INSTRUCTION: ${systemPrompt}` }] },
-        { role: "model", parts: [{ text: "Siap, saya adalah Asisten AI MyLearning. Saya akan mematuhi semua instruksi katalog dan format Markdown yang Anda berikan." }] },
+        { role: "model", parts: [{ text: "Siap, saya adalah Sentinel AI Assistant. Saya akan mematuhi semua instruksi katalog dan format Markdown yang Anda berikan." }] },
         ...filteredHistory,
         { role: "user", parts: [{ text: userMessage }] }
       ],
@@ -288,7 +288,7 @@ Pertanyaan Pengguna: ${userMessage}
     return responseText.trim() || "Maaf, saya tidak bisa menemukan jawaban yang tepat di FAQ kami. Silakan hubungi tim support kami.";
   } catch (error: any) {
     console.error("FAQ AI Error:", error);
-    return "Maaf, terjadi kesalahan saat menghubungi asisten AI. Silakan coba lagi nanti.";
+    return "Maaf, terjadi kesalahan saat menghubungi Sentinel AI Assistant. Silakan coba lagi nanti.";
   }
 }
 

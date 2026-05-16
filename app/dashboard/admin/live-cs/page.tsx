@@ -427,7 +427,7 @@ export default function AdminLiveCS() {
                         ? "bg-white/5 text-slate-400 border border-white/10 rounded-bl-none italic"
                         : "bg-white/10 text-slate-200 rounded-bl-none border border-white/5"
                     }`}>
-                        {msg.senderType === "bot" && <div className="flex items-center gap-1.5 mb-1 text-[10px] not-italic opacity-80 uppercase tracking-tighter"><Bot size={10} /> Gemini Assistant</div>}
+                        {msg.senderType === "bot" && <div className="flex items-center gap-1.5 mb-1 text-[10px] not-italic opacity-80 uppercase tracking-tighter"><Bot size={10} /> Sentinel AI Assistant</div>}
                         
                         {msg.content.startsWith("[Voice Message](") ? (
                           <div className="flex items-center gap-3 py-1">

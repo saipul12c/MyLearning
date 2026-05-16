@@ -167,7 +167,7 @@ export const faqData: FAQCategory[] = [
       {
         question: "Bagaimana cara menghubungi Customer Service?",
         answer:
-          "Gunakan fitur Live CS di pojok kanan bawah. Anda akan dibantu oleh Asisten AI kami secara instan, atau dapat terhubung langsung dengan Agen Live jika memerlukan bantuan lebih lanjut.",
+          "Gunakan fitur Live CS di pojok kanan bawah. Anda akan dibantu oleh Sentinel AI Assistant kami secara instan, atau dapat terhubung langsung dengan Agen Live jika memerlukan bantuan lebih lanjut.",
       },
       {
         question: "Apakah data pribadi saya aman?",

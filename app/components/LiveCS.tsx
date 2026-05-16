@@ -36,7 +36,7 @@ export default function LiveCS() {
   const [loading, setLoading] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState({ adminOnline: false, instructorOnline: false, totalOnline: 0 });
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
-  const [agentName, setAgentName] = useState("LearningAI");
+  const [agentName, setAgentName] = useState("Sentinel AI Assistant");
   const [isAgentTyping, setIsAgentTyping] = useState(false);
   const [rating, setRating] = useState(0);
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
@@ -208,7 +208,7 @@ export default function LiveCS() {
     if (isOpen && messages.length === 0) {
       const greeting = isLoggedIn 
         ? `Halo **${user?.fullName || "Siswa"}**! Senang melihat Anda kembali. Ada yang bisa saya bantu hari ini?`
-        : "Halo! Saya **Asisten AI MyLearning**. Saya siap membantu Anda memilih kursus terbaik. Sedang mencari materi apa hari ini? [Lihat Katalog](/courses)";
+        : "Halo! Saya **Sentinel AI Assistant**. Saya siap membantu Anda memilih kursus terbaik. Sedang mencari materi apa hari ini? [Lihat Katalog](/courses)";
       
       setMessages([
         {
@@ -639,7 +639,7 @@ export default function LiveCS() {
           </div>
           <div>
             <h3 className="font-bold text-sm leading-none">
-              {mode === "ai" ? "Assistant AI" : agentName}
+              {mode === "ai" ? "Sentinel AI Assistant" : agentName}
             </h3>
             <div className="flex items-center gap-1.5 mt-1">
               <span className={`w-2 h-2 rounded-full ${mode === "ai" || onlineStatus.totalOnline > 0 ? "bg-emerald-400" : "bg-amber-400"}`}></span>
@@ -670,7 +670,7 @@ export default function LiveCS() {
             }`}>
               {msg.role === "model" && (
                 <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-bold text-purple-400 uppercase tracking-tighter">
-                  <Bot size={12} /> Gemini AI Assistant
+                  <Bot size={12} /> Sentinel AI Assistant
                 </div>
               )}
               {msg.role === "model" || msg.role === "agent" ? (
@@ -911,7 +911,7 @@ export default function LiveCS() {
               <p className="text-slate-400 text-xs mt-1">ID Tiket: <span className="text-cyan-400 font-mono font-bold">{ticketId}</span></p>
               <p className="text-slate-400 text-[10px] mt-2 italic">Kami akan menghubungi Anda kembali melalui email sesegera mungkin.</p>
             </div>
-            <button onClick={() => setMode("ai")} className="text-purple-400 text-xs hover:underline">Kembali ke Chat AI</button>
+            <button onClick={() => setMode("ai")} className="text-purple-400 text-xs hover:underline">Kembali ke Sentinel AI</button>
           </div>
         )}
       </div>
@@ -962,7 +962,7 @@ export default function LiveCS() {
                 broadcastTyping();
               }}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-              placeholder={mode === "agent" ? "Tulis pesan ke agen..." : "Tanya asisten AI..."}
+              placeholder={mode === "agent" ? "Tulis pesan ke agen..." : "Tanya Sentinel AI..."}
               className="input !py-2.5 !flex-1 !rounded-xl text-sm"
             />
             <button

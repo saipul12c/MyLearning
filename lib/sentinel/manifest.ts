@@ -259,7 +259,7 @@ export const SYSTEM_MANIFEST = {
     {
       key: 'ai_tutor_beta',
       category: 'feature',
-      description: 'Aktifkan fitur tutor AI berbasis Gemini 3 Pro.',
+      description: 'Aktifkan fitur Sentinel AI Assistant.',
       proposedValue: false,
       isPublic: true,
       impact: 'medium',

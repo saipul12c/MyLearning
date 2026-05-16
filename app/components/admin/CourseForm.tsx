@@ -822,7 +822,7 @@ export default function CourseForm({ courseId }: Props) {
                                               onClick={() => handleGenerateAIQuestions(q.id, q.title)}
                                               className="flex items-center gap-1.5 text-[10px] font-black text-indigo-400 hover:text-white transition-colors px-2"
                                            >
-                                              {isGeneratingAI ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} AI Generate
+                                              {isGeneratingAI ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Sentinel AI Generate
                                            </button>
                                         </div>
                                         {q.isRequired && (
@@ -1072,7 +1072,7 @@ export default function CourseForm({ courseId }: Props) {
                                     }`}
                               >
                                  {isGeneratingAI ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                 {isGeneratingAI ? "Generating..." : "AI Generate"}
+                                 {isGeneratingAI ? "Generating..." : "Sentinel AI Generate"}
                               </button>
                            </div>
                            <textarea
@@ -1229,7 +1229,7 @@ export default function CourseForm({ courseId }: Props) {
                                  }`}
                            >
                               {isGeneratingAI ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                              {isGeneratingAI ? "Generating..." : "AI Generate"}
+                              {isGeneratingAI ? "Generating..." : "Sentinel AI Generate"}
                            </button>
 
                            <div className="w-px h-8 bg-white/5 mx-1" />
