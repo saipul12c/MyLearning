@@ -348,7 +348,7 @@ export async function proxy(request: NextRequest) {
       request.headers.get('x-nextjs-prefetch') === '1' ||
       request.headers.get('x-nextjs-prerender') === 'true'
     const path = request.nextUrl.pathname
-    const publicPages = ['/', '/about', '/pring', '/courses', '/events', '/faq', '/contact', '/privasi', '/terms', '/login', '/register', '/verify']
+    const publicPages = ['/', '/about', '/pricing', '/courses', '/events', '/faq', '/contact', '/privasi', '/terms', '/login', '/register', '/verify']
     const isPublicPage = publicPages.some(p => path === p || path.startsWith(p + '/'))
 
     if (isPublicAsset || isMaintenancePage || isPrefetch) {

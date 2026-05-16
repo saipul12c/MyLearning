@@ -22,6 +22,9 @@ export const metadata: Metadata = {
   title: "About",
   description:
     "Tentang MyLearning - Platform belajar online terbaik di Indonesia. Misi kami adalah demokratisasi pendidikan berkualitas untuk semua orang.",
+  alternates: {
+    canonical: "/about",
+  },
 };
 
 export default async function AboutPage() {

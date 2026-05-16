@@ -33,7 +33,7 @@ export default function SentinelGuard({ children }: { children: React.ReactNode 
                        pathname.startsWith('/about') || 
                        pathname.startsWith('/courses') || 
                        pathname.startsWith('/events') || 
-                       pathname.startsWith('/pring') || 
+                       pathname.startsWith('/pricing') || 
                        pathname.startsWith('/faq') || 
                        pathname.startsWith('/contact') || 
                        pathname.startsWith('/login') || 

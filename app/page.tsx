@@ -23,6 +23,12 @@ import VerifiedBadge from "./components/VerifiedBadge";
 import NativeAdCard from "./components/NativeAdCard";
 import TestimonialWall from "./components/TestimonialWall";
 
+export const metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
+
 export const revalidate = 3600; // Revalidate at most every hour for fresh rotation
 
 export default async function HomePage() {

@@ -7,7 +7,7 @@ const { sendRequest } = require('../utils/request');
 async function runWebVulnerabilities(stats, vulnerabilities) {
     console.log(`\n🌐 MEMULAI PENGUJIAN WEB VULNERABILITIES (ADVANCED)...`);
 
-    const testEndpoints = ['/', '/login', '/dashboard', '/courses', '/pring'];
+    const testEndpoints = ['/', '/login', '/dashboard', '/courses', '/pricing'];
 
     for (const endpoint of testEndpoints) {
         console.log(`\n🔍 Audit Keamanan pada: ${endpoint}`);

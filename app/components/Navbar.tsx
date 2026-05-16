@@ -15,7 +15,7 @@ const navLinks = [
   { href: "/about", label: "About" },
   { href: "/courses", label: "Kursus" },
   { href: "/events", label: "Event" },
-  { href: "/pring", label: "Upgrade ✨" },
+  { href: "/pricing", label: "Upgrade ✨" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Kontak" },
 ];
@@ -76,7 +76,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-1">
           {navLinks
             .filter(link => {
-              if (link.href === "/pring" && (isAdmin || isInstructor)) return false;
+              if (link.href === "/pricing" && (isAdmin || isInstructor)) return false;
               return true;
             })
             .map((link) => {
@@ -195,7 +195,7 @@ export default function Navbar() {
         <div className="px-4 pb-4 pt-2 glass-strong mt-2 mx-4 rounded-2xl">
           {navLinks
             .filter(link => {
-              if (link.href === "/pring" && (isAdmin || isInstructor)) return false;
+              if (link.href === "/pricing" && (isAdmin || isInstructor)) return false;
               return true;
             })
             .map((link) => {

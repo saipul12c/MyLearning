@@ -12,6 +12,9 @@ import NativeAdCard from "@/app/components/NativeAdCard";
 export const metadata: Metadata = {
   title: "Kebijakan Privasi | MyLearning",
   description: "Kebijakan privasi resmi platform MyLearning Indonesia. Pelajari bagaimana kami melindungi data pribadi Anda.",
+  alternates: {
+    canonical: "/privasi",
+  },
 };
 
 const sections = [

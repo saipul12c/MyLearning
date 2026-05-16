@@ -231,3 +231,31 @@ export async function sendContactReply(params: {
     subject: `Re: ${params.originalSubject}`,
   });
 }
+
+/**
+ * Send notification when an agent replies to a live chat
+ */
+export async function sendChatNotification(params: {
+  userName: string;
+  userEmail: string;
+  agentName: string;
+  messagePreview: string;
+}): Promise<SendEmailResult> {
+  const siteUrl = typeof window !== "undefined" ? window.location.origin : "https://mylearning.com";
+  
+  return sendEmail("contactReply", {
+    to_name: params.userName,
+    to_email: params.userEmail,
+    original_subject: "Balasan Live Chat",
+    reply_message: `Halo ${params.userName},\n\n${params.agentName} baru saja membalas pesan Anda di Live Chat:\n\n"${params.messagePreview}"\n\nSilakan klik link di bawah untuk membalas:\n${siteUrl}`,
+    subject: `[MyLearning] Pesan baru dari ${params.agentName}`,
+  });
+}
+
+/**
+ * DEVELOPMENT NOTICE: Email notifications are currently being integrated.
+ * This function logs the intent while the actual EmailJS template is in progress.
+ */
+if (typeof window !== "undefined") {
+  console.info("[Email Service] Sistem Notifikasi Chat sedang dalam tahap pengembangan (Beta).");
+}

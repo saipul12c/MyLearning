@@ -47,6 +47,11 @@ async function executeWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promis
 export interface UserContext {
   fullName?: string;
   isLoggedIn: boolean;
+  role?: string;
+  tierName?: string;
+  level?: number;
+  xp?: number;
+  achievements?: string[];
   enrolledCourseIds: string[];
   currentPage?: string;
   activeContext?: { type: string; id?: string; metadata?: any } | null;
@@ -121,8 +126,17 @@ TUGAS ANDA:
    - Gunakan data di bawah ini untuk memahami apa yang sedang dihadapi pengguna.
 
 INFO KONTEKS PENGGUNA:
+- Peran (Role): ${userContext?.role || "user"}
+- Tier Keanggotaan: ${userContext?.tierName || "Standar"}
+- Level Belajar: Level ${userContext?.level || 1} (${userContext?.xp || 0} XP)
+${userContext?.achievements && userContext.achievements.length > 0 ? `- Pencapaian: ${userContext.achievements.join(", ")}` : ""}
 - Halaman Saat Ini: ${userContext?.currentPage || "Tidak diketahui"}
 - Konteks Aktif: ${userContext?.activeContext ? JSON.stringify(userContext.activeContext) : "Tidak ada"}
+
+INSTRUKSI GAMIFIKASI:
+- Jika pengguna memiliki Tier tinggi (misal: "Pro" atau "Expert"), berikan apresiasi ekstra.
+- Jika pengguna mendekati kenaikan level, berikan semangat untuk menyelesaikan materi.
+- Sebutkan pencapaian mereka (Achievement) jika relevan untuk memuji kemajuan mereka.
 
 INSTRUKSI RENDERING KHUSUS (PREMIUM):
 - Jika merekomendasikan kursus, selain link, Anda bisa menyertakan blok kode khusus untuk merender KARTU KURSUS. 

@@ -47,7 +47,7 @@ const formatXP = (xp: number) => {
     return xp.toString();
 };
 
-export default function PringClient({ tiers, achievements }: Props) {
+export default function PricingClient({ tiers, achievements }: Props) {
     const { user, isLoggedIn } = useAuth();
     const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);

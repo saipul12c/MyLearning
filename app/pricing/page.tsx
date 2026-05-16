@@ -1,21 +1,24 @@
 import { Metadata } from "next";
 import { getTiers, getAchievements } from "@/lib/tiers";
-import PringClient from "@/app/pring/PringPricing";
+import PricingClient from "@/app/pricing/PricingClient";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getPublicSentinelConfigs } from "@/lib/sentinel/actions";
 
 export const metadata: Metadata = {
-    title: "Pricing & Membership | MyLearning Premium",
+    title: "Pricing & Membership",
     description: "Invest in your future with MyLearning Premium. Choose the perfect tier and unlock exclusive courses, AI features, and industry-recognized certificates.",
     openGraph: {
         title: "MyLearning Premium - Invest in Your Future",
         description: "One-time investment for lifetime access to the most advanced learning ecosystem.",
         images: ["/og-pricing.png"],
+    },
+    alternates: {
+        canonical: "/pricing",
     }
 };
 
-export default async function PringPage() {
+export default async function PricingPage() {
     // 1. Sentinel Gatekeeper Check
     const sentinel = await getPublicSentinelConfigs();
     if (sentinel.module_tiers_enabled === false) {
@@ -36,7 +39,7 @@ export default async function PringPage() {
 
     return (
         <div className="min-h-screen bg-slate-950">
-            <PringClient tiers={tiers} achievements={achievements} />
+            <PricingClient tiers={tiers} achievements={achievements} />
         </div>
     );
 }

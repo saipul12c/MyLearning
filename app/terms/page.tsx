@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service",
+  title: "Terms of Service | MyLearning",
   description: "Syarat dan ketentuan penggunaan platform MyLearning.",
+  alternates: {
+    canonical: "/terms",
+  },
 };
 
 export default function TermsPage() {

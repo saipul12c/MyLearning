@@ -72,7 +72,7 @@ export const SYSTEM_MANIFEST = {
       proposedValue: true,
       isPublic: true,
       impact: 'medium',
-      devNotes: 'Mempengaruhi halaman /pring dan alur pendaftaran.'
+      devNotes: 'Mempengaruhi halaman /pricing dan alur pendaftaran.'
     },
     {
       key: 'module_achievements_enabled',

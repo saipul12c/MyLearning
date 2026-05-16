@@ -22,6 +22,7 @@ export interface ChatMessage {
   senderId?: string;
   senderType: "user" | "agent" | "bot";
   content: string;
+  isRead: boolean;
   createdAt: string;
 }
 
@@ -92,6 +93,27 @@ export async function sendLiveMessage(chatId: string, content: string, senderTyp
       content
     });
 
+  /*
+  if (!error && (senderType === "agent" || senderType === "bot")) {
+    // Notify user via email (async, don't wait)
+    // DISABLED FOR NOW (UNDER DEVELOPMENT)
+    (async () => {
+        try {
+            const { data: chat } = await supabase.from("live_chats").select("guest_name, guest_email").eq("id", chatId).single();
+            if (chat?.guest_email) {
+                const { sendChatNotification } = await import("./email");
+                await sendChatNotification({
+                    userName: chat.guest_name || "User",
+                    userEmail: chat.guest_email,
+                    agentName: senderType === "bot" ? "Assistant AI" : "Agen MyLearning",
+                    messagePreview: content.length > 100 ? content.substring(0, 100) + "..." : content
+                });
+            }
+        } catch (e) {}
+    })();
+  }
+  */
+
   return !error;
 }
 
@@ -120,5 +142,54 @@ export async function resetUnreadCount(chatId: string, type: "agent" | "user"): 
         chat_uuid: chatId,
         target_type: type
     });
+}
+
+export async function markMessagesAsRead(chatId: string, senderType: "user" | "agent"): Promise<void> {
+  // Mark messages from the OTHER party as read
+  const targetType = senderType === "user" ? "agent" : "user";
+  await supabase
+    .from("live_chat_messages")
+    .update({ is_read: true })
+    .eq("chat_id", chatId)
+    .eq("sender_type", targetType)
+    .eq("is_read", false);
+}
+
+export async function updateInternalNotes(chatId: string, notes: string): Promise<boolean> {
+  const { data: chat } = await supabase.from("live_chats").select("metadata").eq("id", chatId).single();
+  const metadata = { ...(chat?.metadata || {}), internal_notes: notes };
+  
+  const { error } = await supabase
+    .from("live_chats")
+    .update({ metadata })
+    .eq("id", chatId);
+    
+  return !error;
+}
+
+export async function transferChat(chatId: string, targetAgentId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from("live_chats")
+    .update({ 
+      agent_id: targetAgentId,
+      status: "active" 
+    })
+    .eq("id", chatId);
+    
+  return !error;
+}
+
+export async function getAvailableAgents(): Promise<{ id: string; fullName: string; role: string }[]> {
+  const { data } = await supabase
+    .from("user_profiles")
+    .select("id, full_name, role")
+    .in("role", ["admin", "instructor"])
+    .eq("is_online", true);
+    
+  return (data || []).map(d => ({
+    id: d.id,
+    fullName: d.full_name,
+    role: d.role
+  }));
 }
 

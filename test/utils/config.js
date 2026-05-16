@@ -114,7 +114,7 @@ const RATE_LIMIT_ENDPOINTS = [
     '/register',
     '/contact',
     '/verify',
-    '/pring'
+    '/pricing'
 ];
 
 module.exports = {

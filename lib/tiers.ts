@@ -112,7 +112,7 @@ export async function purchaseTier(userId: string, tierId: string): Promise<{ su
             title: `Upgrade ke ${tier.name} Diproses ⏳`,
             message: `Permintaan upgrade Anda telah diterima. Silakan selesaikan pembayaran sebesar Rp ${tier.price.toLocaleString()} untuk aktivasi.`,
             type: 'info',
-            linkUrl: '/pring'
+            linkUrl: '/pricing'
         });
 
         return { success: true, purchaseId: purchase.id };

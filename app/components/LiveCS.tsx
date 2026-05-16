@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, X, Send, Bot, User, Phone, CheckCircle, Clock, AlertCircle, Paperclip, Star } from "lucide-react";
+import { MessageSquare, X, Send, Bot, User, Phone, CheckCircle, Clock, AlertCircle, Paperclip, Star, Mic, Square, Sparkles } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import { getGeminiResponse, type UserContext } from "@/lib/gemini";
 import { detectAgentRequest, getClientFingerprint } from "@/lib/utils";
-import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages } from "@/lib/live_chat";
+import { checkOnlineAgents, createChatSession, sendLiveMessage, getChatMessages, markMessagesAsRead } from "@/lib/live_chat";
+import { triggerAutoAIReply } from "@/lib/ai_chat";
 import { saveContactMessage, getUserEnrollments } from "@/lib/enrollment";
 import { uploadChatFile } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
@@ -42,7 +43,12 @@ export default function LiveCS() {
   const [suggestionChips, setSuggestionChips] = useState<string[]>(["Cara daftar?", "Info Kursus"]);
   const [ticketId, setTicketId] = useState("");
   const [activeContext, setActiveContext] = useState<{ type: string; id?: string; metadata?: any } | null>(null);
+  const [userStats, setUserStats] = useState<{ tierName?: string; achievements?: string[] }>({});
   const [showQuickMenu, setShowQuickMenu] = useState(false);
+  const [showAiFallback, setShowAiFallback] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const aiFallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -105,6 +111,27 @@ export default function LiveCS() {
         getUserEnrollments(user.id).then(enrs => {
             setEnrolledIds(enrs.map(e => e.courseId));
         });
+
+        // Fetch Gamification & Tier Data
+        const fetchData = async () => {
+            const { getUserBadges } = await import("@/lib/gamification");
+            const { getTiers } = await import("@/lib/tiers");
+            
+            const [badges, tiers] = await Promise.all([
+                getUserBadges(user.id),
+                getTiers()
+            ]);
+
+            const myTier = tiers.find(t => t.id === user.tierId)?.name || "Standar";
+            const myBadges = badges.map(b => b.name);
+
+            setUserStats({
+                tierName: myTier,
+                achievements: myBadges
+            });
+        };
+
+        fetchData();
     }
   }, [isLoggedIn, user]);
 
@@ -167,6 +194,7 @@ export default function LiveCS() {
       }));
       
       setMessages(formattedHistory);
+      markMessagesAsRead(sessionId, "user");
       
       const status = await checkOnlineAgents();
       setOnlineStatus(status);
@@ -178,16 +206,32 @@ export default function LiveCS() {
 
   useEffect(() => {
     if (isOpen && messages.length === 0) {
+      const greeting = isLoggedIn 
+        ? `Halo **${user?.fullName || "Siswa"}**! Senang melihat Anda kembali. Ada yang bisa saya bantu hari ini?`
+        : "Halo! Saya **Asisten AI MyLearning**. Saya siap membantu Anda memilih kursus terbaik. Sedang mencari materi apa hari ini? [Lihat Katalog](/courses)";
+      
       setMessages([
         {
           role: "model",
-          content: "Halo! Saya **Asisten AI MyLearning**. Saya siap membantu Anda memilih kursus terbaik. [Lihat Katalog](/courses)",
+          content: greeting,
           timestamp: new Date(),
         },
       ]);
+      
+      // If guest, maybe offer a voucher after a short delay
+      if (!isLoggedIn && isAiEnabled) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            role: "model",
+            content: "Khusus untuk pengunjung baru, gunakan kode kupon `NEWLEARNER` untuk diskon 10% pada pembelian pertama Anda! 🎁",
+            timestamp: new Date()
+          }]);
+        }, 3000);
+      }
+      
       setMode("ai");
     }
-  }, [isOpen]);
+  }, [isOpen, isLoggedIn, user]);
 
   // Real-time listener for agent chat
   useEffect(() => {
@@ -205,17 +249,20 @@ export default function LiveCS() {
         },
         (payload) => {
           const newMsg = payload.new as any;
-          if (newMsg.sender_type === "agent") {
+          if (newMsg.sender_type === "agent" || newMsg.sender_type === "bot") {
             setMessages((prev) => [
               ...prev,
               {
-                role: "agent",
+                role: newMsg.sender_type === "agent" ? "agent" : "model",
                 content: newMsg.content,
                 timestamp: new Date(newMsg.created_at),
               },
             ]);
             setLoading(false);
-            setIsAgentTyping(false); // Stop typing when msg received
+            if (newMsg.sender_type === "agent") setIsAgentTyping(false);
+            if (aiFallbackTimerRef.current) clearTimeout(aiFallbackTimerRef.current);
+            setShowAiFallback(false);
+            markMessagesAsRead(chatSessionId, "user");
           }
         }
       )
@@ -250,14 +297,21 @@ export default function LiveCS() {
         (payload) => {
           const update = payload.new as any;
           if (update.status === "closed") {
+            const closingMsg = "Sesi chat telah diakhiri oleh Agen. Terima kasih!";
             setMessages((prev) => [
               ...prev,
               { 
                 role: "system", 
-                content: "Sesi chat telah diakhiri oleh Agen. Terima kasih!", 
+                content: closingMsg, 
                 timestamp: new Date() 
               },
             ]);
+            
+            // Generate and Send Summary Email (Async)
+            if (chatSessionId) {
+               handleFinalizeSession(chatSessionId);
+            }
+
             setChatSessionId(null);
             localStorage.removeItem("learning_chat_session");
             // Switch to survey mode
@@ -307,6 +361,11 @@ export default function LiveCS() {
       const context: UserContext = {
         fullName: user?.fullName,
         isLoggedIn: !!isLoggedIn,
+        role: user?.role,
+        tierName: userStats.tierName,
+        level: user?.level,
+        xp: user?.xp,
+        achievements: userStats.achievements,
         enrolledCourseIds: enrolledIds,
         currentPage: pathname,
         activeContext: activeContext // Pass the lesson/payment context to Gemini
@@ -332,8 +391,67 @@ export default function LiveCS() {
       setLoading(false);
     } else if (mode === "agent" && chatSessionId) {
       // Send to live agent
-      await sendLiveMessage(chatSessionId, userMsg, "user", user?.id);
+      const success = await sendLiveMessage(chatSessionId, userMsg, "user", user?.id);
+      
+      if (success) {
+        // Start fallback timer if agent hasn't replied
+        if (aiFallbackTimerRef.current) clearTimeout(aiFallbackTimerRef.current);
+        aiFallbackTimerRef.current = setTimeout(() => {
+          setShowAiFallback(true);
+        }, 15000); // Show fallback after 15s of waiting
+      }
     }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
+        const file = new File([blob], "voice_message.ogg", { type: "audio/ogg" });
+        
+        setLoading(true);
+        const { url } = await uploadChatFile(file);
+        if (url) {
+          setInputValue(`[Voice Message](${url})`);
+          await handleSendMessage();
+        }
+        setLoading(false);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Mic error:", err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleAiFallback = async () => {
+    if (!chatSessionId || messages.length === 0) return;
+    setShowAiFallback(false);
+    setLoading(true);
+    
+    const lastUserMsg = [...messages].reverse().find(m => m.role === "user")?.content || "";
+    
+    await triggerAutoAIReply(chatSessionId, lastUserMsg, {
+        currentPage: pathname,
+        activeContext
+    });
+    
+    // The real-time listener will pick up the bot message
+    setLoading(false);
   };
 
   const broadcastTyping = async () => {
@@ -344,6 +462,25 @@ export default function LiveCS() {
       event: "typing",
       payload: { sender: "user" },
     });
+  };
+
+  const handleFinalizeSession = async (sessionId: string) => {
+    try {
+        const { getChatInsights } = await import("@/lib/ai_chat");
+        const { sendContactReply } = await import("@/lib/email");
+        
+        const insights = await getChatInsights(sessionId);
+        if (insights && (user?.email || guestInfo.email)) {
+            await sendContactReply({
+                userName: user?.fullName || guestInfo.name || "User",
+                userEmail: user?.email || guestInfo.email,
+                originalSubject: "Ringkasan Percakapan Live Chat MyLearning",
+                replyMessage: `Berikut adalah ringkasan percakapan Anda:\n\n${insights.summary}\n\nTerima kasih telah menghubungi kami!`
+            });
+        }
+    } catch (e) {
+        console.error("Error finalizing session:", e);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -531,6 +668,11 @@ export default function LiveCS() {
                 ? "bg-white/5 text-slate-400 text-xs text-center w-full !rounded-lg"
                 : "bg-white/10 text-slate-200 rounded-bl-none border border-white/5"
             }`}>
+              {msg.role === "model" && (
+                <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-bold text-purple-400 uppercase tracking-tighter">
+                  <Bot size={12} /> Gemini AI Assistant
+                </div>
+              )}
               {msg.role === "model" || msg.role === "agent" ? (
                 <article className="prose-cs">
                   <ReactMarkdown 
@@ -608,12 +750,38 @@ export default function LiveCS() {
                   </ReactMarkdown>
                 </article>
               ) : (
-                msg.content
+                <div className="flex flex-col gap-1">
+                   {msg.content.startsWith("[Voice Message](") ? (
+                    <div className="flex items-center gap-2 py-1">
+                      <Mic size={14} className="text-purple-400" />
+                      <audio src={msg.content.match(/\((.*?)\)/)?.[1]} controls className="h-7 w-32 filter invert brightness-200" />
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                  {msg.role === "user" && mode === "agent" && (
+                    <div className="flex justify-end mt-0.5 opacity-60">
+                       <CheckCircle size={10} className="text-white" />
+                    </div>
+                  )}
+                </div>
               )}
 
             </div>
           </div>
         ))}
+
+        {showAiFallback && mode === "agent" && (
+          <div className="flex justify-center animate-in fade-in zoom-in duration-300">
+            <button 
+              onClick={handleAiFallback}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold hover:bg-purple-500/30 transition-all shadow-lg"
+            >
+              <Sparkles size={14} className="text-purple-400" />
+              Admin belum balas? Tanya AI saja
+            </button>
+          </div>
+        )}
         {loading && (
           <div className="flex justify-start animate-pulse">
             <div className="bg-white/5 rounded-2xl px-4 py-2 flex gap-1">
@@ -795,14 +963,21 @@ export default function LiveCS() {
               }}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
               placeholder={mode === "agent" ? "Tulis pesan ke agen..." : "Tanya asisten AI..."}
-              className="input !py-2.5 !pr-10 !rounded-xl text-sm"
+              className="input !py-2.5 !flex-1 !rounded-xl text-sm"
             />
             <button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={loading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-purple-500 hover:text-cyan-400 transition-colors"
+              className="p-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors shadow-lg shadow-purple-500/20 disabled:opacity-50"
             >
-              <Send size={18} />
+              <Send size={20} />
+            </button>
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`p-2.5 rounded-xl transition-all ${isRecording ? "bg-red-500 text-white animate-pulse" : "bg-white/5 text-slate-400 hover:text-white"}`}
+              title={isRecording ? "Hentikan Rekaman" : "Pesan Suara"}
+            >
+              {isRecording ? <Square size={20} /> : <Mic size={20} />}
             </button>
           </div>
         )}

@@ -7,6 +7,7 @@ import NotificationToast from "./components/NotificationToast";
 import SentinelGuard from "./components/SentinelGuard";
 import SentinelBroadcaster from "./components/SentinelBroadcaster";
 import { getPromotionsBatch } from "@/lib/promotions";
+import JsonLd from "./components/JsonLd";
 
 // Disabling next/font/google due to build-time connection issues.
 // Font is now handled in globals.css via standard @import or system fallback.
@@ -22,6 +23,9 @@ export const metadata: Metadata = {
   },
   description:
     "Pelajari skill digital dari instruktur terbaik. Kursus pemrograman, data science, desain, bisnis, dan lebih banyak lagi. Mulai belajar gratis hari ini!",
+  alternates: {
+    canonical: "./",
+  },
   keywords: [
     "belajar online",
     "kursus online",
@@ -64,8 +68,44 @@ export default async function RootLayout({
   const stickyPromo = adBatch["sticky_bottom"]?.[0] || null;
   const footerPromo = adBatch["footer_native"]?.[0] || null;
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "MyLearning",
+    "url": "https://my-learning-projek.netlify.app",
+    "logo": "https://my-learning-projek.netlify.app/logo.png",
+    "sameAs": [
+      "https://twitter.com/mylearning",
+      "https://facebook.com/mylearning",
+      "https://instagram.com/mylearning"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "telephone": "+62-821-1234-5678",
+      "contactType": "customer service",
+      "areaServed": "ID",
+      "availableLanguage": "Indonesian"
+    }
+  };
+
+  const websiteLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "MyLearning",
+    "url": "https://my-learning-projek.netlify.app",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://my-learning-projek.netlify.app/courses?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  };
+
   return (
     <html lang="id" className={`${inter.variable} antialiased`} data-scroll-behavior="smooth">
+      <head>
+        <JsonLd data={jsonLd} />
+        <JsonLd data={websiteLd} />
+      </head>
       <body className="min-h-screen flex flex-col">
         <AuthProvider>
           <NotificationToast />

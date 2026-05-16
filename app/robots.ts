@@ -1,6 +1,8 @@
 import { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://my-learning-projek.netlify.app'
+  
   return {
     rules: [
       {
@@ -15,11 +17,11 @@ export default function robots(): MetadataRoute.Robots {
           '/verify-signature',
           '/security-check',
           '/maintenance',
+          '/test-certificate',
           '/api/', // Sembunyikan API route jika ada
-          '/_next/', // Folder internal Next.js
         ],
       },
     ],
-    sitemap: 'https://my-learning-projek.netlify.app/sitemap.xml',
+    sitemap: `${baseUrl}/sitemap.xml`,
   }
 }

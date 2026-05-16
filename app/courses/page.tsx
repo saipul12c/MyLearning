@@ -5,6 +5,9 @@ import CoursesClient from "./CoursesClient";
 export const metadata = {
   title: "Kursus Online | MyLearning",
   description: "Jelajahi berbagai kursus online terbaik dari instruktur berpengalaman di MyLearning.",
+  alternates: {
+    canonical: "/courses",
+  },
 };
 
 export default async function CoursesPage(props: { searchParams: Promise<{ category?: string }> }) {
